@@ -78,7 +78,7 @@ REM [BetterPMMP-PATCH]
 if exist source\src\PocketMine.php (
 	set POCKETMINE_FILE=source\src\PocketMine.php
 ) else (
-	echo source 폴더를 찾을 수 없습니다
+	echo source folder not found
 	pause
 	exit 1
 )
@@ -130,7 +130,7 @@ REM [BetterPMMP-PATCH]
 if exist source\src\PocketMine.php (
 	set POCKETMINE_FILE=source\src\PocketMine.php
 ) else (
-	echo source 폴더를 찾을 수 없습니다
+	echo source folder not found
 	pause
 	exit 1
 )
@@ -1354,7 +1354,7 @@ function patchStartCmdBinPath(string $baseDir): array
 
     if (str_contains($content, "if exist bin\\mintty.exe (")) {
         $nl = str_contains($content, "\r\n") ? "\r\n" : "\n";
-        $sourceBinErrorBlock = "if not exist source\\bin (" . $nl . "\techo source\\bin 폴더를 찾을 수 없습니다" . $nl . "\tpause" . $nl . "\texit 1" . $nl . ")" . $nl . $nl;
+        $sourceBinErrorBlock = "if not exist source\\bin (" . $nl . "\techo source\\bin folder not found" . $nl . "\tpause" . $nl . "\texit 1" . $nl . ")" . $nl . $nl;
         $content = str_replace(
             "if exist bin\\mintty.exe (",
             $sourceBinErrorBlock . "if exist source\\bin\\mintty.exe (",
