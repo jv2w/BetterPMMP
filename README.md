@@ -8,7 +8,7 @@ A patch tool that applies performance optimizations, gameplay fixes, and develop
 
 `patch_tool.php` runs the PMMP source tree through ~60 idempotent patch functions. Each patch:
 
-- Marks itself with `[BETTERPMMP-PATCH]` so it is never applied twice.
+- Marks itself with `[BetterPMMP-PATCH]` so it is never applied twice.
 - Reports `APPLIED` / `SKIPPED` / `FAILED` in a summary at the end.
 - Is self-healing - re-running on an already-patched (or partially patched) tree is safe.
 
