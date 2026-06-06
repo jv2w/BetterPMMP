@@ -8,7 +8,7 @@
 
 `patch_tool.php`는 PMMP 소스 트리에 약 60개의 멱등(idempotent) 패치 함수를 실행합니다. 각 패치는:
 
-- `[BETTERPMMP-PATCH]` 마커를 남겨 중복 적용을 방지합니다.
+- `[BetterPMMP-PATCH]` 마커를 남겨 중복 적용을 방지합니다.
 - 종료 시 `APPLIED` / `SKIPPED` / `FAILED` 요약을 출력합니다.
 - 이미 패치되었거나 일부만 패치된 트리에 다시 실행해도 안전합니다.
 

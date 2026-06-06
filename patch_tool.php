@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * [BETTERPMMP-PATCH] Patch Tool
+ * [BetterPMMP-PATCH] Patch Tool
  * Usage: php patch_tool.php <source_directory_path>
  */
 
@@ -24,7 +24,7 @@ function isAlreadyPatched(string $filePath): bool
     $content = file_get_contents($filePath);
     if ($content === false)
         return false;
-    return str_contains($content, '[BETTERPMMP-PATCH]') || str_contains($content, '[PMMP-SOURCE-RELOAD-PATCH]');
+    return str_contains($content, '[BetterPMMP-PATCH]') || str_contains($content, '[PMMP-SOURCE-RELOAD-PATCH]');
 }
 
 function patchStartCmd(string $baseDir): array
@@ -50,7 +50,7 @@ function patchStartCmd(string $baseDir): array
 
         if (str_contains($content, 'PocketMine-MP.phar')) {
             $newBlock = <<<'BAT'
-REM [BETTERPMMP-PATCH]
+REM [BetterPMMP-PATCH]
 if exist source\src\PocketMine.php (
 	set POCKETMINE_FILE=source\src\PocketMine.php
 ) else (
@@ -102,7 +102,7 @@ if "%PHP_BINARY%"=="" (
 	exit 1
 )
 
-REM [BETTERPMMP-PATCH]
+REM [BetterPMMP-PATCH]
 if exist source\src\PocketMine.php (
 	set POCKETMINE_FILE=source\src\PocketMine.php
 ) else (
@@ -280,7 +280,7 @@ PHP;
     if (!str_contains($content, 'public function reloadPlugin')) {
         $reloadMethod = <<<'RELOADMETHOD'
 
-	/** [BETTERPMMP-PATCH] reloadPlugin method */
+	/** [BetterPMMP-PATCH] reloadPlugin method */
 	public function reloadPlugin(Plugin $plugin): bool
 	{
 		$pluginName = $plugin->getDescription()->getName();
@@ -571,7 +571,7 @@ use pocketmine\player\Player;
 use function count;
 use function implode;
 
-/** [BETTERPMMP-PATCH] */
+/** [BetterPMMP-PATCH] */
 class ReloadPluginCommand extends VanillaCommand{
 
 	private static string $lastPluginName = '';
@@ -660,7 +660,7 @@ function patchSimpleCommandMap(string $sourceDir): array
         if (str_contains($content, $useInsertPoint)) {
             $content = str_replace(
                 $useInsertPoint,
-                $useInsertPoint . "\nuse pocketmine\\command\\defaults\\ReloadPluginCommand; /** [BETTERPMMP-PATCH] */",
+                $useInsertPoint . "\nuse pocketmine\\command\\defaults\\ReloadPluginCommand; /** [BetterPMMP-PATCH] */",
                 $content
             );
         }
@@ -698,7 +698,7 @@ function createClassCacheInvalidator(string $sourceDir): array
 
 declare(strict_types=1);
 
-/** [BETTERPMMP-PATCH] */
+/** [BetterPMMP-PATCH] */
 
 namespace pocketmine\plugin;
 
@@ -966,7 +966,7 @@ function createPluginResourceIndex(string $sourceDir): array
 
 declare(strict_types=1);
 
-/** [BETTERPMMP-PATCH] */
+/** [BetterPMMP-PATCH] */
 
 namespace pocketmine\plugin;
 
@@ -1088,7 +1088,7 @@ function createPluginResources(string $sourceDir): array
 
 declare(strict_types=1);
 
-/** [BETTERPMMP-PATCH] */
+/** [BetterPMMP-PATCH] */
 
 namespace pocketmine\plugin;
 
@@ -1275,7 +1275,7 @@ PHP;
     if ($newContent === $content) {
         $newContent = preg_replace(
             '/\$composerGitHash\s*=\s*InstalledVersions::getReference.*?(?:exit\(1\);\s*\}\s*\})/s',
-            "/** [BETTERPMMP-PATCH] Composer sync check bypassed for source folder execution */",
+            "/** [BetterPMMP-PATCH] Composer sync check bypassed for source folder execution */",
             $content
         );
         if ($newContent === null || $newContent === $content) {
@@ -1284,7 +1284,7 @@ PHP;
     } else {
         $newContent = str_replace(
             "require_once(\$bootstrap);\n",
-            "require_once(\$bootstrap);\n\n\t\t/** [BETTERPMMP-PATCH] Composer sync check bypassed for source folder execution */\n",
+            "require_once(\$bootstrap);\n\n\t\t/** [BetterPMMP-PATCH] Composer sync check bypassed for source folder execution */\n",
             $newContent
         );
     }
@@ -1376,10 +1376,10 @@ function patchDataPath(string $sourceDir): array
     if ($content === false)
         return makePatchResult($targetFile, false, false, 'Failed to read PocketMine.php');
 
-    if (str_contains($content, '[BETTERPMMP-PATCH] Create system subdirectory'))
+    if (str_contains($content, '[BetterPMMP-PATCH] Create system subdirectory'))
         return makePatchResult($targetFile, false, true);
     $oldMkdirBlock = 'if(!@mkdir($dataPath, 0777, true) && !is_dir($dataPath)){';
-    $newMkdirBlock = '/** [BETTERPMMP-PATCH] Create system subdirectory */' . "\n\t\t"
+    $newMkdirBlock = '/** [BetterPMMP-PATCH] Create system subdirectory */' . "\n\t\t"
         . '@mkdir($dataPath . DIRECTORY_SEPARATOR . "system", 0777, true);' . "\n\t\t"
         . 'if(!@mkdir($dataPath, 0777, true) && !is_dir($dataPath)){';
 
@@ -1464,7 +1464,7 @@ function patchStartWarning(string $sourceDir): array
     if (!str_contains($content, 'Non-packaged installation detected')) {
         return makePatchResult($targetFile, false, false, 'Non-packaged installation warning not found in PocketMine.php');
     }
-    $replacement = '/** [BETTERPMMP-PATCH] Start warning replaced */' . "\n\t\t"
+    $replacement = '/** [BetterPMMP-PATCH] Start warning replaced */' . "\n\t\t"
         . '$logger->info("§aBetterPMMP By UserX0001");';
 
     $oldPattern = '$logger->warning("Non-packaged installation detected. This will degrade autoloading speed and make startup times longer.");';
@@ -1495,12 +1495,12 @@ function patchGarbageCollectorLog(string $sourceDir): array
         return makePatchResult($targetFile, false, false, 'Failed to read GarbageCollectorManager.php');
     }
 
-    if (str_contains($content, '[BETTERPMMP-PATCH] GC log output removed')) {
+    if (str_contains($content, '[BetterPMMP-PATCH] GC log output removed')) {
         return makePatchResult($targetFile, false, true);
     }
     $newContent = preg_replace(
         '/\s*\$this->logger->info\(sprintf\(\s*"Run #%d.*?\)\);/s',
-        "\n\t\t\t/** [BETTERPMMP-PATCH] GC log output removed */",
+        "\n\t\t\t/** [BetterPMMP-PATCH] GC log output removed */",
         $content
     );
 
@@ -1528,7 +1528,7 @@ function patchServerStartLogs(string $sourceDir): array
         return makePatchResult($targetFile, false, false, 'Failed to read Server.php');
     }
 
-    if (str_contains($content, '[BETTERPMMP-PATCH] Default game mode log removed')) {
+    if (str_contains($content, '[BetterPMMP-PATCH] Default game mode log removed')) {
         return makePatchResult($targetFile, false, true);
     }
     $hasDefaultGameMode = str_contains($content, 'pocketmine_server_defaultGameMode');
@@ -1542,7 +1542,7 @@ function patchServerStartLogs(string $sourceDir): array
     if ($hasDefaultGameMode) {
         $newContent = preg_replace(
             '/\s*\$this->logger->info\(\$this->language->translate\(\s*KnownTranslationFactory::pocketmine_server_defaultGameMode\(.*?\)\s*\)\);/s',
-            "\n\t\t/** [BETTERPMMP-PATCH] Default game mode log removed */",
+            "\n\t\t/** [BetterPMMP-PATCH] Default game mode log removed */",
             $newContent
         );
     }
@@ -1550,7 +1550,7 @@ function patchServerStartLogs(string $sourceDir): array
     if ($hasLinkBlock) {
         $newContent = preg_replace(
             '/\s*\$highlight\s*=\s*TextFormat::AQUA;.*?\$this->logger->info\(\$splash\);/s',
-            "\n\t\t/** [BETTERPMMP-PATCH] Start link logs removed */",
+            "\n\t\t/** [BetterPMMP-PATCH] Start link logs removed */",
             $newContent
         );
     }
@@ -1588,7 +1588,7 @@ function patchInfoPrefix(string $sourceDir): array
     if (!str_contains($content, $oldSprintf)) {
         return makePatchResult($targetFile, false, false, 'sprintf format line not found in MainLogger.php send()');
     }
-    $newBlock = '/** [BETTERPMMP-PATCH] INFO prefix removed for cleaner output */' . "\n\t\t"
+    $newBlock = '/** [BetterPMMP-PATCH] INFO prefix removed for cleaner output */' . "\n\t\t"
         . 'if($prefix === "INFO"){' . "\n\t\t\t"
         . '$message = sprintf(' . "\n\t\t\t\t"
         . 'TextFormat::AQUA . "[%s] " . TextFormat::RESET . "%s%s" . TextFormat::RESET,' . "\n\t\t\t\t"
@@ -1668,7 +1668,7 @@ function patchBlockInputLag(string $sourceDir): array
         }
         if ($nextMethodPos !== false) {
             $newSyncAndCapture = <<<'NEWSYNC'
-	/** [BETTERPMMP-PATCH] Block lag fix - snapshot-based sync */
+	/** [BetterPMMP-PATCH] Block lag fix - snapshot-based sync */
 	/**
 	 * @phpstan-param array<int, int> $oldBlockSnapshot
 	 */
@@ -1743,7 +1743,7 @@ NEWSYNC;
 
                 $newBlock =
                     '$vBlockPos = new Vector3($blockPos->getX(), $blockPos->getY(), $blockPos->getZ());' . "\n\n" .
-                    "\t\t\t\t/** [BETTERPMMP-PATCH] Block lag fix - capture snapshot before interaction */\n" .
+                    "\t\t\t\t/** [BetterPMMP-PATCH] Block lag fix - capture snapshot before interaction */\n" .
                     "\t\t\t\t\$oldBlockSnapshot = \$this->captureBlockSnapshot(\$vBlockPos, \$data->getFace());\n" .
                     "\t\t\t\t\$interactResult = \$this->player->interactBlock(\$vBlockPos, \$data->getFace(), \$clickPos);\n\n" .
                     "\t\t\t\t\$syncAdjacentFace = null;\n" .
@@ -1989,7 +1989,7 @@ use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\permission\DefaultPermissionNames;
 
-/** [BETTERPMMP-PATCH] */
+/** [BetterPMMP-PATCH] */
 class RestartCommand extends VanillaCommand{
 
 	public function __construct(){
@@ -2053,7 +2053,7 @@ function patchSimpleCommandMapRestartCommand(string $sourceDir): array
             if (str_contains($content, $candidate)) {
                 $content = str_replace(
                     $candidate,
-                    $candidate . "\nuse pocketmine\\command\\defaults\\RestartCommand; /** [BETTERPMMP-PATCH] */",
+                    $candidate . "\nuse pocketmine\\command\\defaults\\RestartCommand; /** [BetterPMMP-PATCH] */",
                     $content
                 );
                 break;
@@ -2205,7 +2205,7 @@ function patchIronDoorNoInteract(string $sourceDir): array
         return makePatchResult($targetFile, false, false, 'Failed to match onInteract pattern in Door.php');
     }
 
-    $newOnInteract = '/** [BETTERPMMP-PATCH] Iron door: block onInteract completely */' . "\n"
+    $newOnInteract = '/** [BetterPMMP-PATCH] Iron door: block onInteract completely */' . "\n"
         . "\t" . 'public function onInteract(Item $item, int $face, Vector3 $clickVector, ?Player $player = null, array &$returnedItems = []) : bool{' . "\n"
         . "\t\t" . 'if($this->getTypeId() === BlockTypeIds::IRON_DOOR){' . "\n"
         . "\t\t\t" . 'return true;' . "\n"
@@ -2239,7 +2239,7 @@ function patchPocketmineYmlBetterPmmp(string $sourceDir): array
     }
     $betterPmmpBlock = <<<'YAML'
 
-# [BETTERPMMP-PATCH] Extreme optimization settings
+# [BetterPMMP-PATCH] Extreme optimization settings
 better-pmmp:
   # Fixed light: skip async LightPopulationTask entirely.
   # Fills server-side light arrays with a fixed value instead of running BFS flood-fill on worker threads.
@@ -2305,7 +2305,7 @@ function patchYmlServerPropertiesBetterPmmp(string $sourceDir): array
     }
     $old = "\tpublic const WORLDS = 'worlds';\n}";
 
-    $new = "\t/** [BETTERPMMP-PATCH] BetterPMMP optimization config constants */\n"
+    $new = "\t/** [BetterPMMP-PATCH] BetterPMMP optimization config constants */\n"
         . "\tpublic const BETTER_PMMP = 'better-pmmp';\n"
         . "\tpublic const BETTER_PMMP_FIXED_LIGHT = 'better-pmmp.fixed-light';\n"
         . "\tpublic const BETTER_PMMP_FIXED_LIGHT_ENABLED = 'better-pmmp.fixed-light.enabled';\n"
@@ -2356,7 +2356,7 @@ function patchWorldFixedLight(string $sourceDir): array
         . "\n"
         . "\t\t\t\$this->workerPool->submitTask(new LightPopulationTask(";
 
-    $new = "\t/** [BETTERPMMP-PATCH] Fixed light values bypass - skip LightPopulationTask when enabled */\n"
+    $new = "\t/** [BetterPMMP-PATCH] Fixed light values bypass - skip LightPopulationTask when enabled */\n"
         . "\tprivate function orderLightPopulation(int \$chunkX, int \$chunkZ) : void{\n"
         . "\t\t\$chunkHash = World::chunkHash(\$chunkX, \$chunkZ);\n"
         . "\t\t\$lightPopulatedState = \$this->chunks[\$chunkHash]->isLightPopulated();\n"
@@ -2409,7 +2409,7 @@ function patchWorldPerWorldChunkTicking(string $sourceDir): array
         . "\t\t\$this->maxConcurrentChunkPopulationTasks = \$cfg->getPropertyInt(YmlServerProperties::CHUNK_GENERATION_POPULATION_QUEUE_SIZE, 2);";
 
     $new = "\t\t\$this->tickedBlocksPerSubchunkPerTick = \$cfg->getPropertyInt(YmlServerProperties::CHUNK_TICKING_BLOCKS_PER_SUBCHUNK_PER_TICK, self::DEFAULT_TICKED_BLOCKS_PER_SUBCHUNK_PER_TICK);\n"
-        . "\t\t/** [BETTERPMMP-PATCH] Per-world chunk ticking override.\n"
+        . "\t\t/** [BetterPMMP-PATCH] Per-world chunk ticking override.\n"
         . "\t\t * tick-radius is clamped to this world's effective view-distance (per-world override if set, else server.properties),\n"
         . "\t\t * NOT to the global server view-distance, so a world configured with a larger view-distance can also tick farther. */\n"
         . "\t\t\$perWorldChunkTicking = \$cfg->getProperty('better-pmmp.per-world-chunk-ticking', []);\n"
@@ -2475,7 +2475,7 @@ function patchWorldChunkOptimization(string $sourceDir): array
         . "\t\t\t\$this->timings->randomChunkUpdatesChunkSelection->stopTiming();\n"
         . "\t\t}";
 
-    $newTickChunks = "\t\t/** [BETTERPMMP-PATCH] Batch recheck limit for chunk tick optimization */\n"
+    $newTickChunks = "\t\t/** [BetterPMMP-PATCH] Batch recheck limit for chunk tick optimization */\n"
         . "\t\tif(count(\$this->recheckTickingChunks) > 0){\n"
         . "\t\t\t\$this->timings->randomChunkUpdatesChunkSelection->startTiming();\n"
         . "\n"
@@ -2532,7 +2532,7 @@ function patchPlayerPerWorldViewDistance(string $sourceDir): array
 
     $oldField = "\tprotected int \$viewDistance = -1;";
     $newField = "\tprotected int \$viewDistance = -1;\n"
-        . "\t/** [BETTERPMMP-PATCH] Original view-distance requested by client (pre-clamp, pre-override). Used to re-apply per-world override on world change. */\n"
+        . "\t/** [BetterPMMP-PATCH] Original view-distance requested by client (pre-clamp, pre-override). Used to re-apply per-world override on world change. */\n"
         . "\tprotected int \$requestedViewDistance = -1;";
     $newContent = str_replace($oldField, $newField, $content);
     if ($newContent === $content) {
@@ -2543,11 +2543,11 @@ function patchPlayerPerWorldViewDistance(string $sourceDir): array
         . "\n"
         . "\t\tif(\$newViewDistance !== \$this->viewDistance){";
 
-    $newSetView = "\t\t/** [BETTERPMMP-PATCH] Remember the original requested distance so we can re-apply per-world override on world change */\n"
+    $newSetView = "\t\t/** [BetterPMMP-PATCH] Remember the original requested distance so we can re-apply per-world override on world change */\n"
         . "\t\t\$this->requestedViewDistance = \$distance;\n"
         . "\t\t\$newViewDistance = \$this->server->getAllowedViewDistance(\$distance);\n"
         . "\n"
-        . "\t\t/** [BETTERPMMP-PATCH] Per-world view distance override */\n"
+        . "\t\t/** [BetterPMMP-PATCH] Per-world view distance override */\n"
         . "\t\t\$perWorldViewDistance = \$this->server->getConfigGroup()->getProperty('better-pmmp.per-world-view-distance', []);\n"
         . "\t\tif(is_array(\$perWorldViewDistance)){\n"
         . "\t\t\t\$currentWorld = \$this->getWorld();\n"
@@ -2578,14 +2578,14 @@ function patchPlayerPerWorldViewDistance(string $sourceDir): array
         . "\t\t\t\$this->stopSleep();";
 
     $newTeleport = "\tpublic function teleport(Vector3 \$pos, ?float \$yaw = null, ?float \$pitch = null) : bool{\n"
-        . "\t\t/** [BETTERPMMP-PATCH] Capture old world before parent::teleport mutates position */\n"
+        . "\t\t/** [BetterPMMP-PATCH] Capture old world before parent::teleport mutates position */\n"
         . "\t\t\$oldWorld = \$this->getWorld();\n"
         . "\t\tif(parent::teleport(\$pos, \$yaw, \$pitch)){\n"
         . "\n"
         . "\t\t\t\$this->removeCurrentWindow();\n"
         . "\t\t\t\$this->stopSleep();\n"
         . "\n"
-        . "\t\t\t/** [BETTERPMMP-PATCH] Re-evaluate per-world view distance using the original requested distance,\n"
+        . "\t\t\t/** [BetterPMMP-PATCH] Re-evaluate per-world view distance using the original requested distance,\n"
         . "\t\t\t * so a previous world's override does not leak into a world that has no override. */\n"
         . "\t\t\tif(\$oldWorld !== \$this->getWorld()){\n"
         . "\t\t\t\t\$baseDistance = \$this->requestedViewDistance > 0 ? \$this->requestedViewDistance : \$this->server->getViewDistance();\n"
@@ -2699,7 +2699,7 @@ function patchWorldNeighbourUpdateThrottle(string $sourceDir): array
         . "\t\t}";
 
     $new = "\t\t\$this->timings->neighbourBlockUpdates->startTiming();\n"
-        . "\t\t/** [BETTERPMMP-PATCH] Neighbour block update throttle */\n"
+        . "\t\t/** [BetterPMMP-PATCH] Neighbour block update throttle */\n"
         . "\t\t\$neighbourUpdateLimit = (int) \$this->server->getConfigGroup()->getProperty('better-pmmp.neighbour-update-limit', 512);\n"
         . "\t\t\$neighbourUpdateCount = 0;\n"
         . "\t\twhile(\$this->neighbourBlockUpdateQueue->count() > 0){\n"
@@ -2759,13 +2759,13 @@ function patchWorldBlockCacheSize(string $sourceDir): array
     }
     $content = str_replace(
         "\tprivate int \$blockCacheSize = 0;",
-        "\tprivate int \$blockCacheSize = 0;\n\t/** [BETTERPMMP-PATCH] Configurable block cache cap */\n\tprivate int \$blockCacheSizeCap = 2048;",
+        "\tprivate int \$blockCacheSize = 0;\n\t/** [BetterPMMP-PATCH] Configurable block cache cap */\n\tprivate int \$blockCacheSizeCap = 2048;",
         $content
     );
 
     $content = str_replace(
         "\t\t\$this->initRandomTickBlocksFromConfig(\$cfg);\n\n\t\t\$this->timings = new WorldTimings(\$this);",
-        "\t\t/** [BETTERPMMP-PATCH] Block cache size from config */\n"
+        "\t\t/** [BetterPMMP-PATCH] Block cache size from config */\n"
         . "\t\t\$this->blockCacheSizeCap = max(512, (int) \$this->server->getConfigGroup()->getProperty('better-pmmp.block-cache-size', 8192));\n"
         . "\t\t\$this->initRandomTickBlocksFromConfig(\$cfg);\n\n\t\t\$this->timings = new WorldTimings(\$this);",
         $content
@@ -2808,7 +2808,7 @@ function patchEntityMoveInPlace(string $sourceDir): array
         . "\t\t\t\$this->location->pitch\n"
         . "\t\t);";
 
-    $new = "\t\t/** [BETTERPMMP-PATCH] In-place location update - avoids new Location() allocation per move */\n"
+    $new = "\t\t/** [BetterPMMP-PATCH] In-place location update - avoids new Location() allocation per move */\n"
         . "\t\t\$this->location->x = (\$this->boundingBox->minX + \$this->boundingBox->maxX) / 2;\n"
         . "\t\t\$this->location->y = \$this->boundingBox->minY - \$this->ySize;\n"
         . "\t\t\$this->location->z = (\$this->boundingBox->minZ + \$this->boundingBox->maxZ) / 2;";
@@ -2844,7 +2844,7 @@ function patchEntitySmartBlocksAroundCache(string $sourceDir): array
     $content = str_replace(
         "\tprotected ?array \$blocksAround = null;",
         "\tprotected ?array \$blocksAround = null;\n"
-        . "\t/** [BETTERPMMP-PATCH] Smart blocksAround cache tracking */\n"
+        . "\t/** [BetterPMMP-PATCH] Smart blocksAround cache tracking */\n"
         . "\tprivate int \$lastBlockFloorX = PHP_INT_MIN;\n"
         . "\tprivate int \$lastBlockFloorY = PHP_INT_MIN;\n"
         . "\tprivate int \$lastBlockFloorZ = PHP_INT_MIN;",
@@ -2864,7 +2864,7 @@ function patchEntitySmartBlocksAroundCache(string $sourceDir): array
     $old = "\t\t\$this->getWorld()->onEntityMoved(\$this);\n"
         . "\t\t\$this->checkBlockIntersections();";
 
-    $new = "\t\t/** [BETTERPMMP-PATCH] Smart blocksAround cache - invalidate only when block grid position changes post-move */\n"
+    $new = "\t\t/** [BetterPMMP-PATCH] Smart blocksAround cache - invalidate only when block grid position changes post-move */\n"
         . "\t\t\$newFloorX = (int) floor(\$this->location->x);\n"
         . "\t\t\$newFloorY = (int) floor(\$this->location->y);\n"
         . "\t\t\$newFloorZ = (int) floor(\$this->location->z);\n"
@@ -2908,7 +2908,7 @@ function patchEntityMotionEpsilonCleanup(string $sourceDir): array
     $old = "\t\t\$this->motion = new Vector3(\$this->motion->x * \$friction, \$mY, \$this->motion->z * \$friction);\n"
         . "\t}";
 
-    $new = "\t\t/** [BETTERPMMP-PATCH] Motion epsilon cleanup - zeroes sub-threshold components after friction */\n"
+    $new = "\t\t/** [BetterPMMP-PATCH] Motion epsilon cleanup - zeroes sub-threshold components after friction */\n"
         . "\t\t\$mX = \$this->motion->x * \$friction;\n"
         . "\t\t\$mZ = \$this->motion->z * \$friction;\n"
         . "\t\t\$this->motion->x = abs(\$mX) < 1.0E-6 ? 0.0 : \$mX;\n"
@@ -3010,7 +3010,7 @@ function patchYmlServerPropertiesCriticalHit(string $sourceDir): array
     }
 
     $old = "\tpublic const WORLDS = 'worlds';\n}";
-    $new = "\t/** [BETTERPMMP-PATCH] Critical hit config constants */\n"
+    $new = "\t/** [BetterPMMP-PATCH] Critical hit config constants */\n"
         . "\tpublic const BETTER_PMMP_CRITICAL_HIT = 'better-pmmp.critical-hit';\n"
         . "\tpublic const BETTER_PMMP_CRITICAL_HIT_IGNORE_SPRINT = 'better-pmmp.critical-hit.ignore-sprint';\n"
         . "\tpublic const BETTER_PMMP_CRITICAL_HIT_MIN_FALL_DISTANCE = 'better-pmmp.critical-hit.min-fall-distance';\n"
@@ -3055,7 +3055,7 @@ function patchPlayerCriticalHit(string $sourceDir): array
     $indent = $matches[1];
     $innerIndent = $matches[2];
 
-    $replacement = $indent . "/** [BETTERPMMP-PATCH] Configurable critical hit logic */\n"
+    $replacement = $indent . "/** [BetterPMMP-PATCH] Configurable critical hit logic */\n"
         . $indent . "\$config = \$this->server->getConfigGroup();\n"
         . $indent . "\$critMinFall = (float) \$config->getProperty('better-pmmp.critical-hit.min-fall-distance', 0.5);\n"
         . $indent . "\$critIgnoreSprint = (bool) \$config->getProperty('better-pmmp.critical-hit.ignore-sprint', false);\n"
@@ -3102,7 +3102,7 @@ function patchWorldEntityTickClose(string $sourceDir): array
         . "\t\t\t}\n"
         . "\t\t}";
 
-    $new = "\t\t/** [BETTERPMMP-PATCH] Entity tick close guard - prevents redundant close() on already-closed entities */\n"
+    $new = "\t\t/** [BetterPMMP-PATCH] Entity tick close guard - prevents redundant close() on already-closed entities */\n"
         . "\t\tforeach(\$this->updateEntities as \$id => \$entity){\n"
         . "\t\t\tif(\$entity->isClosed() || \$entity->isFlaggedForDespawn() || !\$entity->onUpdate(\$currentTick)){\n"
         . "\t\t\t\tunset(\$this->updateEntities[\$id]);\n"
@@ -3156,7 +3156,7 @@ function patchWorldUnloadEntityIteration(string $sourceDir): array
         . "\t\t\t}\n"
         . "\t\t}";
 
-    $new = "\t\t/** [BETTERPMMP-PATCH] Safe entity iteration during world unload - snapshot keys to avoid modification during iteration */\n"
+    $new = "\t\t/** [BetterPMMP-PATCH] Safe entity iteration during world unload - snapshot keys to avoid modification during iteration */\n"
         . "\t\t\$chunkHashes = array_keys(\$this->entitiesByChunk);\n"
         . "\t\tforeach(\$chunkHashes as \$chunkHash){\n"
         . "\t\t\tif(!isset(\$this->entitiesByChunk[\$chunkHash])){\n"
@@ -3211,7 +3211,7 @@ function patchNetworkSessionSetHandlerGuard(string $sourceDir): array
     $old = "\tpublic function setHandler(?PacketHandler \$handler) : void{\n"
         . "\t\tif(\$this->connected){ //TODO: this is fine since we can't handle anything from a disconnected session, but it might produce surprises in some cases";
 
-    $new = "\t/** [BETTERPMMP-PATCH] setHandler disconnect guard - prevents handler assignment during disconnect cleanup */\n"
+    $new = "\t/** [BetterPMMP-PATCH] setHandler disconnect guard - prevents handler assignment during disconnect cleanup */\n"
         . "\tpublic function setHandler(?PacketHandler \$handler) : void{\n"
         . "\t\tif(\$this->connected && !\$this->disconnectGuard){";
 
@@ -3251,7 +3251,7 @@ function patchHandlerListRegisterAllCache(string $sourceDir): array
         . "\t\t\$this->invalidateAffectedCaches();\n"
         . "\t}";
 
-    $new = "\t/** [BETTERPMMP-PATCH] Batch register listeners - single cache invalidation instead of N+1 */\n"
+    $new = "\t/** [BetterPMMP-PATCH] Batch register listeners - single cache invalidation instead of N+1 */\n"
         . "\tpublic function registerAll(array \$listeners) : void{\n"
         . "\t\tforeach(\$listeners as \$listener){\n"
         . "\t\t\tif(isset(\$this->handlerSlots[\$listener->getPriority()][spl_object_id(\$listener)])){\n"
@@ -3297,7 +3297,7 @@ function patchEntityHealthFloatComparison(string $sourceDir): array
         . "\t\t}";
 
     $new = "\tpublic function setHealth(float \$amount) : void{\n"
-        . "\t\t/** [BETTERPMMP-PATCH] Float-safe health comparison using epsilon */\n"
+        . "\t\t/** [BetterPMMP-PATCH] Float-safe health comparison using epsilon */\n"
         . "\t\tif(abs(\$amount - \$this->health) < 1e-6){\n"
         . "\t\t\treturn;\n"
         . "\t\t}";
@@ -3338,7 +3338,7 @@ function patchPlayerRespawnLockReset(string $sourceDir): array
 
     $new1 = "\t\t\tfunction(Position \$safeSpawn) : void{\n"
         . "\t\t\t\tif(!\$this->isConnected()){\n"
-        . "\t\t\t\t\t/** [BETTERPMMP-PATCH] Respawn lock reset on disconnect */\n"
+        . "\t\t\t\t\t/** [BetterPMMP-PATCH] Respawn lock reset on disconnect */\n"
         . "\t\t\t\t\t\$this->respawnLocked = false;\n"
         . "\t\t\t\t\treturn;\n"
         . "\t\t\t\t}";
@@ -3353,7 +3353,7 @@ function patchPlayerRespawnLockReset(string $sourceDir): array
         . "\t\t\t\t\t\$this->getNetworkSession()->disconnectWithError(KnownTranslationFactory::pocketmine_disconnect_error_respawn());";
 
     $new2 = "\t\t\tfunction() : void{\n"
-        . "\t\t\t\t/** [BETTERPMMP-PATCH] Respawn lock reset on error */\n"
+        . "\t\t\t\t/** [BetterPMMP-PATCH] Respawn lock reset on error */\n"
         . "\t\t\t\t\$this->respawnLocked = false;\n"
         . "\t\t\t\tif(\$this->isConnected()){\n"
         . "\t\t\t\t\t\$this->getNetworkSession()->disconnectWithError(KnownTranslationFactory::pocketmine_disconnect_error_respawn());";
@@ -3399,7 +3399,7 @@ function patchHandlerListMergePerformance(string $sourceDir): array
         . "\n"
         . "\t\treturn \$this->handlerCache->list = array_merge(...\$listenersByPriority);";
 
-    $new = "\t\t/** [BETTERPMMP-PATCH] Single-pass handler list merge - O(n) instead of O(n^2) */\n"
+    $new = "\t\t/** [BetterPMMP-PATCH] Single-pass handler list merge - O(n) instead of O(n^2) */\n"
         . "\t\t\$listenersByPriority = [];\n"
         . "\t\tforeach(\$handlerLists as \$currentList){\n"
         . "\t\t\tforeach(\$currentList->handlerSlots as \$priority => \$listeners){\n"
@@ -3457,7 +3457,7 @@ function patchServerRemoveOnlinePlayerSnapshot(string $sourceDir): array
         . "\t\t}\n"
         . "\t}";
 
-    $new = "\t/** [BETTERPMMP-PATCH] Snapshot playerList before notification loop to prevent nested iteration */\n"
+    $new = "\t/** [BetterPMMP-PATCH] Snapshot playerList before notification loop to prevent nested iteration */\n"
         . "\tpublic function removeOnlinePlayer(Player \$player) : void{\n"
         . "\t\tif(isset(\$this->playerList[\$rawUUID = \$player->getUniqueId()->getBytes()])){\n"
         . "\t\t\tunset(\$this->playerList[\$rawUUID]);\n"
@@ -3503,7 +3503,7 @@ function patchPlayerDestroyCyclesCleanup(string $sourceDir): array
         . "\t\tunset(\$this->craftingGrid);\n"
         . "\t\t\$this->spawnPosition = null;";
 
-    $new = "\t/** [BETTERPMMP-PATCH] Defensive reference cleanup - clear singleton reference for GC */\n"
+    $new = "\t/** [BetterPMMP-PATCH] Defensive reference cleanup - clear singleton reference for GC */\n"
         . "\tprotected function destroyCycles() : void{\n"
         . "\t\t\$this->networkSession = null;\n"
         . "\t\tunset(\$this->cursorInventory);\n"
@@ -3560,7 +3560,7 @@ function patchWorldUnloadChunkEntityClose(string $sourceDir): array
             $indent = ($anchor === $old) ? "\t\t\t\t" : "\t\t\t";
             $inner = $indent . "\t";
             $innerInner = $inner . "\t";
-            $new = $indent . "/** [BETTERPMMP-PATCH] Guard against double-close during chunk unload */\n"
+            $new = $indent . "/** [BetterPMMP-PATCH] Guard against double-close during chunk unload */\n"
                 . $indent . "foreach(\$this->getChunkEntities(\$x, \$z) as \$entity){\n"
                 . $inner . "if(\$entity instanceof Player){\n"
                 . $innerInner . "continue;\n"
@@ -3612,7 +3612,7 @@ function patchNetworkSessionDisconnectGuardTiming(string $sourceDir): array
 
     $new = "\t\t\t\$this->disconnectGuard = true;\n"
         . "\t\t\t\$func();\n"
-        . "\t\t\t/** [BETTERPMMP-PATCH] Keep disconnectGuard active through full cleanup - session is never reused */\n"
+        . "\t\t\t/** [BetterPMMP-PATCH] Keep disconnectGuard active through full cleanup - session is never reused */\n"
         . "\t\t\t\$this->flushGamePacketQueue();";
 
     $newContent = str_replace($old, $new, $content);
@@ -3640,7 +3640,7 @@ function patchClassMapAuthoritative(string $sourceDir): array
         return makePatchResult($targetFile, false, false, 'Failed to read autoload_real.php');
     }
 
-    if (str_contains($content, '[BETTERPMMP-PATCH] classmap-authoritative disabled')) {
+    if (str_contains($content, '[BetterPMMP-PATCH] classmap-authoritative disabled')) {
         return makePatchResult($targetFile, false, true);
     }
 
@@ -3650,7 +3650,7 @@ function patchClassMapAuthoritative(string $sourceDir): array
 
     $newContent = str_replace(
         '$loader->setClassMapAuthoritative(true);',
-        '/** [BETTERPMMP-PATCH] classmap-authoritative disabled to allow PSR-4 fallback for patched classes */' . "\n        \$loader->setClassMapAuthoritative(false);",
+        '/** [BetterPMMP-PATCH] classmap-authoritative disabled to allow PSR-4 fallback for patched classes */' . "\n        \$loader->setClassMapAuthoritative(false);",
         $content
     );
 
@@ -3732,7 +3732,7 @@ function patchPocketmineYmlFpsOptimization(string $sourceDir): array
     }
 
     $insertion = $anchor . "\n"
-        . "  # [BETTERPMMP-PATCH] Client-side FPS optimization\n"
+        . "  # [BetterPMMP-PATCH] Client-side FPS optimization\n"
         . "  # Reduces redundant/out-of-range packets sent to players to relieve client frame drops.\n"
         . "  # All filters preserve gameplay correctness — teleport and forced sync bypass every filter.\n"
         . "  fps-optimization:\n"
@@ -3799,7 +3799,7 @@ function patchYmlServerPropertiesFpsOptimization(string $sourceDir): array
     }
 
     $insert = $anchor
-        . "\t/** [BETTERPMMP-PATCH] FPS optimization config constants */\n"
+        . "\t/** [BetterPMMP-PATCH] FPS optimization config constants */\n"
         . "\tpublic const BETTER_PMMP_FPS_OPTIMIZATION = 'better-pmmp.fps-optimization';\n"
         . "\tpublic const BETTER_PMMP_FPS_ENTITY_BROADCAST_ENABLED = 'better-pmmp.fps-optimization.entity-broadcast.enabled';\n"
         . "\tpublic const BETTER_PMMP_FPS_ENTITY_BROADCAST_MOTION_DISTANCE = 'better-pmmp.fps-optimization.entity-broadcast.motion-distance';\n"
@@ -3865,7 +3865,7 @@ function patchFpsEntityBroadcastOptimization(string $sourceDir): array
         . "\t}";
 
     $newMove = "\tprotected function broadcastMovement(bool \$teleport = false) : void{\n"
-        . "\t\t/** [BETTERPMMP-PATCH] FPS optimization: redundancy check + distance filter */\n"
+        . "\t\t/** [BetterPMMP-PATCH] FPS optimization: redundancy check + distance filter */\n"
         . "\t\t\$fpsGround = \$this->onGround;\n"
         . "\t\t\$fpsX = \$this->location->x; \$fpsY = \$this->location->y; \$fpsZ = \$this->location->z;\n"
         . "\t\t\$fpsYaw = \$this->location->yaw; \$fpsPitch = \$this->location->pitch;\n"
@@ -3899,7 +3899,7 @@ function patchFpsEntityBroadcastOptimization(string $sourceDir): array
         . "\t\tNetworkBroadcastUtils::broadcastPackets(\$this->hasSpawned, [SetActorMotionPacket::create(\$this->id, \$this->getMotion(), tick: 0)]);\n"
         . "\t}";
     $newMotion = "\tprotected function broadcastMotion() : void{\n"
-        . "\t\t/** [BETTERPMMP-PATCH] FPS optimization: motion redundancy + distance filter */\n"
+        . "\t\t/** [BetterPMMP-PATCH] FPS optimization: motion redundancy + distance filter */\n"
         . "\t\t\$fpsMotion = \$this->getMotion();\n"
         . "\t\tif(\$this->fpsRedundantMotionSuppressed(\$fpsMotion->x, \$fpsMotion->y, \$fpsMotion->z)){\n"
         . "\t\t\treturn;\n"
@@ -3919,7 +3919,7 @@ function patchFpsEntityBroadcastOptimization(string $sourceDir): array
         . "\t}";
     $helperBlock = $helperAnchor . "\n"
         . "\n"
-        . "\t/** [BETTERPMMP-PATCH] FPS optimization state */\n"
+        . "\t/** [BetterPMMP-PATCH] FPS optimization state */\n"
         . "\tprotected float \$fpsLastBroadcastX = NAN;\n"
         . "\tprotected float \$fpsLastBroadcastY = NAN;\n"
         . "\tprotected float \$fpsLastBroadcastZ = NAN;\n"
@@ -4032,7 +4032,7 @@ function patchFpsActorAnimationDistanceFilter(string $sourceDir): array
         . "\t\tNetworkBroadcastUtils::broadcastPackets(\$targets ?? \$this->getViewers(), \$animation->encode());\n"
         . "\t}";
     $new = "\tpublic function broadcastAnimation(Animation \$animation, ?array \$targets = null) : void{\n"
-        . "\t\t/** [BETTERPMMP-PATCH] FPS optimization: animation viewer distance filter */\n"
+        . "\t\t/** [BetterPMMP-PATCH] FPS optimization: animation viewer distance filter */\n"
         . "\t\t\$fpsTargets = \$targets ?? \$this->getViewers();\n"
         . "\t\tif(\$targets === null){\n"
         . "\t\t\t\$fpsTargets = \$this->filterFpsAnimationViewers(\$fpsTargets);\n"
@@ -4094,7 +4094,7 @@ function patchFpsParticleSoundDistanceFilter(string $sourceDir): array
     $oldSound = "\tpublic function addSound(Vector3 \$pos, Sound \$sound, ?array \$players = null) : void{\n"
         . "\t\t\$players ??= \$this->getViewersForPosition(\$pos);";
     $newSound = "\tpublic function addSound(Vector3 \$pos, Sound \$sound, ?array \$players = null) : void{\n"
-        . "\t\t/** [BETTERPMMP-PATCH] FPS optimization: sound distance filter */\n"
+        . "\t\t/** [BetterPMMP-PATCH] FPS optimization: sound distance filter */\n"
         . "\t\t\$fpsImplicit = \$players === null;\n"
         . "\t\t\$players ??= \$this->getViewersForPosition(\$pos);\n"
         . "\t\tif(\$fpsImplicit){\n"
@@ -4110,7 +4110,7 @@ function patchFpsParticleSoundDistanceFilter(string $sourceDir): array
     $oldParticle = "\tpublic function addParticle(Vector3 \$pos, Particle \$particle, ?array \$players = null) : void{\n"
         . "\t\t\$players ??= \$this->getViewersForPosition(\$pos);";
     $newParticle = "\tpublic function addParticle(Vector3 \$pos, Particle \$particle, ?array \$players = null) : void{\n"
-        . "\t\t/** [BETTERPMMP-PATCH] FPS optimization: particle distance filter */\n"
+        . "\t\t/** [BetterPMMP-PATCH] FPS optimization: particle distance filter */\n"
         . "\t\t\$fpsImplicit = \$players === null;\n"
         . "\t\t\$players ??= \$this->getViewersForPosition(\$pos);\n"
         . "\t\tif(\$fpsImplicit){\n"
@@ -4129,7 +4129,7 @@ function patchFpsParticleSoundDistanceFilter(string $sourceDir): array
     $helperBlock = $helperAnchor . "\n"
         . "\n"
         . "\t/**\n"
-        . "\t * [BETTERPMMP-PATCH] FPS optimization: filter viewers by squared distance from a position.\n"
+        . "\t * [BetterPMMP-PATCH] FPS optimization: filter viewers by squared distance from a position.\n"
         . "\t * @param array<int, \\pocketmine\\player\\Player> \$viewers\n"
         . "\t * @return array<int, \\pocketmine\\player\\Player>\n"
         . "\t */\n"
@@ -4180,7 +4180,7 @@ function patchFpsChunkSendPacing(string $sourceDir): array
     }
 
     $oldLimit = "\t\t\$limit = \$this->chunksPerTick - count(\$this->activeChunkGenerationRequests);";
-    $newLimit = "\t\t/** [BETTERPMMP-PATCH] FPS optimization: chunk send pacing (smooth ramp-up) */\n"
+    $newLimit = "\t\t/** [BetterPMMP-PATCH] FPS optimization: chunk send pacing (smooth ramp-up) */\n"
         . "\t\t\$fpsChunksPerTick = \$this->chunksPerTick;\n"
         . "\t\t\$fpsConfig = \$this->server->getConfigGroup();\n"
         . "\t\tif((bool) \$fpsConfig->getProperty('better-pmmp.fps-optimization.chunk-pacing.enabled', true)){\n"
@@ -4201,7 +4201,7 @@ function patchFpsChunkSendPacing(string $sourceDir): array
 
     $propAnchor = "\tprotected int \$chunksPerTick;";
     $propNew = $propAnchor . "\n"
-        . "\t/** [BETTERPMMP-PATCH] FPS optimization: chunk pacing tick counter */\n"
+        . "\t/** [BetterPMMP-PATCH] FPS optimization: chunk pacing tick counter */\n"
         . "\tprotected int \$fpsChunkPacingTicks = 0;";
     $content = str_replace($propAnchor, $propNew, $content, $cprop);
     if ($cprop !== 1) {
@@ -4235,7 +4235,7 @@ function patchFpsItemEntitySuppression(string $sourceDir): array
     $anchor = "class ItemEntity extends Entity{\n";
     $insert = $anchor
         . "\n"
-        . "\t/** [BETTERPMMP-PATCH] FPS optimization: suppress redundant motion broadcast for stationary items in dense chunks */\n"
+        . "\t/** [BetterPMMP-PATCH] FPS optimization: suppress redundant motion broadcast for stationary items in dense chunks */\n"
         . "\tprotected function broadcastMovement(bool \$teleport = false) : void{\n"
         . "\t\tif(!\$teleport && \$this->fpsShouldSuppressBroadcast()){\n"
         . "\t\t\treturn;\n"
