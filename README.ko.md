@@ -43,15 +43,15 @@ php patch_tool.php <소스_디렉터리_경로>
 ## 요구 사항
 
 - PocketMine-MP 5.0.0 소스 코드
-- PHP 8.x — [pmmp/PHP-Binaries 릴리스](https://github.com/pmmp/PHP-Binaries/releases)의 PMMP 전용 PHP 바이너리
+- PHP 8.x - [pmmp/PHP-Binaries 릴리스](https://github.com/pmmp/PHP-Binaries/releases)의 PMMP 전용 PHP 바이너리
 - Windows (`start.cmd` 기반 시작 스크립트)
 
 ## 설치
 
 1. PocketMine-MP 5.0.0 소스를 `source/` 폴더에 둡니다.
 2. PHP 바이너리를 준비합니다. `start.cmd`는 다음 두 위치 중 한 곳에서 PHP를 찾습니다:
-   - **서버 내부** — `bin/php/php.exe` (로컬 바이너리가 있으면 항상 우선 사용), 또는
-   - **시스템 경로** — `source/` 폴더 밖, `PATH`에 등록된 `php.exe`.
+   - **서버 내부** - `bin/php/php.exe` (로컬 바이너리가 있으면 항상 우선 사용), 또는
+   - **시스템 경로** - `source/` 폴더 밖, `PATH`에 등록된 `php.exe`.
 
    [pmmp/PHP-Binaries 릴리스](https://github.com/pmmp/PHP-Binaries/releases)에서 환경에 맞는 빌드를 받아, 서버 내부 방식이라면 `bin/php/`에 압축을 풉니다.
 3. 패치 도구를 실행합니다:

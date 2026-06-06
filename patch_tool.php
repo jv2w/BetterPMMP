@@ -163,6 +163,8 @@ function patchPluginManager(string $sourceDir): array
         return makePatchResult($targetFile, false, false, 'Failed to read PluginManager.php');
     }
 
+    $originalContent = $content;
+
     $useStatements = <<<'PHP'
 use function strlen;
 PHP;
@@ -564,6 +566,10 @@ PHP;
                 $content
             );
         }
+    }
+
+    if ($content === $originalContent) {
+        return makePatchResult($targetFile, false, true);
     }
 
     if (file_put_contents($targetFile, $content) === false) {
@@ -1187,21 +1193,32 @@ function patchReloadPermission(string $sourceDir): array
     $permNamesContent = str_replace(
         'public const COMMAND_PLUGINS = "pocketmine.command.plugins";',
         "public const COMMAND_PLUGINS = \"pocketmine.command.plugins\";\n\tpublic const COMMAND_RELOAD = \"pocketmine.command.reload\";",
-        $permNamesContent
+        $permNamesContent,
+        $permNamesCount
     );
-    file_put_contents($permNamesFile, $permNamesContent);
+    if ($permNamesCount !== 1) {
+        return makePatchResult($permNamesFile, false, false, 'COMMAND_PLUGINS anchor not found in DefaultPermissionNames.php');
+    }
+    if (file_put_contents($permNamesFile, $permNamesContent) === false) {
+        return makePatchResult($permNamesFile, false, false, 'Failed to write DefaultPermissionNames.php');
+    }
 
     $permFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'permission' . DIRECTORY_SEPARATOR . 'DefaultPermissions.php';
     if (file_exists($permFile)) {
         $permContent = file_get_contents($permFile);
         if ($permContent !== false && !str_contains($permContent, 'Names::COMMAND_RELOAD')) {
-
             $permContent = str_replace(
                 'Names::COMMAND_PLUGINS,',
                 "Names::COMMAND_PLUGINS,\n\t\t\tNames::COMMAND_RELOAD,",
-                $permContent
+                $permContent,
+                $permCount
             );
-            file_put_contents($permFile, $permContent);
+            if ($permCount !== 1) {
+                return makePatchResult($permFile, false, false, 'Names::COMMAND_PLUGINS anchor not found in DefaultPermissions.php');
+            }
+            if (file_put_contents($permFile, $permContent) === false) {
+                return makePatchResult($permFile, false, false, 'Failed to write DefaultPermissions.php');
+            }
         }
     }
 
@@ -1209,13 +1226,18 @@ function patchReloadPermission(string $sourceDir): array
     if (file_exists($keysFile)) {
         $keysContent = file_get_contents($keysFile);
         if ($keysContent !== false && !str_contains($keysContent, 'POCKETMINE_PERMISSION_COMMAND_RELOAD')) {
-
             $keysContent = str_replace(
                 'public const POCKETMINE_PERMISSION_COMMAND_PLUGINS = "pocketmine.permission.command.plugins";',
                 "public const POCKETMINE_PERMISSION_COMMAND_PLUGINS = \"pocketmine.permission.command.plugins\";\n\tpublic const POCKETMINE_PERMISSION_COMMAND_RELOAD = \"pocketmine.permission.command.reload\";",
-                $keysContent
+                $keysContent,
+                $keysCount
             );
-            file_put_contents($keysFile, $keysContent);
+            if ($keysCount !== 1) {
+                return makePatchResult($keysFile, false, false, 'POCKETMINE_PERMISSION_COMMAND_PLUGINS anchor not found in KnownTranslationKeys.php');
+            }
+            if (file_put_contents($keysFile, $keysContent) === false) {
+                return makePatchResult($keysFile, false, false, 'Failed to write KnownTranslationKeys.php');
+            }
         }
     }
 
@@ -1223,13 +1245,18 @@ function patchReloadPermission(string $sourceDir): array
     if (file_exists($paramInfoFile)) {
         $paramContent = file_get_contents($paramInfoFile);
         if ($paramContent !== false && !str_contains($paramContent, 'POCKETMINE_PERMISSION_COMMAND_RELOAD')) {
-
             $paramContent = str_replace(
                 'Keys::POCKETMINE_PERMISSION_COMMAND_PLUGINS => [],',
                 "Keys::POCKETMINE_PERMISSION_COMMAND_PLUGINS => [],\n\t\tKeys::POCKETMINE_PERMISSION_COMMAND_RELOAD => [],",
-                $paramContent
+                $paramContent,
+                $paramCount
             );
-            file_put_contents($paramInfoFile, $paramContent);
+            if ($paramCount !== 1) {
+                return makePatchResult($paramInfoFile, false, false, 'POCKETMINE_PERMISSION_COMMAND_PLUGINS anchor not found in KnownTranslationParameterInfo.php');
+            }
+            if (file_put_contents($paramInfoFile, $paramContent) === false) {
+                return makePatchResult($paramInfoFile, false, false, 'Failed to write KnownTranslationParameterInfo.php');
+            }
         }
     }
 
@@ -1237,13 +1264,18 @@ function patchReloadPermission(string $sourceDir): array
     if (file_exists($engIniFile)) {
         $engContent = file_get_contents($engIniFile);
         if ($engContent !== false && !str_contains($engContent, 'pocketmine.permission.command.reload')) {
-
             $engContent = str_replace(
                 'pocketmine.permission.command.plugins=Allows the user to view the list of plugins',
                 "pocketmine.permission.command.plugins=Allows the user to view the list of plugins\npocketmine.permission.command.reload=Allows the user to reload a plugin",
-                $engContent
+                $engContent,
+                $engCount
             );
-            file_put_contents($engIniFile, $engContent);
+            if ($engCount !== 1) {
+                return makePatchResult($engIniFile, false, false, 'pocketmine.permission.command.plugins anchor not found in eng.ini');
+            }
+            if (file_put_contents($engIniFile, $engContent) === false) {
+                return makePatchResult($engIniFile, false, false, 'Failed to write eng.ini');
+            }
         }
     }
 
@@ -1399,22 +1431,27 @@ function patchDataPath(string $sourceDir): array
         . '@mkdir($dataPath . DIRECTORY_SEPARATOR . "system", 0777, true);' . "\n\t\t"
         . 'if(!@mkdir($dataPath, 0777, true) && !is_dir($dataPath)){';
 
-    $newContent = str_replace($oldMkdirBlock, $newMkdirBlock, $content);
+    $newContent = str_replace($oldMkdirBlock, $newMkdirBlock, $content, $mkdirCount);
+    if ($mkdirCount !== 1)
+        return makePatchResult($targetFile, false, false, 'mkdir anchor not found in PocketMine.php');
 
     $newContent = str_replace(
         'Path::join($dataPath, \'server.lock\')',
         'Path::join($dataPath, "system", \'server.lock\')',
-        $newContent
+        $newContent,
+        $lockCount
     );
+    if ($lockCount !== 1)
+        return makePatchResult($targetFile, false, false, 'server.lock path anchor not found in PocketMine.php');
 
     $newContent = str_replace(
         'Path::join($dataPath, "log_archive")',
         'Path::join($dataPath, "system", "log_archive")',
-        $newContent
+        $newContent,
+        $logCount
     );
-
-    if ($newContent === $content)
-        return makePatchResult($targetFile, false, false, 'Failed to patch data path in PocketMine.php');
+    if ($logCount !== 1)
+        return makePatchResult($targetFile, false, false, 'log_archive path anchor not found in PocketMine.php');
 
     if (file_put_contents($targetFile, $newContent) === false)
         return makePatchResult($targetFile, false, false, 'Failed to write patched PocketMine.php');
@@ -1775,8 +1812,8 @@ NEWSYNC;
         }
     }
 
-    if ($changeCount === 0) {
-        return makePatchResult($targetFile, false, false, 'Failed to match any block lag fix patterns in InGamePacketHandler.php');
+    if ($changeCount !== 2) {
+        return makePatchResult($targetFile, false, false, 'Block lag fix requires both method and interaction anchors; matched ' . $changeCount . '/2 in InGamePacketHandler.php');
     }
 
     if (file_put_contents($targetFile, $content) === false) {
@@ -2098,7 +2135,7 @@ function patchStartCmdRestartLoop(string $baseDir): array
 
     // Always run PHP directly (no mintty) so the restart loop can reliably
     // detect restart.flag after PHP exits. mintty uses "start """ which is
-    // asynchronous — the batch process exits immediately and the restart loop
+    // asynchronous - the batch process exits immediately and the restart loop
     // is never reached.
     $restartLoop =
         ":betterpmmp_start" . $nl
@@ -2115,7 +2152,7 @@ function patchStartCmdRestartLoop(string $baseDir): array
     // with goto :EOF + separate :betterpmmp_start, (c) else-only start.cmd.
     $cutPos = null;
 
-    // Priority 1: mintty if-block — present in normal and broken-old-patch cases
+    // Priority 1: mintty if-block - present in normal and broken-old-patch cases
     if (preg_match('/(\r?\n)if exist [^\r\n]*mintty\.exe \(/', $content, $m, PREG_OFFSET_CAPTURE)) {
         $cutPos = $m[0][1];
     }
@@ -2466,7 +2503,11 @@ function patchPlayerPerWorldViewDistance(string $sourceDir): array
 
     $oldChunks = "\t\t\t\$this->server->getAllowedViewDistance(\$this->viewDistance),";
     $newChunks = "\t\t\t\$this->viewDistance,";
+    $beforeChunks = $newContent;
     $newContent = str_replace($oldChunks, $newChunks, $newContent);
+    if ($newContent === $beforeChunks) {
+        return makePatchResult($targetFile, false, false, 'Failed to match getAllowedViewDistance chunk-request call in Player.php');
+    }
 
     $oldTeleport = "\tpublic function teleport(Vector3 \$pos, ?float \$yaw = null, ?float \$pitch = null) : bool{\n"
         . "\t\tif(parent::teleport(\$pos, \$yaw, \$pitch)){\n"
@@ -2489,7 +2530,11 @@ function patchPlayerPerWorldViewDistance(string $sourceDir): array
         . "\t\t\t\t\$this->setViewDistance(\$baseDistance);\n"
         . "\t\t\t}";
 
+    $beforeTeleport = $newContent;
     $newContent = str_replace($oldTeleport, $newTeleport, $newContent);
+    if ($newContent === $beforeTeleport) {
+        return makePatchResult($targetFile, false, false, 'Failed to match teleport method in Player.php');
+    }
 
     if (file_put_contents($targetFile, $newContent) === false) {
         return makePatchResult($targetFile, false, false, 'Failed to write patched Player.php');
@@ -2673,8 +2718,12 @@ function patchEntitySmartBlocksAroundCache(string $sourceDir): array
         . "\tprivate int \$lastBlockFloorX = PHP_INT_MIN;\n"
         . "\tprivate int \$lastBlockFloorY = PHP_INT_MIN;\n"
         . "\tprivate int \$lastBlockFloorZ = PHP_INT_MIN;",
-        $content
+        $content,
+        $fieldCount
     );
+    if ($fieldCount !== 1) {
+        return makePatchResult($targetFile, false, false, 'blocksAround field anchor not found in Entity.php');
+    }
 
     $content = str_replace(
         "\tprotected function move(float \$dx, float \$dy, float \$dz) : void{\n"
@@ -2683,8 +2732,12 @@ function patchEntitySmartBlocksAroundCache(string $sourceDir): array
         . "\t\tTimings::\$entityMove->startTiming();",
         "\tprotected function move(float \$dx, float \$dy, float \$dz) : void{\n"
         . "\t\tTimings::\$entityMove->startTiming();",
-        $content
+        $content,
+        $moveCount
     );
+    if ($moveCount !== 1) {
+        return makePatchResult($targetFile, false, false, 'move() blocksAround reset anchor not found in Entity.php');
+    }
 
     $old = "\t\t\$this->getWorld()->onEntityMoved(\$this);\n"
         . "\t\t\$this->checkBlockIntersections();";
@@ -3317,28 +3370,11 @@ function patchPocketmineYmlFpsOptimization(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'pocketmine.yml';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'pocketmine.yml not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read pocketmine.yml');
-    }
-
-    if (str_contains($content, 'fps-optimization:')) {
-        return makePatchResult($targetFile, false, true);
-    }
-
     $anchor = "  block-cache-size: 8192";
-    if (!str_contains($content, $anchor)) {
-        return makePatchResult($targetFile, false, false, 'better-pmmp anchor (block-cache-size) not found in pocketmine.yml');
-    }
-
     $insertion = $anchor . "\n"
         . "  # [BetterPMMP-PATCH] Client-side FPS optimization\n"
         . "  # Reduces redundant/out-of-range packets sent to players to relieve client frame drops.\n"
-        . "  # All filters preserve gameplay correctness — teleport and forced sync bypass every filter.\n"
+        . "  # All filters preserve gameplay correctness - teleport and forced sync bypass every filter.\n"
         . "  fps-optimization:\n"
         . "    # Skip Entity broadcastMovement/broadcastMotion for viewers beyond motion-distance blocks.\n"
         . "    # Also suppresses redundant broadcasts when position/rotation/motion did not actually change.\n"
@@ -3368,40 +3404,14 @@ function patchPocketmineYmlFpsOptimization(string $sourceDir): array
         . "      enabled: true\n"
         . "      threshold-per-chunk: 16";
 
-    $newContent = str_replace($anchor, $insertion, $content, $count);
-    if ($count !== 1) {
-        return makePatchResult($targetFile, false, false, 'Failed to insert fps-optimization block');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched pocketmine.yml');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'pocketmine.yml', 'fps-optimization:', $anchor, $insertion, 'better-pmmp anchor (block-cache-size) not found in pocketmine.yml', 'Failed to write patched pocketmine.yml');
 }
 
 function patchYmlServerPropertiesFpsOptimization(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'generated' . DIRECTORY_SEPARATOR . 'YmlServerProperties.php';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'YmlServerProperties.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read YmlServerProperties.php');
-    }
-
-    if (str_contains($content, 'BETTER_PMMP_FPS_OPTIMIZATION')) {
-        return makePatchResult($targetFile, false, true);
-    }
-
     $anchor = "\tpublic const BETTER_PMMP_BLOCK_CACHE_SIZE = 'better-pmmp.block-cache-size';\n";
-    if (!str_contains($content, $anchor)) {
-        return makePatchResult($targetFile, false, false, 'BETTER_PMMP_BLOCK_CACHE_SIZE anchor not found');
-    }
-
     $insert = $anchor
         . "\t/** [BetterPMMP-PATCH] FPS optimization config constants */\n"
         . "\tpublic const BETTER_PMMP_FPS_OPTIMIZATION = 'better-pmmp.fps-optimization';\n"
@@ -3421,16 +3431,7 @@ function patchYmlServerPropertiesFpsOptimization(string $sourceDir): array
         . "\tpublic const BETTER_PMMP_FPS_ITEM_ENTITY_ENABLED = 'better-pmmp.fps-optimization.item-entity.enabled';\n"
         . "\tpublic const BETTER_PMMP_FPS_ITEM_ENTITY_THRESHOLD = 'better-pmmp.fps-optimization.item-entity.threshold-per-chunk';\n";
 
-    $newContent = str_replace($anchor, $insert, $content, $count);
-    if ($count !== 1) {
-        return makePatchResult($targetFile, false, false, 'Failed to insert FPS const block');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched YmlServerProperties.php');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'YmlServerProperties.php', 'BETTER_PMMP_FPS_OPTIMIZATION', $anchor, $insert, 'BETTER_PMMP_BLOCK_CACHE_SIZE anchor not found', 'Failed to write patched YmlServerProperties.php');
 }
 
 function patchFpsEntityBroadcastOptimization(string $sourceDir): array
@@ -3470,13 +3471,15 @@ function patchFpsEntityBroadcastOptimization(string $sourceDir): array
 
     $newMove = "\tprotected function broadcastMovement(bool \$teleport = false) : void{\n"
         . "\t\t/** [BetterPMMP-PATCH] FPS optimization: redundancy check + distance filter */\n"
+        . "\t\t\$fpsConfig = \\pocketmine\\Server::getInstance()->getConfigGroup();\n"
+        . "\t\t\$fpsEnabled = (bool) \$fpsConfig->getProperty('better-pmmp.fps-optimization.entity-broadcast.enabled', true);\n"
         . "\t\t\$fpsGround = \$this->onGround;\n"
         . "\t\t\$fpsX = \$this->location->x; \$fpsY = \$this->location->y; \$fpsZ = \$this->location->z;\n"
         . "\t\t\$fpsYaw = \$this->location->yaw; \$fpsPitch = \$this->location->pitch;\n"
-        . "\t\tif(!\$teleport && \$this->fpsRedundantMovementSuppressed(\$fpsX, \$fpsY, \$fpsZ, \$fpsYaw, \$fpsPitch, \$fpsGround)){\n"
+        . "\t\tif(!\$teleport && \$fpsEnabled && \$this->fpsRedundantMovementSuppressed(\$fpsConfig, \$fpsX, \$fpsY, \$fpsZ, \$fpsYaw, \$fpsPitch, \$fpsGround)){\n"
         . "\t\t\treturn;\n"
         . "\t\t}\n"
-        . "\t\t\$fpsTargets = \$this->filterFpsBroadcastViewers(\$this->hasSpawned, \$teleport);\n"
+        . "\t\t\$fpsTargets = (\$fpsEnabled && !\$teleport) ? \$this->filterFpsBroadcastViewers(\$fpsConfig, \$this->hasSpawned) : \$this->hasSpawned;\n"
         . "\t\tif(count(\$fpsTargets) === 0){\n"
         . "\t\t\t\$this->fpsLastBroadcastX = \$fpsX; \$this->fpsLastBroadcastY = \$fpsY; \$this->fpsLastBroadcastZ = \$fpsZ;\n"
         . "\t\t\t\$this->fpsLastBroadcastYaw = \$fpsYaw; \$this->fpsLastBroadcastPitch = \$fpsPitch; \$this->fpsLastBroadcastGround = \$fpsGround;\n"
@@ -3504,11 +3507,13 @@ function patchFpsEntityBroadcastOptimization(string $sourceDir): array
         . "\t}";
     $newMotion = "\tprotected function broadcastMotion() : void{\n"
         . "\t\t/** [BetterPMMP-PATCH] FPS optimization: motion redundancy + distance filter */\n"
+        . "\t\t\$fpsConfig = \\pocketmine\\Server::getInstance()->getConfigGroup();\n"
+        . "\t\t\$fpsEnabled = (bool) \$fpsConfig->getProperty('better-pmmp.fps-optimization.entity-broadcast.enabled', true);\n"
         . "\t\t\$fpsMotion = \$this->getMotion();\n"
-        . "\t\tif(\$this->fpsRedundantMotionSuppressed(\$fpsMotion->x, \$fpsMotion->y, \$fpsMotion->z)){\n"
+        . "\t\tif(\$fpsEnabled && \$this->fpsRedundantMotionSuppressed(\$fpsConfig, \$fpsMotion->x, \$fpsMotion->y, \$fpsMotion->z)){\n"
         . "\t\t\treturn;\n"
         . "\t\t}\n"
-        . "\t\t\$fpsTargets = \$this->filterFpsBroadcastViewers(\$this->hasSpawned, false);\n"
+        . "\t\t\$fpsTargets = \$fpsEnabled ? \$this->filterFpsBroadcastViewers(\$fpsConfig, \$this->hasSpawned) : \$this->hasSpawned;\n"
         . "\t\t\$this->fpsLastBroadcastMotionX = \$fpsMotion->x; \$this->fpsLastBroadcastMotionY = \$fpsMotion->y; \$this->fpsLastBroadcastMotionZ = \$fpsMotion->z;\n"
         . "\t\tif(count(\$fpsTargets) === 0) return;\n"
         . "\t\tNetworkBroadcastUtils::broadcastPackets(\$fpsTargets, [SetActorMotionPacket::create(\$this->id, \$fpsMotion, tick: 0)]);\n"
@@ -3538,12 +3543,8 @@ function patchFpsEntityBroadcastOptimization(string $sourceDir): array
         . "\t * @param array<int, \\pocketmine\\player\\Player> \$viewers\n"
         . "\t * @return array<int, \\pocketmine\\player\\Player>\n"
         . "\t */\n"
-        . "\tprivate function filterFpsBroadcastViewers(array \$viewers, bool \$teleport) : array{\n"
-        . "\t\tif(\$teleport || count(\$viewers) === 0){\n"
-        . "\t\t\treturn \$viewers;\n"
-        . "\t\t}\n"
-        . "\t\t\$config = \\pocketmine\\Server::getInstance()->getConfigGroup();\n"
-        . "\t\tif(!(bool) \$config->getProperty('better-pmmp.fps-optimization.entity-broadcast.enabled', true)){\n"
+        . "\tprivate function filterFpsBroadcastViewers(\\pocketmine\\ServerConfigGroup \$config, array \$viewers) : array{\n"
+        . "\t\tif(count(\$viewers) === 0){\n"
         . "\t\t\treturn \$viewers;\n"
         . "\t\t}\n"
         . "\t\t\$maxDist = (float) \$config->getProperty('better-pmmp.fps-optimization.entity-broadcast.motion-distance', 96);\n"
@@ -3565,11 +3566,7 @@ function patchFpsEntityBroadcastOptimization(string $sourceDir): array
         . "\t\treturn \$out;\n"
         . "\t}\n"
         . "\n"
-        . "\tprivate function fpsRedundantMovementSuppressed(float \$x, float \$y, float \$z, float \$yaw, float \$pitch, bool \$ground) : bool{\n"
-        . "\t\t\$config = \\pocketmine\\Server::getInstance()->getConfigGroup();\n"
-        . "\t\tif(!(bool) \$config->getProperty('better-pmmp.fps-optimization.entity-broadcast.enabled', true)){\n"
-        . "\t\t\treturn false;\n"
-        . "\t\t}\n"
+        . "\tprivate function fpsRedundantMovementSuppressed(\\pocketmine\\ServerConfigGroup \$config, float \$x, float \$y, float \$z, float \$yaw, float \$pitch, bool \$ground) : bool{\n"
         . "\t\tif(is_nan(\$this->fpsLastBroadcastX) || \$ground !== \$this->fpsLastBroadcastGround){\n"
         . "\t\t\treturn false;\n"
         . "\t\t}\n"
@@ -3586,11 +3583,7 @@ function patchFpsEntityBroadcastOptimization(string $sourceDir): array
         . "\t\treturn \$dyaw <= \$rotEps && \$dpitch <= \$rotEps;\n"
         . "\t}\n"
         . "\n"
-        . "\tprivate function fpsRedundantMotionSuppressed(float \$mx, float \$my, float \$mz) : bool{\n"
-        . "\t\t\$config = \\pocketmine\\Server::getInstance()->getConfigGroup();\n"
-        . "\t\tif(!(bool) \$config->getProperty('better-pmmp.fps-optimization.entity-broadcast.enabled', true)){\n"
-        . "\t\t\treturn false;\n"
-        . "\t\t}\n"
+        . "\tprivate function fpsRedundantMotionSuppressed(\\pocketmine\\ServerConfigGroup \$config, float \$mx, float \$my, float \$mz) : bool{\n"
         . "\t\t\$eps = (float) \$config->getProperty('better-pmmp.fps-optimization.entity-broadcast.motion-epsilon', 0.0001);\n"
         . "\t\t\$dx = \$mx - \$this->fpsLastBroadcastMotionX;\n"
         . "\t\t\$dy = \$my - \$this->fpsLastBroadcastMotionY;\n"
