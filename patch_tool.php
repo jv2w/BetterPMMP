@@ -27,6 +27,33 @@ function isAlreadyPatched(string $filePath): bool
     return str_contains($content, '[BetterPMMP-PATCH]') || str_contains($content, '[PMMP-SOURCE-RELOAD-PATCH]');
 }
 
+function applyReplacePatch(string $targetFile, string $fileLabel, string $skipMarker, string $old, string $new, string $matchError, string $writeError): array
+{
+    if (!file_exists($targetFile)) {
+        return makePatchResult($targetFile, false, false, "{$fileLabel} not found");
+    }
+
+    $content = file_get_contents($targetFile);
+    if ($content === false) {
+        return makePatchResult($targetFile, false, false, "Failed to read {$fileLabel}");
+    }
+
+    if (str_contains($content, $skipMarker)) {
+        return makePatchResult($targetFile, false, true);
+    }
+
+    $newContent = str_replace($old, $new, $content);
+    if ($newContent === $content) {
+        return makePatchResult($targetFile, false, false, $matchError);
+    }
+
+    if (file_put_contents($targetFile, $newContent) === false) {
+        return makePatchResult($targetFile, false, false, $writeError);
+    }
+
+    return makePatchResult($targetFile, true, false);
+}
+
 function patchStartCmd(string $baseDir): array
 {
     $targetFile = $baseDir . DIRECTORY_SEPARATOR . 'start.cmd';
@@ -37,15 +64,12 @@ function patchStartCmd(string $baseDir): array
 
     if (file_exists($targetFile)) {
         $content = file_get_contents($targetFile);
-        if ($content !== false && (str_contains($content, 'source\src\PocketMine.php') || str_contains($content, 'source\\src\\PocketMine.php'))) {
-            return makePatchResult($targetFile, false, true);
-        }
-    }
-
-    if (file_exists($targetFile)) {
-        $content = file_get_contents($targetFile);
         if ($content === false) {
             return makePatchResult($targetFile, false, false, 'Failed to read start.cmd');
+        }
+
+        if (str_contains($content, 'source\src\PocketMine.php')) {
+            return makePatchResult($targetFile, false, true);
         }
 
         if (str_contains($content, 'PocketMine-MP.phar')) {
@@ -629,8 +653,6 @@ PHPFILE;
     if (file_exists($targetFile) && file_get_contents($targetFile) === $commandContent) {
         return makePatchResult($targetFile, false, true);
     }
-    if (file_exists($targetFile)) {
-    }
 
     if (file_put_contents($targetFile, $commandContent) === false) {
         return makePatchResult($targetFile, false, false, 'Failed to write ReloadPluginCommand.php');
@@ -942,8 +964,6 @@ PHPFILE;
     if (file_exists($targetFile) && file_get_contents($targetFile) === $classContent) {
         return makePatchResult($targetFile, false, true);
     }
-    if (file_exists($targetFile)) {
-    }
 
     if (file_put_contents($targetFile, $classContent) === false) {
         return makePatchResult($targetFile, false, false, 'Failed to write ClassCacheInvalidator.php');
@@ -1064,8 +1084,6 @@ PHPFILE;
     if (file_exists($targetFile) && file_get_contents($targetFile) === $classContent) {
         return makePatchResult($targetFile, false, true);
     }
-    if (file_exists($targetFile)) {
-    }
 
     if (file_put_contents($targetFile, $classContent) === false) {
         return makePatchResult($targetFile, false, false, 'Failed to write PluginResourceIndex.php');
@@ -1142,8 +1160,6 @@ PHPFILE;
     if (file_exists($targetFile) && file_get_contents($targetFile) === $classContent) {
         return makePatchResult($targetFile, false, true);
     }
-    if (file_exists($targetFile)) {
-    }
 
     if (file_put_contents($targetFile, $classContent) === false) {
         return makePatchResult($targetFile, false, false, 'Failed to write PluginResources.php');
@@ -1178,7 +1194,7 @@ function patchReloadPermission(string $sourceDir): array
     $permFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'permission' . DIRECTORY_SEPARATOR . 'DefaultPermissions.php';
     if (file_exists($permFile)) {
         $permContent = file_get_contents($permFile);
-        if ($permContent !== false && strpos($permContent, 'Names::COMMAND_RELOAD') === false) {
+        if ($permContent !== false && !str_contains($permContent, 'Names::COMMAND_RELOAD')) {
 
             $permContent = str_replace(
                 'Names::COMMAND_PLUGINS,',
@@ -1192,7 +1208,7 @@ function patchReloadPermission(string $sourceDir): array
     $keysFile = $sourceDir . DIRECTORY_SEPARATOR . 'generated' . DIRECTORY_SEPARATOR . 'lang' . DIRECTORY_SEPARATOR . 'KnownTranslationKeys.php';
     if (file_exists($keysFile)) {
         $keysContent = file_get_contents($keysFile);
-        if ($keysContent !== false && strpos($keysContent, 'POCKETMINE_PERMISSION_COMMAND_RELOAD') === false) {
+        if ($keysContent !== false && !str_contains($keysContent, 'POCKETMINE_PERMISSION_COMMAND_RELOAD')) {
 
             $keysContent = str_replace(
                 'public const POCKETMINE_PERMISSION_COMMAND_PLUGINS = "pocketmine.permission.command.plugins";',
@@ -1206,7 +1222,7 @@ function patchReloadPermission(string $sourceDir): array
     $paramInfoFile = $sourceDir . DIRECTORY_SEPARATOR . 'generated' . DIRECTORY_SEPARATOR . 'lang' . DIRECTORY_SEPARATOR . 'KnownTranslationParameterInfo.php';
     if (file_exists($paramInfoFile)) {
         $paramContent = file_get_contents($paramInfoFile);
-        if ($paramContent !== false && strpos($paramContent, 'POCKETMINE_PERMISSION_COMMAND_RELOAD') === false) {
+        if ($paramContent !== false && !str_contains($paramContent, 'POCKETMINE_PERMISSION_COMMAND_RELOAD')) {
 
             $paramContent = str_replace(
                 'Keys::POCKETMINE_PERMISSION_COMMAND_PLUGINS => [],',
@@ -1220,7 +1236,7 @@ function patchReloadPermission(string $sourceDir): array
     $engIniFile = $sourceDir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'translations' . DIRECTORY_SEPARATOR . 'eng.ini';
     if (file_exists($engIniFile)) {
         $engContent = file_get_contents($engIniFile);
-        if ($engContent !== false && strpos($engContent, 'pocketmine.permission.command.reload') === false) {
+        if ($engContent !== false && !str_contains($engContent, 'pocketmine.permission.command.reload')) {
 
             $engContent = str_replace(
                 'pocketmine.permission.command.plugins=Allows the user to view the list of plugins',
@@ -1309,7 +1325,7 @@ function patchStartCmdBinPath(string $baseDir): array
         return makePatchResult($targetFile, false, false, 'Failed to read start.cmd');
     }
 
-    if (str_contains($content, 'source\\bin\\php\\php.exe') || str_contains($content, 'source\bin\php\php.exe')) {
+    if (str_contains($content, 'source\\bin\\php\\php.exe')) {
         return makePatchResult($targetFile, false, true);
     }
     $content = str_replace(
@@ -1858,7 +1874,6 @@ function patchPluginBaseLazyDataFolder(string $sourceDir): array
     if (str_contains($content, '[BETTERPMMP-PATCH-LAZY-DATAFOLDER]')) {
         return makePatchResult($targetFile, false, true);
     }
-    $changed = false;
 
     $insertionAnchors = [
         'public function saveResource(',
@@ -1879,7 +1894,6 @@ function patchPluginBaseLazyDataFolder(string $sourceDir): array
                 . "\t\t}\n"
                 . "\t}\n\n\t";
             $content = str_replace($anchor, $ensureMethod . $anchor, $content);
-            $changed = true;
             $methodInserted = true;
             break;
         }
@@ -1897,7 +1911,6 @@ function patchPluginBaseLazyDataFolder(string $sourceDir): array
                     . "\t\t}\n"
                     . "\t}\n";
                 $content = substr($content, 0, $bracePos + 1) . $ensureMethod . substr($content, $bracePos + 1);
-                $changed = true;
                 $methodInserted = true;
             }
         }
@@ -1906,60 +1919,30 @@ function patchPluginBaseLazyDataFolder(string $sourceDir): array
     if (!$methodInserted) {
         return makePatchResult($targetFile, false, false, 'Failed to insert ensureDataFolderExists method');
     }
-    if (preg_match('/public\s+function\s+saveResource\s*\([^)]*\)\s*:\s*bool\s*\{/', $content, $m, PREG_OFFSET_CAPTURE)) {
-        $bracePos = strpos($content, '{', $m[0][1]);
-        if ($bracePos !== false) {
-            $afterBrace = $bracePos + 1;
-            if (!preg_match('/\$this->ensureDataFolderExists\(\);/', substr($content, $afterBrace, 200))) {
-                $content = substr($content, 0, $afterBrace)
-                    . "\n\t\t\$this->ensureDataFolderExists();"
-                    . substr($content, $afterBrace);
-                $changed = true;
-            }
+    $injectEnsureCall = static function (string $content, string $signaturePattern): string {
+        if (!preg_match($signaturePattern, $content, $m, PREG_OFFSET_CAPTURE)) {
+            return $content;
         }
-    }
-
-    if (preg_match('/public\s+function\s+saveConfig\s*\(\s*\)\s*:\s*void\s*\{/', $content, $m, PREG_OFFSET_CAPTURE)) {
         $bracePos = strpos($content, '{', $m[0][1]);
-        if ($bracePos !== false) {
-            $afterBrace = $bracePos + 1;
-            if (!preg_match('/\$this->ensureDataFolderExists\(\);/', substr($content, $afterBrace, 200))) {
-                $content = substr($content, 0, $afterBrace)
-                    . "\n\t\t\$this->ensureDataFolderExists();"
-                    . substr($content, $afterBrace);
-                $changed = true;
-            }
+        if ($bracePos === false) {
+            return $content;
         }
-    }
-
-    if (preg_match('/public\s+function\s+getDataFolder\s*\(\s*\)\s*:\s*string\s*\{/', $content, $m, PREG_OFFSET_CAPTURE)) {
-        $bracePos = strpos($content, '{', $m[0][1]);
-        if ($bracePos !== false) {
-            $afterBrace = $bracePos + 1;
-            if (!preg_match('/\$this->ensureDataFolderExists\(\);/', substr($content, $afterBrace, 200))) {
-                $content = substr($content, 0, $afterBrace)
-                    . "\n\t\t\$this->ensureDataFolderExists();"
-                    . substr($content, $afterBrace);
-                $changed = true;
-            }
+        $afterBrace = $bracePos + 1;
+        if (preg_match('/\$this->ensureDataFolderExists\(\);/', substr($content, $afterBrace, 200))) {
+            return $content;
         }
-    }
+        return substr($content, 0, $afterBrace)
+            . "\n\t\t\$this->ensureDataFolderExists();"
+            . substr($content, $afterBrace);
+    };
 
-    if (preg_match('/public\s+function\s+getConfig\s*\(\s*\)\s*:\s*Config\s*\{/', $content, $m, PREG_OFFSET_CAPTURE)) {
-        $bracePos = strpos($content, '{', $m[0][1]);
-        if ($bracePos !== false) {
-            $afterBrace = $bracePos + 1;
-            if (!preg_match('/\$this->ensureDataFolderExists\(\);/', substr($content, $afterBrace, 200))) {
-                $content = substr($content, 0, $afterBrace)
-                    . "\n\t\t\$this->ensureDataFolderExists();"
-                    . substr($content, $afterBrace);
-                $changed = true;
-            }
-        }
-    }
-
-    if (!$changed) {
-        return makePatchResult($targetFile, false, false, 'Failed to patch PluginBase.php for lazy data folder');
+    foreach ([
+        '/public\s+function\s+saveResource\s*\([^)]*\)\s*:\s*bool\s*\{/',
+        '/public\s+function\s+saveConfig\s*\(\s*\)\s*:\s*void\s*\{/',
+        '/public\s+function\s+getDataFolder\s*\(\s*\)\s*:\s*string\s*\{/',
+        '/public\s+function\s+getConfig\s*\(\s*\)\s*:\s*Config\s*\{/',
+    ] as $signaturePattern) {
+        $content = $injectEnsureCall($content, $signaturePattern);
     }
 
     if (file_put_contents($targetFile, $content) === false) {
@@ -2016,8 +1999,6 @@ PHPFILE;
 
     if (file_exists($targetFile) && file_get_contents($targetFile) === $commandContent) {
         return makePatchResult($targetFile, false, true);
-    }
-    if (file_exists($targetFile)) {
     }
 
     if (file_put_contents($targetFile, $commandContent) === false) {
@@ -2291,18 +2272,6 @@ function patchYmlServerPropertiesBetterPmmp(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'generated' . DIRECTORY_SEPARATOR . 'YmlServerProperties.php';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'YmlServerProperties.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read YmlServerProperties.php');
-    }
-
-    if (str_contains($content, 'BETTER_PMMP')) {
-        return makePatchResult($targetFile, false, true);
-    }
     $old = "\tpublic const WORLDS = 'worlds';\n}";
 
     $new = "\t/** [BetterPMMP-PATCH] BetterPMMP optimization config constants */\n"
@@ -2319,34 +2288,13 @@ function patchYmlServerPropertiesBetterPmmp(string $sourceDir): array
         . "\n"
         . "\tpublic const WORLDS = 'worlds';\n}";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match WORLDS constant pattern in YmlServerProperties.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched YmlServerProperties.php');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'YmlServerProperties.php', 'BETTER_PMMP', $old, $new, 'Failed to match WORLDS constant pattern in YmlServerProperties.php', 'Failed to write patched YmlServerProperties.php');
 }
 
 function patchWorldFixedLight(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'world' . DIRECTORY_SEPARATOR . 'World.php';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'World.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read World.php');
-    }
-
-    if (str_contains($content, 'Fixed light values bypass')) {
-        return makePatchResult($targetFile, false, true);
-    }
     $old = "\tprivate function orderLightPopulation(int \$chunkX, int \$chunkZ) : void{\n"
         . "\t\t\$chunkHash = World::chunkHash(\$chunkX, \$chunkZ);\n"
         . "\t\t\$lightPopulatedState = \$this->chunks[\$chunkHash]->isLightPopulated();\n"
@@ -2377,34 +2325,13 @@ function patchWorldFixedLight(string $sourceDir): array
         . "\n"
         . "\t\t\t\$this->workerPool->submitTask(new LightPopulationTask(";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match orderLightPopulation pattern in World.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched World.php (fixed light)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'World.php', 'Fixed light values bypass', $old, $new, 'Failed to match orderLightPopulation pattern in World.php', 'Failed to write patched World.php (fixed light)');
 }
 
 function patchWorldPerWorldChunkTicking(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'world' . DIRECTORY_SEPARATOR . 'World.php';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'World.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read World.php');
-    }
-
-    if (str_contains($content, 'Per-world chunk ticking override')) {
-        return makePatchResult($targetFile, false, true);
-    }
     $old = "\t\t\$this->tickedBlocksPerSubchunkPerTick = \$cfg->getPropertyInt(YmlServerProperties::CHUNK_TICKING_BLOCKS_PER_SUBCHUNK_PER_TICK, self::DEFAULT_TICKED_BLOCKS_PER_SUBCHUNK_PER_TICK);\n"
         . "\t\t\$this->maxConcurrentChunkPopulationTasks = \$cfg->getPropertyInt(YmlServerProperties::CHUNK_GENERATION_POPULATION_QUEUE_SIZE, 2);";
 
@@ -2431,34 +2358,13 @@ function patchWorldPerWorldChunkTicking(string $sourceDir): array
         . "\t\t}\n"
         . "\t\t\$this->maxConcurrentChunkPopulationTasks = \$cfg->getPropertyInt(YmlServerProperties::CHUNK_GENERATION_POPULATION_QUEUE_SIZE, 2);";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match chunk ticking config pattern in World.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched World.php (per-world chunk ticking)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'World.php', 'Per-world chunk ticking override', $old, $new, 'Failed to match chunk ticking config pattern in World.php', 'Failed to write patched World.php (per-world chunk ticking)');
 }
 
 function patchWorldChunkOptimization(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'world' . DIRECTORY_SEPARATOR . 'World.php';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'World.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read World.php');
-    }
-
-    if (str_contains($content, 'Batch recheck limit for chunk tick optimization')) {
-        return makePatchResult($targetFile, false, true);
-    }
     $oldTickChunks = "\t\tif(count(\$this->recheckTickingChunks) > 0){\n"
         . "\t\t\t\$this->timings->randomChunkUpdatesChunkSelection->startTiming();\n"
         . "\n"
@@ -2501,16 +2407,7 @@ function patchWorldChunkOptimization(string $sourceDir): array
         . "\t\t\t\$this->timings->randomChunkUpdatesChunkSelection->stopTiming();\n"
         . "\t\t}";
 
-    $newContent = str_replace($oldTickChunks, $newTickChunks, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match chunk optimization patterns in World.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched World.php (chunk optimization)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'World.php', 'Batch recheck limit for chunk tick optimization', $oldTickChunks, $newTickChunks, 'Failed to match chunk optimization patterns in World.php', 'Failed to write patched World.php (chunk optimization)');
 }
 
 function patchPlayerPerWorldViewDistance(string $sourceDir): array
@@ -2603,76 +2500,34 @@ function patchPlayerPerWorldViewDistance(string $sourceDir): array
 
 function patchServerLogPath(string $sourceDir): array
 {
-    $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'PocketMine.php';
-
-    if (!file_exists($targetFile))
-        return makePatchResult($targetFile, false, false, 'PocketMine.php not found');
-
-    $content = file_get_contents($targetFile);
-    if ($content === false)
-        return makePatchResult($targetFile, false, false, 'Failed to read PocketMine.php');
-
-    if (str_contains($content, '"system", "server.log"'))
-        return makePatchResult($targetFile, false, true);
-    $newContent = str_replace(
+    return applyReplacePatch(
+        $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'PocketMine.php',
+        'PocketMine.php',
+        '"system", "server.log"',
         'Path::join($dataPath, "server.log")',
         'Path::join($dataPath, "system", "server.log")',
-        $content
+        'Failed to patch server.log path in PocketMine.php',
+        'Failed to write patched PocketMine.php'
     );
-
-    if ($newContent === $content)
-        return makePatchResult($targetFile, false, false, 'Failed to patch server.log path in PocketMine.php');
-
-    if (file_put_contents($targetFile, $newContent) === false)
-        return makePatchResult($targetFile, false, false, 'Failed to write patched PocketMine.php');
-
-    return makePatchResult($targetFile, true, false);
 }
 
 function patchCrashdumpsPath(string $sourceDir): array
 {
-    $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Server.php';
-
-    if (!file_exists($targetFile))
-        return makePatchResult($targetFile, false, false, 'Server.php not found');
-
-    $content = file_get_contents($targetFile);
-    if ($content === false)
-        return makePatchResult($targetFile, false, false, 'Failed to read Server.php');
-
-    if (str_contains($content, '"system", "crashdumps"'))
-        return makePatchResult($targetFile, false, true);
-    $newContent = str_replace(
+    return applyReplacePatch(
+        $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Server.php',
+        'Server.php',
+        '"system", "crashdumps"',
         'Path::join($this->dataPath, "crashdumps")',
         'Path::join($this->dataPath, "system", "crashdumps")',
-        $content
+        'Failed to patch crashdumps path in Server.php',
+        'Failed to write patched Server.php'
     );
-
-    if ($newContent === $content)
-        return makePatchResult($targetFile, false, false, 'Failed to patch crashdumps path in Server.php');
-
-    if (file_put_contents($targetFile, $newContent) === false)
-        return makePatchResult($targetFile, false, false, 'Failed to write patched Server.php');
-
-    return makePatchResult($targetFile, true, false);
 }
 
 function patchWorldNeighbourUpdateThrottle(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'world' . DIRECTORY_SEPARATOR . 'World.php';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'World.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read World.php');
-    }
-
-    if (str_contains($content, 'Neighbour block update throttle')) {
-        return makePatchResult($targetFile, false, true);
-    }
     $old = "\t\t\$this->timings->neighbourBlockUpdates->startTiming();\n"
         . "\t\t//Normal updates\n"
         . "\t\twhile(\$this->neighbourBlockUpdateQueue->count() > 0){\n"
@@ -2729,16 +2584,7 @@ function patchWorldNeighbourUpdateThrottle(string $sourceDir): array
         . "\t\t\t\$block->onNearbyBlockChange();\n"
         . "\t\t}";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match neighbour update loop in World.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched World.php (neighbour update throttle)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'World.php', 'Neighbour block update throttle', $old, $new, 'Failed to match neighbour update loop in World.php', 'Failed to write patched World.php (neighbour update throttle)');
 }
 
 function patchWorldBlockCacheSize(string $sourceDir): array
@@ -2787,18 +2633,6 @@ function patchEntityMoveInPlace(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'entity' . DIRECTORY_SEPARATOR . 'Entity.php';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'Entity.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read Entity.php');
-    }
-
-    if (str_contains($content, 'In-place location update')) {
-        return makePatchResult($targetFile, false, true);
-    }
     $old = "\t\t\$this->location = new Location(\n"
         . "\t\t\t(\$this->boundingBox->minX + \$this->boundingBox->maxX) / 2,\n"
         . "\t\t\t\$this->boundingBox->minY - \$this->ySize,\n"
@@ -2813,16 +2647,7 @@ function patchEntityMoveInPlace(string $sourceDir): array
         . "\t\t\$this->location->y = \$this->boundingBox->minY - \$this->ySize;\n"
         . "\t\t\$this->location->z = (\$this->boundingBox->minZ + \$this->boundingBox->maxZ) / 2;";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match Location construction in Entity.php move()');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched Entity.php (move in-place)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'Entity.php', 'In-place location update', $old, $new, 'Failed to match Location construction in Entity.php move()', 'Failed to write patched Entity.php (move in-place)');
 }
 
 function patchEntitySmartBlocksAroundCache(string $sourceDir): array
@@ -2893,18 +2718,6 @@ function patchEntityMotionEpsilonCleanup(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'entity' . DIRECTORY_SEPARATOR . 'Entity.php';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'Entity.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read Entity.php');
-    }
-
-    if (str_contains($content, 'Motion epsilon cleanup')) {
-        return makePatchResult($targetFile, false, true);
-    }
     $old = "\t\t\$this->motion = new Vector3(\$this->motion->x * \$friction, \$mY, \$this->motion->z * \$friction);\n"
         . "\t}";
 
@@ -2916,16 +2729,7 @@ function patchEntityMotionEpsilonCleanup(string $sourceDir): array
         . "\t\t\$this->motion->z = abs(\$mZ) < 1.0E-6 ? 0.0 : \$mZ;\n"
         . "\t}";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match tryChangeMovement() end in Entity.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched Entity.php (motion epsilon cleanup)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'Entity.php', 'Motion epsilon cleanup', $old, $new, 'Failed to match tryChangeMovement() end in Entity.php', 'Failed to write patched Entity.php (motion epsilon cleanup)');
 }
 
 function patchPocketmineYmlCriticalHit(string $sourceDir): array
@@ -3079,19 +2883,6 @@ function patchWorldEntityTickClose(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'world' . DIRECTORY_SEPARATOR . 'World.php';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'World.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read World.php');
-    }
-
-    if (str_contains($content, 'Entity tick close guard')) {
-        return makePatchResult($targetFile, false, true);
-    }
-
     $old = "\t\t//Update entities that need update\n"
         . "\t\tforeach(\$this->updateEntities as \$id => \$entity){\n"
         . "\t\t\tif(\$entity->isClosed() || \$entity->isFlaggedForDespawn() || !\$entity->onUpdate(\$currentTick)){\n"
@@ -3112,34 +2903,12 @@ function patchWorldEntityTickClose(string $sourceDir): array
         . "\t\t\t}\n"
         . "\t\t}";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match entity tick loop in World.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched World.php (entity tick close)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'World.php', 'Entity tick close guard', $old, $new, 'Failed to match entity tick loop in World.php', 'Failed to write patched World.php (entity tick close)');
 }
 
 function patchWorldUnloadEntityIteration(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'world' . DIRECTORY_SEPARATOR . 'World.php';
-
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'World.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read World.php');
-    }
-
-    if (str_contains($content, 'Safe entity iteration during world unload')) {
-        return makePatchResult($targetFile, false, true);
-    }
 
     $old = "\t\tforeach(\$this->entitiesByChunk as \$chunkHash => \$entities){\n"
         . "\t\t\tself::getXZ(\$chunkHash, \$chunkX, \$chunkZ);\n"
@@ -3179,34 +2948,12 @@ function patchWorldUnloadEntityIteration(string $sourceDir): array
         . "\t\t\t}\n"
         . "\t\t}";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match entitiesByChunk unload loop in World.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched World.php (unload entity iteration)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'World.php', 'Safe entity iteration during world unload', $old, $new, 'Failed to match entitiesByChunk unload loop in World.php', 'Failed to write patched World.php (unload entity iteration)');
 }
 
 function patchNetworkSessionSetHandlerGuard(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'network' . DIRECTORY_SEPARATOR . 'mcpe' . DIRECTORY_SEPARATOR . 'NetworkSession.php';
-
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'NetworkSession.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read NetworkSession.php');
-    }
-
-    if (str_contains($content, 'setHandler disconnect guard')) {
-        return makePatchResult($targetFile, false, true);
-    }
 
     $old = "\tpublic function setHandler(?PacketHandler \$handler) : void{\n"
         . "\t\tif(\$this->connected){ //TODO: this is fine since we can't handle anything from a disconnected session, but it might produce surprises in some cases";
@@ -3215,34 +2962,12 @@ function patchNetworkSessionSetHandlerGuard(string $sourceDir): array
         . "\tpublic function setHandler(?PacketHandler \$handler) : void{\n"
         . "\t\tif(\$this->connected && !\$this->disconnectGuard){";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match setHandler() in NetworkSession.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched NetworkSession.php (setHandler guard)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'NetworkSession.php', 'setHandler disconnect guard', $old, $new, 'Failed to match setHandler() in NetworkSession.php', 'Failed to write patched NetworkSession.php (setHandler guard)');
 }
 
 function patchHandlerListRegisterAllCache(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'event' . DIRECTORY_SEPARATOR . 'HandlerList.php';
-
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'HandlerList.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read HandlerList.php');
-    }
-
-    if (str_contains($content, 'Batch register listeners')) {
-        return makePatchResult($targetFile, false, true);
-    }
 
     $old = "\tpublic function registerAll(array \$listeners) : void{\n"
         . "\t\tforeach(\$listeners as \$listener){\n"
@@ -3262,34 +2987,12 @@ function patchHandlerListRegisterAllCache(string $sourceDir): array
         . "\t\t\$this->invalidateAffectedCaches();\n"
         . "\t}";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match registerAll() in HandlerList.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched HandlerList.php (registerAll cache)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'HandlerList.php', 'Batch register listeners', $old, $new, 'Failed to match registerAll() in HandlerList.php', 'Failed to write patched HandlerList.php (registerAll cache)');
 }
 
 function patchEntityHealthFloatComparison(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'entity' . DIRECTORY_SEPARATOR . 'Entity.php';
-
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'Entity.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read Entity.php');
-    }
-
-    if (str_contains($content, 'Float-safe health comparison')) {
-        return makePatchResult($targetFile, false, true);
-    }
 
     $old = "\tpublic function setHealth(float \$amount) : void{\n"
         . "\t\tif(\$amount === \$this->health){\n"
@@ -3302,16 +3005,7 @@ function patchEntityHealthFloatComparison(string $sourceDir): array
         . "\t\t\treturn;\n"
         . "\t\t}";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match setHealth() in Entity.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched Entity.php (health float comparison)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'Entity.php', 'Float-safe health comparison', $old, $new, 'Failed to match setHealth() in Entity.php', 'Failed to write patched Entity.php (health float comparison)');
 }
 
 function patchPlayerRespawnLockReset(string $sourceDir): array
@@ -3374,19 +3068,6 @@ function patchHandlerListMergePerformance(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'event' . DIRECTORY_SEPARATOR . 'HandlerList.php';
 
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'HandlerList.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read HandlerList.php');
-    }
-
-    if (str_contains($content, 'Single-pass handler list merge')) {
-        return makePatchResult($targetFile, false, true);
-    }
-
     $old = "\t\t\$listenersByPriority = [];\n"
         . "\t\tforeach(\$handlerLists as \$currentList){\n"
         . "\t\t\tforeach(\$currentList->handlerSlots as \$priority => \$listeners){\n"
@@ -3419,34 +3100,12 @@ function patchHandlerListMergePerformance(string $sourceDir): array
         . "\t\t}\n"
         . "\t\treturn \$this->handlerCache->list = \$result;";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match getListenerList() merge in HandlerList.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched HandlerList.php (merge performance)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'HandlerList.php', 'Single-pass handler list merge', $old, $new, 'Failed to match getListenerList() merge in HandlerList.php', 'Failed to write patched HandlerList.php (merge performance)');
 }
 
 function patchServerRemoveOnlinePlayerSnapshot(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Server.php';
-
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'Server.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read Server.php');
-    }
-
-    if (str_contains($content, 'Snapshot playerList before notification')) {
-        return makePatchResult($targetFile, false, true);
-    }
 
     $old = "\tpublic function removeOnlinePlayer(Player \$player) : void{\n"
         . "\t\tif(isset(\$this->playerList[\$rawUUID = \$player->getUniqueId()->getBytes()])){\n"
@@ -3468,34 +3127,12 @@ function patchServerRemoveOnlinePlayerSnapshot(string $sourceDir): array
         . "\t\t}\n"
         . "\t}";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match removeOnlinePlayer() in Server.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched Server.php (removeOnlinePlayer snapshot)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'Server.php', 'Snapshot playerList before notification', $old, $new, 'Failed to match removeOnlinePlayer() in Server.php', 'Failed to write patched Server.php (removeOnlinePlayer snapshot)');
 }
 
 function patchPlayerDestroyCyclesCleanup(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'player' . DIRECTORY_SEPARATOR . 'Player.php';
-
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'Player.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read Player.php');
-    }
-
-    if (str_contains($content, 'Defensive reference cleanup')) {
-        return makePatchResult($targetFile, false, true);
-    }
 
     $old = "\tprotected function destroyCycles() : void{\n"
         . "\t\t\$this->networkSession = null;\n"
@@ -3511,16 +3148,7 @@ function patchPlayerDestroyCyclesCleanup(string $sourceDir): array
         . "\t\tunset(\$this->creativeInventory);\n"
         . "\t\t\$this->spawnPosition = null;";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match destroyCycles() in Player.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched Player.php (destroyCycles cleanup)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'Player.php', 'Defensive reference cleanup', $old, $new, 'Failed to match destroyCycles() in Player.php', 'Failed to write patched Player.php (destroyCycles cleanup)');
 }
 
 function patchWorldUnloadChunkEntityClose(string $sourceDir): array
@@ -3579,9 +3207,7 @@ function patchWorldUnloadChunkEntityClose(string $sourceDir): array
         return makePatchResult($targetFile, false, false, 'Failed to match chunk entity close loop in World.php');
     }
 
-    $newContent = $content;
-
-    if (file_put_contents($targetFile, $newContent) === false) {
+    if (file_put_contents($targetFile, $content) === false) {
         return makePatchResult($targetFile, false, false, 'Failed to write patched World.php (chunk entity close guard)');
     }
 
@@ -3591,19 +3217,6 @@ function patchWorldUnloadChunkEntityClose(string $sourceDir): array
 function patchNetworkSessionDisconnectGuardTiming(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'network' . DIRECTORY_SEPARATOR . 'mcpe' . DIRECTORY_SEPARATOR . 'NetworkSession.php';
-
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'NetworkSession.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read NetworkSession.php');
-    }
-
-    if (str_contains($content, 'Keep disconnectGuard active through full cleanup')) {
-        return makePatchResult($targetFile, false, true);
-    }
 
     $old = "\t\t\t\$this->disconnectGuard = true;\n"
         . "\t\t\t\$func();\n"
@@ -3615,16 +3228,7 @@ function patchNetworkSessionDisconnectGuardTiming(string $sourceDir): array
         . "\t\t\t/** [BetterPMMP-PATCH] Keep disconnectGuard active through full cleanup - session is never reused */\n"
         . "\t\t\t\$this->flushGamePacketQueue();";
 
-    $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content) {
-        return makePatchResult($targetFile, false, false, 'Failed to match tryDisconnect() guard reset in NetworkSession.php');
-    }
-
-    if (file_put_contents($targetFile, $newContent) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched NetworkSession.php (disconnect guard timing)');
-    }
-
-    return makePatchResult($targetFile, true, false);
+    return applyReplacePatch($targetFile, 'NetworkSession.php', 'Keep disconnectGuard active through full cleanup', $old, $new, 'Failed to match tryDisconnect() guard reset in NetworkSession.php', 'Failed to write patched NetworkSession.php (disconnect guard timing)');
 }
 
 function patchClassMapAuthoritative(string $sourceDir): array
@@ -4302,7 +3906,6 @@ if ($sourceDir === false) {
 
 $baseDir = dirname($sourceDir);
 if (basename($sourceDir) === 'src') {
-    $baseDir = dirname($sourceDir);
     $sourceDir = $baseDir;
 }
 
