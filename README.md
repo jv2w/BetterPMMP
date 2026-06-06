@@ -43,18 +43,23 @@ php patch_tool.php <source_directory_path>
 ## Requirements
 
 - PocketMine-MP 5.0.0 source code
-- PHP 8.x
+- PHP 8.x — the PMMP custom PHP binary from [pmmp/PHP-Binaries releases](https://github.com/pmmp/PHP-Binaries/releases)
 - Windows (start scripts target `start.cmd`)
 
 ## Installation
 
 1. Place the PocketMine-MP 5.0.0 source in the `source/` folder.
-2. Run the patch tool:
+2. Provide a PHP binary. `start.cmd` looks for it in either location:
+   - **Inside the server** — `bin/php/php.exe` (the local binary is always preferred if present), or
+   - **On the system** — a `php.exe` on your `PATH` (outside the `source/` folder).
+
+   Download the matching build from [pmmp/PHP-Binaries releases](https://github.com/pmmp/PHP-Binaries/releases) and extract it to `bin/php/` for the in-server option.
+3. Run the patch tool:
    ```bash
    php patch_tool.php source
    ```
    (or run `makeBetterPMMP.bat`)
-3. Start the server with `start.cmd`.
+4. Start the server with `start.cmd`.
 
 Patches are idempotent - re-run any time after updating the source.
 
