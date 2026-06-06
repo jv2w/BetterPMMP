@@ -65,4 +65,4 @@ Patches are idempotent - re-run any time after updating the source.
 
 ## License
 
-LGPL-3.0
+MIT

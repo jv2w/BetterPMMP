@@ -65,4 +65,4 @@ php patch_tool.php <소스_디렉터리_경로>
 
 ## 라이선스
 
-LGPL-3.0
+MIT
