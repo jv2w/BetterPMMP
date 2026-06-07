@@ -286,20 +286,9 @@ PHP;
     }
 
     if (!str_contains($content, 'public function getResourceIndex()')) {
-        $getPluginsMethod = 'public function getPlugins(): array';
-        $resourceIndexGetter = <<<'PHP'
-public function getResourceIndex(): PluginResourceIndex
-	{
-		return $this->resourceIndex;
-	}
-
-	public function getPlugins(): array
-PHP;
-        if (str_contains($content, $getPluginsMethod)) {
-            $content = str_replace($getPluginsMethod, $resourceIndexGetter, $content);
-        } elseif (preg_match('/public\s+function\s+getPlugins\s*\(\s*\)\s*:\s*array/', $content, $gpMatch)) {
-            $resourceIndexGetterDynamic = "public function getResourceIndex(): PluginResourceIndex\n\t{\n\t\treturn \$this->resourceIndex;\n\t}\n\n\t" . $gpMatch[0];
-            $content = str_replace($gpMatch[0], $resourceIndexGetterDynamic, $content);
+        $getterMethod = "public function getResourceIndex(): PluginResourceIndex\n\t{\n\t\treturn \$this->resourceIndex;\n\t}\n\n\t";
+        if (preg_match('/(?:\/\*\*(?:(?!\*\/).)*\*\/\s*)?public\s+function\s+getPlugins\s*\(\s*\)\s*:\s*array/s', $content, $gpMatch)) {
+            $content = str_replace($gpMatch[0], $getterMethod . $gpMatch[0], $content);
         }
     }
 
@@ -314,6 +303,10 @@ PHP;
 
 		$reflect = new \ReflectionClass(PluginBase::class);
 		$prefixedPath = $reflect->getMethod('getFile')->invoke($plugin);
+		if (!\is_string($prefixedPath)) {
+			$logger->critical("Failed to reload plugin {$pluginName}: invalid plugin file path");
+			return false;
+		}
 		$loader = $plugin->getPluginLoader();
 		$protocol = $loader->getAccessProtocol();
 		$rawPath = $prefixedPath;
@@ -321,6 +314,30 @@ PHP;
 			$rawPath = substr($prefixedPath, strlen($protocol));
 		}
 		$rawPath = rtrim($rawPath, '/' . DIRECTORY_SEPARATOR);
+
+		if (!is_dir($rawPath)) {
+			$logger->critical("Cannot hot-reload plugin {$pluginName}: only directory (source) plugins are reloadable; phar/script plugins require a full server restart");
+			return false;
+		}
+
+		$newDescription = $loader->getPluginDescription($rawPath);
+		if ($newDescription === null) {
+			$logger->critical("Failed to reload plugin {$pluginName}: could not read plugin description from {$rawPath}");
+			return false;
+		}
+
+		$disabledDependents = [];
+		foreach (\array_reverse($this->resourceIndex->getTransitiveDependents($pluginName)) as $depName) {
+			$depPlugin = $this->plugins[$depName] ?? null;
+			if ($depPlugin !== null && $depPlugin->isEnabled()) {
+				$disabledDependents[] = $depName;
+				try {
+					$this->disablePlugin($depPlugin);
+				} catch (\Throwable $e) {
+					$logger->warning("Exception disabling dependent {$depName}: " . $e->getMessage());
+				}
+			}
+		}
 
 		try {
 			$this->disablePlugin($plugin);
@@ -354,15 +371,64 @@ PHP;
 		unset($this->enabledPlugins[$pluginName]);
 		$this->resourceIndex->removePlugin($pluginName);
 
-		$newDescription = $loader->getPluginDescription($rawPath);
-		if ($newDescription === null) {
-			$logger->critical("Failed to reload plugin {$pluginName}: could not read plugin description from {$rawPath}");
-			return false;
-		}
+		$restore = function () use ($plugin, $pluginName, $disabledDependents, $logger): void {
+			$this->plugins[$pluginName] = $plugin;
+			$permManager = PermissionManager::getInstance();
+			$opRoot = $permManager->getPermission(DefaultPermissions::ROOT_OPERATOR);
+			$everyoneRoot = $permManager->getPermission(DefaultPermissions::ROOT_USER);
+			foreach (Utils::stringifyKeys($plugin->getDescription()->getPermissions()) as $default => $perms) {
+				foreach ($perms as $perm) {
+					if ($permManager->getPermission($perm->getName()) !== null) {
+						$permManager->removePermission($perm);
+					}
+					$permManager->addPermission($perm);
+					if ($default === PermissionParser::DEFAULT_TRUE) {
+						$everyoneRoot?->addChild($perm->getName(), true);
+					} elseif ($default === PermissionParser::DEFAULT_OP) {
+						$opRoot?->addChild($perm->getName(), true);
+					} elseif ($default === PermissionParser::DEFAULT_NOT_OP) {
+						$everyoneRoot?->addChild($perm->getName(), true);
+						$opRoot?->addChild($perm->getName(), false);
+					}
+				}
+			}
+			$commandMap = $this->server->getCommandMap();
+			$staleCommands = [];
+			foreach ($commandMap->getCommands() as $command) {
+				if ($command instanceof PluginOwned && $command->getOwningPlugin()->getDescription()->getName() === $pluginName) {
+					$staleCommands[] = $command;
+				}
+			}
+			foreach ($staleCommands as $command) {
+				$commandMap->unregister($command);
+			}
+			$commandReflect = new \ReflectionMethod(PluginBase::class, 'registerYamlCommands');
+			$commandReflect->setAccessible(true);
+			$commandReflect->invoke($plugin);
+			try {
+				$this->enablePlugin($plugin);
+			} catch (\Throwable $e) {
+				$logger->critical("Rollback failed to re-enable {$pluginName}: " . $e->getMessage());
+			}
+			foreach (\array_reverse($disabledDependents) as $depName) {
+				$depPlugin = $this->plugins[$depName] ?? null;
+				if ($depPlugin !== null && !$depPlugin->isEnabled()) {
+					try {
+						$this->enablePlugin($depPlugin);
+					} catch (\Throwable $e) {
+						$logger->critical("Rollback failed to re-enable dependent {$depName}: " . $e->getMessage());
+					}
+				}
+			}
+			$descriptions = [];
+			foreach ($this->plugins as $p) {
+				$descriptions[] = $p->getDescription();
+			}
+			$this->resourceIndex->buildReverseDependencyMap($descriptions);
+		};
 
 		$rootNamespace = ClassCacheInvalidator::detectRootNamespace($rawPath);
 		$result = ClassCacheInvalidator::invalidateChanged($rawPath, [], $this->server->getLoader(), $rootNamespace);
-		$this->resourceIndex->updateMtimeSnapshot($pluginName, $result['mtimes']);
 
 		$newPlugin = null;
 		if ($rootNamespace !== '') {
@@ -376,12 +442,14 @@ PHP;
 							$permManager->removePermission($perm);
 						}
 						$permManager->addPermission($perm);
-						match ($default) {
-							PermissionParser::DEFAULT_TRUE => $everyoneRoot?->addChild($perm->getName(), true),
-							PermissionParser::DEFAULT_OP => $opRoot?->addChild($perm->getName(), true),
-							PermissionParser::DEFAULT_NOT_OP => [$everyoneRoot?->addChild($perm->getName(), true), $opRoot?->addChild($perm->getName(), false)],
-							default => null,
-						};
+						if ($default === PermissionParser::DEFAULT_TRUE) {
+							$everyoneRoot?->addChild($perm->getName(), true);
+						} elseif ($default === PermissionParser::DEFAULT_OP) {
+							$opRoot?->addChild($perm->getName(), true);
+						} elseif ($default === PermissionParser::DEFAULT_NOT_OP) {
+							$everyoneRoot?->addChild($perm->getName(), true);
+							$opRoot?->addChild($perm->getName(), false);
+						}
 					}
 				}
 
@@ -396,6 +464,7 @@ PHP;
 				} catch (\Throwable $e) {
 					$logger->critical("Failed to reload plugin {$pluginName}: " . $e->getMessage());
 					$logger->logException($e);
+					$restore();
 					return false;
 				}
 
@@ -408,6 +477,7 @@ PHP;
 				} catch (\Throwable $e) {
 					$logger->critical("Failed to reload {$pluginName}: " . $e->getMessage());
 					$logger->logException($e);
+					$restore();
 					return false;
 				}
 			}
@@ -417,12 +487,14 @@ PHP;
 			} catch (\Throwable $e) {
 				$logger->critical("Failed to reload plugin {$pluginName}: " . $e->getMessage());
 				$logger->logException($e);
+				$restore();
 				return false;
 			}
 		}
 
 		if ($newPlugin === null) {
 			$logger->critical("Failed to reload plugin {$pluginName}: internalLoadPlugin returned null");
+			$restore();
 			return false;
 		}
 
@@ -430,19 +502,38 @@ PHP;
 			if (!$this->enablePlugin($newPlugin)) {
 				$logger->critical("Failed to enable plugin {$pluginName} after reload");
 				unset($this->plugins[$newPlugin->getDescription()->getName()]);
+				$restore();
 				return false;
 			}
 		} catch (\Throwable $e) {
 			$logger->critical("Exception enabling plugin {$pluginName}: " . $e->getMessage());
 			$logger->logException($e);
 			unset($this->plugins[$newPlugin->getDescription()->getName()]);
+			$restore();
 			return false;
+		}
+
+		$this->resourceIndex->updateMtimeSnapshot($pluginName, $result['mtimes']);
+
+		foreach (\array_reverse($disabledDependents) as $depName) {
+			$depPlugin = $this->plugins[$depName] ?? null;
+			if ($depPlugin !== null && !$depPlugin->isEnabled()) {
+				try {
+					if (!$this->enablePlugin($depPlugin)) {
+						$logger->critical("Failed to re-enable dependent {$depName} after reloading {$pluginName}");
+					}
+				} catch (\Throwable $e) {
+					$logger->critical("Exception re-enabling dependent {$depName}: " . $e->getMessage());
+					$logger->logException($e);
+				}
+			}
 		}
 
 		$descriptions = [];
 		foreach ($this->plugins as $p) {
 			$descriptions[] = $p->getDescription();
 		}
+		/** [BetterPMMP-PATCH] reload-tail-buildmap */
 		$this->resourceIndex->buildReverseDependencyMap($descriptions);
 
 		return true;
@@ -482,7 +573,7 @@ RELOADMETHOD;
         }
     }
 
-    if (!str_contains($content, 'resourceIndex->trackPlugin')) {
+    if (!str_contains($content, '[BetterPMMP-PATCH] track-plugin-resources')) {
         $enabledPluginsLine = "\$this->enabledPlugins[\$plugin->getDescription()->getName()] = \$plugin;";
         $hasEnabledPluginsLine = str_contains($content, $enabledPluginsLine);
         if (!$hasEnabledPluginsLine) {
@@ -495,6 +586,7 @@ RELOADMETHOD;
         if ($hasEnabledPluginsLine) {
             $trackingCode = <<<'PHP'
 
+				/** [BetterPMMP-PATCH] track-plugin-resources */
 				$handlers = [];
 				foreach (HandlerListManager::global()->getAll() as $handlerList) {
 					foreach (EventPriority::ALL as $priority) {
@@ -532,7 +624,7 @@ PHP;
                 }
             }
 
-            if ($hasEnableBlock && !str_contains($content, 'resourceIndex->trackPlugin')) {
+            if ($hasEnableBlock && !str_contains($content, '[BetterPMMP-PATCH] track-plugin-resources')) {
                 $content = str_replace(
                     $oldEnableBlock,
                     $oldEnableBlock . "\n" . $trackingCode,
@@ -542,10 +634,11 @@ PHP;
         }
     }
 
-    if (!str_contains($content, 'resourceIndex->buildReverseDependencyMap')) {
+    if (!str_contains($content, '[BetterPMMP-PATCH] loadplugins-buildmap')) {
         $loadPluginsGuardFalse = '$this->loadPluginsGuard = false;';
         $buildMapCode = <<<'PHP'
 
+		/** [BetterPMMP-PATCH] loadplugins-buildmap */
 		$descriptions = [];
 		foreach($this->plugins as $p){
 			$descriptions[] = $p->getDescription();
@@ -733,7 +826,6 @@ namespace pocketmine\plugin;
 use pocketmine\thread\ThreadSafeClassLoader;
 use function array_key_exists;
 use function array_keys;
-use function str_replace;
 use function count;
 use function explode;
 use function file_get_contents;
@@ -743,8 +835,6 @@ use function implode;
 use function is_dir;
 use function min;
 use function preg_match;
-use function preg_quote;
-use function preg_replace_callback;
 use function preg_replace;
 use function str_ends_with;
 use function str_starts_with;
@@ -835,6 +925,9 @@ class ClassCacheInvalidator
 			new \RecursiveDirectoryIterator($scanTarget, \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::CURRENT_AS_PATHNAME)
 		);
 		foreach ($iterator as $filePath) {
+			if (!\is_string($filePath)) {
+				continue;
+			}
 			if (!str_ends_with($filePath, '.php')) {
 				continue;
 			}
@@ -893,6 +986,9 @@ class ClassCacheInvalidator
 		);
 
 		foreach ($iterator as $filePath) {
+			if (!\is_string($filePath)) {
+				continue;
+			}
 			if (!str_ends_with($filePath, '.php')) {
 				continue;
 			}
@@ -932,22 +1028,9 @@ class ClassCacheInvalidator
 			return true;
 		}
 
+		$source = self::applyVersionToSource($source, $version, $rootNamespace);
+
 		$source = preg_replace('/^<\?php\s*/i', '', $source);
-		if ($source === null) {
-			return true;
-		}
-
-		$escaped = preg_quote($rootNamespace, '/');
-
-		$source = str_replace($rootNamespace . '\\', $rootNamespace . '\\v' . $version . '\\', $source);
-
-		$source = preg_replace_callback(
-			'/^(\s*namespace\s+)(' . $escaped . ')(\s*[;{])/m',
-			static function (array $matches) use ($version): string {
-				return $matches[1] . $matches[2] . '\\v' . $version . $matches[3];
-			},
-			$source
-		);
 		if ($source === null) {
 			return true;
 		}
@@ -958,6 +1041,62 @@ class ClassCacheInvalidator
 		} catch (\Throwable) {
 			return false;
 		}
+	}
+
+	private static function applyVersionToSource(string $source, int $version, string $rootNamespace): string
+	{
+		$insert = '\\v' . $version;
+		$prefix = $rootNamespace . '\\';
+		$result = '';
+		$afterNamespace = false;
+		foreach (\token_get_all($source) as $token) {
+			if (!\is_array($token)) {
+				$afterNamespace = false;
+				$result .= $token;
+				continue;
+			}
+			$id = $token[0];
+			$text = $token[1];
+			if ($id === \T_WHITESPACE || $id === \T_COMMENT || $id === \T_DOC_COMMENT) {
+				$result .= $text;
+				continue;
+			}
+			if ($id === \T_NAMESPACE) {
+				$afterNamespace = true;
+				$result .= $text;
+				continue;
+			}
+			if ($id === \T_NAME_QUALIFIED || $id === \T_NAME_FULLY_QUALIFIED) {
+				$result .= self::versionName($text, $rootNamespace, $prefix, $insert);
+				$afterNamespace = false;
+				continue;
+			}
+			if ($id === \T_STRING && $afterNamespace && $text === $rootNamespace) {
+				$result .= $text . $insert;
+				$afterNamespace = false;
+				continue;
+			}
+			$afterNamespace = false;
+			$result .= $text;
+		}
+		return $result;
+	}
+
+	private static function versionName(string $name, string $rootNamespace, string $prefix, string $insert): string
+	{
+		$leading = '';
+		$bare = $name;
+		if (str_starts_with($bare, '\\')) {
+			$leading = '\\';
+			$bare = substr($bare, 1);
+		}
+		if ($bare === $rootNamespace) {
+			return $leading . $bare . $insert;
+		}
+		if (str_starts_with($bare, $prefix)) {
+			return $leading . $rootNamespace . $insert . '\\' . substr($bare, strlen($prefix));
+		}
+		return $name;
 	}
 
 	public static function getCurrentVersion(): int
@@ -1013,9 +1152,9 @@ final class PluginResourceIndex
     private array $mtimeSnapshots = [];
 
     /**
-     * @param RegisteredListener[] $handlers
-     * @param Command[]            $commands
-     * @param Permission[]         $permissions
+     * @param list<RegisteredListener<*>> $handlers
+     * @param Command[]                                         $commands
+     * @param Permission[]                                      $permissions
      */
     public function trackPlugin(string $pluginName, array $handlers, array $commands, array $permissions): void
     {
@@ -1084,6 +1223,64 @@ final class PluginResourceIndex
             }
         }
     }
+
+    /** @return list<string> */
+    public function getTransitiveDependents(string $pluginName): array
+    {
+        $inSet = [];
+        $queue = [$pluginName];
+        for ($i = 0; $i < \count($queue); ++$i) {
+            foreach ($this->reverseDependencyMap[$queue[$i]] ?? [] as $dependent) {
+                if ($dependent !== $pluginName && !isset($inSet[$dependent])) {
+                    $inSet[$dependent] = true;
+                    $queue[] = $dependent;
+                }
+            }
+        }
+        if (\count($inSet) === 0) {
+            return [];
+        }
+
+        $indegree = [];
+        foreach ($inSet as $name => $ignored) {
+            $indegree[$name] = 0;
+        }
+        foreach ($indegree as $name => $ignored) {
+            foreach ($this->reverseDependencyMap[$name] ?? [] as $dependent) {
+                if (isset($indegree[$dependent])) {
+                    ++$indegree[$dependent];
+                }
+            }
+        }
+
+        $ordered = [];
+        $ready = [];
+        foreach ($indegree as $name => $degree) {
+            if ($degree === 0) {
+                $ready[] = $name;
+            }
+        }
+        for ($i = 0; $i < \count($ready); ++$i) {
+            $name = $ready[$i];
+            $ordered[] = $name;
+            foreach ($this->reverseDependencyMap[$name] ?? [] as $dependent) {
+                if (isset($indegree[$dependent])) {
+                    --$indegree[$dependent];
+                    if ($indegree[$dependent] === 0) {
+                        $ready[] = $dependent;
+                    }
+                }
+            }
+        }
+
+        foreach ($indegree as $name => $degree) {
+            if ($degree > 0) {
+                $ordered[] = $name;
+            }
+        }
+
+        return $ordered;
+    }
 }
 PHPFILE;
 
@@ -1124,10 +1321,10 @@ use pocketmine\scheduler\TaskHandler;
 final class PluginResources{
 
 	/**
-	 * @param RegisteredListener[] $handlers
-	 * @param Command[]            $commands
-	 * @param Permission[]         $permissions
-	 * @param TaskHandler[]        $schedulerTasks
+	 * @param list<RegisteredListener<*>> $handlers
+	 * @param Command[]                                         $commands
+	 * @param Permission[]                                      $permissions
+	 * @param list<TaskHandler<*>>     $schedulerTasks
 	 */
 	public function __construct(
 		private array $handlers = [],
@@ -1136,7 +1333,7 @@ final class PluginResources{
 		private array $schedulerTasks = []
 	){}
 
-	/** @return RegisteredListener[] */
+	/** @return list<RegisteredListener<*>> */
 	public function getHandlers() : array{
 		return $this->handlers;
 	}
@@ -1151,12 +1348,12 @@ final class PluginResources{
 		return $this->permissions;
 	}
 
-	/** @return TaskHandler[] */
+	/** @return list<TaskHandler<*>> */
 	public function getSchedulerTasks() : array{
 		return $this->schedulerTasks;
 	}
 
-	/** @param TaskHandler[] $tasks */
+	/** @param list<TaskHandler<*>> $tasks */
 	public function setSchedulerTasks(array $tasks) : void{
 		$this->schedulerTasks = $tasks;
 	}

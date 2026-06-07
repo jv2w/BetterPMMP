@@ -1,0 +1,70 @@
+patch_tool.php|Function applyReplacePatch() return type has no value type specified in iterable type array.
+patch_tool.php|Function createClassCacheInvalidator() return type has no value type specified in iterable type array.
+patch_tool.php|Function createPluginResourceIndex() return type has no value type specified in iterable type array.
+patch_tool.php|Function createPluginResources() return type has no value type specified in iterable type array.
+patch_tool.php|Function createReloadPluginCommand() return type has no value type specified in iterable type array.
+patch_tool.php|Function createRestartCommand() return type has no value type specified in iterable type array.
+patch_tool.php|Function makePatchResult() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchBlockInputLag() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchClassMapAuthoritative() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchComposerSyncCheck() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchCrashdumpsPath() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchDataPath() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchEntityMoveInPlace() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchEntitySmartBlocksAroundCache() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchFpsActorAnimationDistanceFilter() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchFpsChunkSendPacing() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchFpsEntityBroadcastOptimization() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchFpsItemEntitySuppression() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchFpsParticleSoundDistanceFilter() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchGarbageCollectorLog() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchHandlerListMergePerformance() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchInfoPrefix() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchIronDoorNoInteract() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchNetworkSessionDisconnectGuardTiming() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchNetworkSessionSetHandlerGuard() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchPlayerCriticalHit() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchPlayerPerWorldViewDistance() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchPlayerRespawnLockReset() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchPluginBaseLazyDataFolder() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchPluginManager() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchPluginManagerLazyDataFolder() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchPocketmineYmlBetterPmmp() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchPocketmineYmlCriticalHit() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchPocketmineYmlFpsOptimization() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchReloadPermission() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchServerLogPath() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchServerPaths() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchServerStartLogs() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchSimpleCommandMap() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchSimpleCommandMapRestartCommand() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchStartCmd() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchStartCmdBinPath() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchStartCmdRestartLoop() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchStartWarning() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchWorldBlockCacheSize() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchWorldChunkOptimization() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchWorldFixedLight() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchWorldNeighbourUpdateThrottle() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchWorldPerWorldChunkTicking() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchYmlServerPropertiesBetterPmmp() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchYmlServerPropertiesCriticalHit() return type has no value type specified in iterable type array.
+patch_tool.php|Function patchYmlServerPropertiesFpsOptimization() return type has no value type specified in iterable type array.
+patch_tool.php|Function printSummary() has parameter $results with no value type specified in iterable type array.
+patch_tool.php|Negated boolean expression is always true.
+patch_tool.php|Parameter #1 $search of function str_replace expects array|string, string|false given.
+patch_tool.php|Parameter #3 $length of function substr expects int|null, int<0, max>|false given.
+patch_tool.php|Parameter #3 $length of function substr expects int|null, int|false given.
+patch_tool.php|Parameter #3 $offset of function strpos expects int, int<0, max>|false given.
+patch_tool.php|Parameter #3 $subject of function preg_replace expects array|string, string|null given.
+patch_tool.php|Parameter #3 $subject of function str_replace expects array|string, string|null given.
+patch_tool.php|Strict comparison using === between array|string and null will always evaluate to false.
+src/GarbageCollectorManager.php|Property pocketmine/GarbageCollectorManager::$logger is never read, only written.
+src/entity/Entity.php|Cannot cast mixed to float.
+src/entity/object/ItemEntity.php|Cannot cast mixed to int.
+src/player/Player.php|Cannot cast mixed to float.
+src/player/Player.php|Cannot cast mixed to int.
+src/world/World.php|Call to static method fill() on an unknown class pocketmine/world/format/LightArray.
+src/world/World.php|Cannot cast mixed to float.
+src/world/World.php|Cannot cast mixed to int.
+src/world/World.php|Constant pocketmine/world/World::BLOCK_CACHE_SIZE_CAP is unused.
