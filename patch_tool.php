@@ -2767,24 +2767,6 @@ function patchEntitySmartBlocksAroundCache(string $sourceDir): array
     return makePatchResult($targetFile, true, false);
 }
 
-function patchEntityMotionEpsilonCleanup(string $sourceDir): array
-{
-    $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'entity' . DIRECTORY_SEPARATOR . 'Entity.php';
-
-    $old = "\t\t\$this->motion = new Vector3(\$this->motion->x * \$friction, \$mY, \$this->motion->z * \$friction);\n"
-        . "\t}";
-
-    $new = "\t\t/** [BetterPMMP-PATCH] Motion epsilon cleanup - zeroes sub-threshold components after friction */\n"
-        . "\t\t\$mX = \$this->motion->x * \$friction;\n"
-        . "\t\t\$mZ = \$this->motion->z * \$friction;\n"
-        . "\t\t\$this->motion->x = abs(\$mX) < 1.0E-6 ? 0.0 : \$mX;\n"
-        . "\t\t\$this->motion->y = abs(\$mY) < 1.0E-6 ? 0.0 : \$mY;\n"
-        . "\t\t\$this->motion->z = abs(\$mZ) < 1.0E-6 ? 0.0 : \$mZ;\n"
-        . "\t}";
-
-    return applyReplacePatch($targetFile, 'Entity.php', 'Motion epsilon cleanup', $old, $new, 'Failed to match tryChangeMovement() end in Entity.php', 'Failed to write patched Entity.php (motion epsilon cleanup)');
-}
-
 function patchPocketmineYmlCriticalHit(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'resources' . DIRECTORY_SEPARATOR . 'pocketmine.yml';
@@ -2932,78 +2914,6 @@ function patchPlayerCriticalHit(string $sourceDir): array
     return makePatchResult($targetFile, true, false);
 }
 
-function patchWorldEntityTickClose(string $sourceDir): array
-{
-    $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'world' . DIRECTORY_SEPARATOR . 'World.php';
-
-    $old = "\t\t//Update entities that need update\n"
-        . "\t\tforeach(\$this->updateEntities as \$id => \$entity){\n"
-        . "\t\t\tif(\$entity->isClosed() || \$entity->isFlaggedForDespawn() || !\$entity->onUpdate(\$currentTick)){\n"
-        . "\t\t\t\tunset(\$this->updateEntities[\$id]);\n"
-        . "\t\t\t}\n"
-        . "\t\t\tif(\$entity->isFlaggedForDespawn()){\n"
-        . "\t\t\t\t\$entity->close();\n"
-        . "\t\t\t}\n"
-        . "\t\t}";
-
-    $new = "\t\t/** [BetterPMMP-PATCH] Entity tick close guard - prevents redundant close() on already-closed entities */\n"
-        . "\t\tforeach(\$this->updateEntities as \$id => \$entity){\n"
-        . "\t\t\tif(\$entity->isClosed() || \$entity->isFlaggedForDespawn() || !\$entity->onUpdate(\$currentTick)){\n"
-        . "\t\t\t\tunset(\$this->updateEntities[\$id]);\n"
-        . "\t\t\t}\n"
-        . "\t\t\tif(!\$entity->isClosed() && \$entity->isFlaggedForDespawn()){\n"
-        . "\t\t\t\t\$entity->close();\n"
-        . "\t\t\t}\n"
-        . "\t\t}";
-
-    return applyReplacePatch($targetFile, 'World.php', 'Entity tick close guard', $old, $new, 'Failed to match entity tick loop in World.php', 'Failed to write patched World.php (entity tick close)');
-}
-
-function patchWorldUnloadEntityIteration(string $sourceDir): array
-{
-    $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'world' . DIRECTORY_SEPARATOR . 'World.php';
-
-    $old = "\t\tforeach(\$this->entitiesByChunk as \$chunkHash => \$entities){\n"
-        . "\t\t\tself::getXZ(\$chunkHash, \$chunkX, \$chunkZ);\n"
-        . "\n"
-        . "\t\t\t\$leakedEntities = 0;\n"
-        . "\t\t\tforeach(\$entities as \$entity){\n"
-        . "\t\t\t\tif(!\$entity->isFlaggedForDespawn()){\n"
-        . "\t\t\t\t\t\$leakedEntities++;\n"
-        . "\t\t\t\t}\n"
-        . "\t\t\t\t\$entity->close();\n"
-        . "\t\t\t}\n"
-        . "\t\t\tif(\$leakedEntities !== 0){\n"
-        . "\t\t\t\t\$this->logger->warning(\"\$leakedEntities leaked entities found in ungenerated chunk \$chunkX \$chunkZ during unload, they won't be saved!\");\n"
-        . "\t\t\t}\n"
-        . "\t\t}";
-
-    $new = "\t\t/** [BetterPMMP-PATCH] Safe entity iteration during world unload - snapshot keys to avoid modification during iteration */\n"
-        . "\t\t\$chunkHashes = array_keys(\$this->entitiesByChunk);\n"
-        . "\t\tforeach(\$chunkHashes as \$chunkHash){\n"
-        . "\t\t\tif(!isset(\$this->entitiesByChunk[\$chunkHash])){\n"
-        . "\t\t\t\tcontinue;\n"
-        . "\t\t\t}\n"
-        . "\t\t\t\$entities = \$this->entitiesByChunk[\$chunkHash];\n"
-        . "\t\t\tself::getXZ(\$chunkHash, \$chunkX, \$chunkZ);\n"
-        . "\n"
-        . "\t\t\t\$leakedEntities = 0;\n"
-        . "\t\t\tforeach(\$entities as \$entity){\n"
-        . "\t\t\t\tif(!\$entity->isFlaggedForDespawn()){\n"
-        . "\t\t\t\t\t\$leakedEntities++;\n"
-        . "\t\t\t\t}\n"
-        . "\t\t\t\tif(!\$entity->isClosed()){\n"
-        . "\t\t\t\t\t\$entity->close();\n"
-        . "\t\t\t\t}\n"
-        . "\t\t\t}\n"
-        . "\t\t\tif(\$leakedEntities !== 0){\n"
-        . "\t\t\t\t\$this->logger->warning(\"\$leakedEntities leaked entities found in ungenerated chunk \$chunkX \$chunkZ during unload, they won't be saved!\");\n"
-        . "\t\t\t}\n"
-        . "\t\t}";
-
-    return applyReplacePatch($targetFile, 'World.php', 'Safe entity iteration during world unload', $old, $new, 'Failed to match entitiesByChunk unload loop in World.php', 'Failed to write patched World.php (unload entity iteration)');
-}
-
 function patchNetworkSessionSetHandlerGuard(string $sourceDir): array
 {
     $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'network' . DIRECTORY_SEPARATOR . 'mcpe' . DIRECTORY_SEPARATOR . 'NetworkSession.php';
@@ -3016,49 +2926,6 @@ function patchNetworkSessionSetHandlerGuard(string $sourceDir): array
         . "\t\tif(\$this->connected && !\$this->disconnectGuard){";
 
     return applyReplacePatch($targetFile, 'NetworkSession.php', 'setHandler disconnect guard', $old, $new, 'Failed to match setHandler() in NetworkSession.php', 'Failed to write patched NetworkSession.php (setHandler guard)');
-}
-
-function patchHandlerListRegisterAllCache(string $sourceDir): array
-{
-    $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'event' . DIRECTORY_SEPARATOR . 'HandlerList.php';
-
-    $old = "\tpublic function registerAll(array \$listeners) : void{\n"
-        . "\t\tforeach(\$listeners as \$listener){\n"
-        . "\t\t\t\$this->register(\$listener);\n"
-        . "\t\t}\n"
-        . "\t\t\$this->invalidateAffectedCaches();\n"
-        . "\t}";
-
-    $new = "\t/** [BetterPMMP-PATCH] Batch register listeners - single cache invalidation instead of N+1 */\n"
-        . "\tpublic function registerAll(array \$listeners) : void{\n"
-        . "\t\tforeach(\$listeners as \$listener){\n"
-        . "\t\t\tif(isset(\$this->handlerSlots[\$listener->getPriority()][spl_object_id(\$listener)])){\n"
-        . "\t\t\t\tthrow new \\InvalidArgumentException(\"This listener is already registered to priority {\$listener->getPriority()} of event {\$this->class}\");\n"
-        . "\t\t\t}\n"
-        . "\t\t\t\$this->handlerSlots[\$listener->getPriority()][spl_object_id(\$listener)] = \$listener;\n"
-        . "\t\t}\n"
-        . "\t\t\$this->invalidateAffectedCaches();\n"
-        . "\t}";
-
-    return applyReplacePatch($targetFile, 'HandlerList.php', 'Batch register listeners', $old, $new, 'Failed to match registerAll() in HandlerList.php', 'Failed to write patched HandlerList.php (registerAll cache)');
-}
-
-function patchEntityHealthFloatComparison(string $sourceDir): array
-{
-    $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'entity' . DIRECTORY_SEPARATOR . 'Entity.php';
-
-    $old = "\tpublic function setHealth(float \$amount) : void{\n"
-        . "\t\tif(\$amount === \$this->health){\n"
-        . "\t\t\treturn;\n"
-        . "\t\t}";
-
-    $new = "\tpublic function setHealth(float \$amount) : void{\n"
-        . "\t\t/** [BetterPMMP-PATCH] Float-safe health comparison using epsilon */\n"
-        . "\t\tif(abs(\$amount - \$this->health) < 1e-6){\n"
-        . "\t\t\treturn;\n"
-        . "\t\t}";
-
-    return applyReplacePatch($targetFile, 'Entity.php', 'Float-safe health comparison', $old, $new, 'Failed to match setHealth() in Entity.php', 'Failed to write patched Entity.php (health float comparison)');
 }
 
 function patchPlayerRespawnLockReset(string $sourceDir): array
@@ -3154,117 +3021,6 @@ function patchHandlerListMergePerformance(string $sourceDir): array
         . "\t\treturn \$this->handlerCache->list = \$result;";
 
     return applyReplacePatch($targetFile, 'HandlerList.php', 'Single-pass handler list merge', $old, $new, 'Failed to match getListenerList() merge in HandlerList.php', 'Failed to write patched HandlerList.php (merge performance)');
-}
-
-function patchServerRemoveOnlinePlayerSnapshot(string $sourceDir): array
-{
-    $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Server.php';
-
-    $old = "\tpublic function removeOnlinePlayer(Player \$player) : void{\n"
-        . "\t\tif(isset(\$this->playerList[\$rawUUID = \$player->getUniqueId()->getBytes()])){\n"
-        . "\t\t\tunset(\$this->playerList[\$rawUUID]);\n"
-        . "\t\t\tforeach(\$this->playerList as \$p){\n"
-        . "\t\t\t\t\$p->getNetworkSession()->onPlayerRemoved(\$player);\n"
-        . "\t\t\t}\n"
-        . "\t\t}\n"
-        . "\t}";
-
-    $new = "\t/** [BetterPMMP-PATCH] Snapshot playerList before notification loop to prevent nested iteration */\n"
-        . "\tpublic function removeOnlinePlayer(Player \$player) : void{\n"
-        . "\t\tif(isset(\$this->playerList[\$rawUUID = \$player->getUniqueId()->getBytes()])){\n"
-        . "\t\t\tunset(\$this->playerList[\$rawUUID]);\n"
-        . "\t\t\t\$onlinePlayers = \$this->playerList;\n"
-        . "\t\t\tforeach(\$onlinePlayers as \$p){\n"
-        . "\t\t\t\t\$p->getNetworkSession()->onPlayerRemoved(\$player);\n"
-        . "\t\t\t}\n"
-        . "\t\t}\n"
-        . "\t}";
-
-    return applyReplacePatch($targetFile, 'Server.php', 'Snapshot playerList before notification', $old, $new, 'Failed to match removeOnlinePlayer() in Server.php', 'Failed to write patched Server.php (removeOnlinePlayer snapshot)');
-}
-
-function patchPlayerDestroyCyclesCleanup(string $sourceDir): array
-{
-    $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'player' . DIRECTORY_SEPARATOR . 'Player.php';
-
-    $old = "\tprotected function destroyCycles() : void{\n"
-        . "\t\t\$this->networkSession = null;\n"
-        . "\t\tunset(\$this->cursorInventory);\n"
-        . "\t\tunset(\$this->craftingGrid);\n"
-        . "\t\t\$this->spawnPosition = null;";
-
-    $new = "\t/** [BetterPMMP-PATCH] Defensive reference cleanup - clear singleton reference for GC */\n"
-        . "\tprotected function destroyCycles() : void{\n"
-        . "\t\t\$this->networkSession = null;\n"
-        . "\t\tunset(\$this->cursorInventory);\n"
-        . "\t\tunset(\$this->craftingGrid);\n"
-        . "\t\tunset(\$this->creativeInventory);\n"
-        . "\t\t\$this->spawnPosition = null;";
-
-    return applyReplacePatch($targetFile, 'Player.php', 'Defensive reference cleanup', $old, $new, 'Failed to match destroyCycles() in Player.php', 'Failed to write patched Player.php (destroyCycles cleanup)');
-}
-
-function patchWorldUnloadChunkEntityClose(string $sourceDir): array
-{
-    $targetFile = $sourceDir . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'world' . DIRECTORY_SEPARATOR . 'World.php';
-
-    if (!file_exists($targetFile)) {
-        return makePatchResult($targetFile, false, false, 'World.php not found');
-    }
-
-    $content = file_get_contents($targetFile);
-    if ($content === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to read World.php');
-    }
-
-    if (str_contains($content, 'Guard against double-close during chunk unload')) {
-        return makePatchResult($targetFile, false, true);
-    }
-
-    $old = "\t\t\t\tforeach(\$this->getChunkEntities(\$x, \$z) as \$entity){\n"
-        . "\t\t\t\t\tif(\$entity instanceof Player){\n"
-        . "\t\t\t\t\t\tcontinue;\n"
-        . "\t\t\t\t\t}\n"
-        . "\t\t\t\t\t\$entity->close();\n"
-        . "\t\t\t\t}";
-
-    $old3tab = "\t\t\tforeach(\$this->getChunkEntities(\$x, \$z) as \$entity){\n"
-        . "\t\t\t\tif(\$entity instanceof Player){\n"
-        . "\t\t\t\t\tcontinue;\n"
-        . "\t\t\t\t}\n"
-        . "\t\t\t\t\$entity->close();\n"
-        . "\t\t\t}";
-
-    $matched = false;
-    foreach ([$old, $old3tab] as $anchor) {
-        if (str_contains($content, $anchor)) {
-            $indent = ($anchor === $old) ? "\t\t\t\t" : "\t\t\t";
-            $inner = $indent . "\t";
-            $innerInner = $inner . "\t";
-            $new = $indent . "/** [BetterPMMP-PATCH] Guard against double-close during chunk unload */\n"
-                . $indent . "foreach(\$this->getChunkEntities(\$x, \$z) as \$entity){\n"
-                . $inner . "if(\$entity instanceof Player){\n"
-                . $innerInner . "continue;\n"
-                . $inner . "}\n"
-                . $inner . "if(!\$entity->isClosed()){\n"
-                . $innerInner . "\$entity->close();\n"
-                . $inner . "}\n"
-                . $indent . "}";
-            $content = str_replace($anchor, $new, $content);
-            $matched = true;
-            break;
-        }
-    }
-
-    if (!$matched) {
-        return makePatchResult($targetFile, false, false, 'Failed to match chunk entity close loop in World.php');
-    }
-
-    if (file_put_contents($targetFile, $content) === false) {
-        return makePatchResult($targetFile, false, false, 'Failed to write patched World.php (chunk entity close guard)');
-    }
-
-    return makePatchResult($targetFile, true, false);
 }
 
 function patchNetworkSessionDisconnectGuardTiming(string $sourceDir): array
@@ -3944,20 +3700,12 @@ $patchFunctions = [
     'patchWorldBlockCacheSize' => $sourceDir,
     'patchEntityMoveInPlace' => $sourceDir,
     'patchEntitySmartBlocksAroundCache' => $sourceDir,
-    'patchEntityMotionEpsilonCleanup' => $sourceDir,
     'patchPocketmineYmlCriticalHit' => $sourceDir,
     'patchYmlServerPropertiesCriticalHit' => $sourceDir,
     'patchPlayerCriticalHit' => $sourceDir,
-    'patchWorldEntityTickClose' => $sourceDir,
-    'patchWorldUnloadEntityIteration' => $sourceDir,
     'patchNetworkSessionSetHandlerGuard' => $sourceDir,
-    'patchHandlerListRegisterAllCache' => $sourceDir,
-    'patchEntityHealthFloatComparison' => $sourceDir,
     'patchPlayerRespawnLockReset' => $sourceDir,
     'patchHandlerListMergePerformance' => $sourceDir,
-    'patchServerRemoveOnlinePlayerSnapshot' => $sourceDir,
-    'patchPlayerDestroyCyclesCleanup' => $sourceDir,
-    'patchWorldUnloadChunkEntityClose' => $sourceDir,
     'patchNetworkSessionDisconnectGuardTiming' => $sourceDir,
     'patchClassMapAuthoritative' => $sourceDir,
     'patchPocketmineYmlFpsOptimization' => $sourceDir,
