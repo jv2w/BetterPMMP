@@ -1,68 +1,55 @@
 # BetterPMMP
 
-A patch tool that applies performance optimizations, gameplay fixes, and developer-experience improvements directly to **PocketMine-MP 5.0.0** source code.
+A patch tool for **PocketMine-MP 5.0.0** that applies performance, gameplay, and quality-of-life fixes directly to the source.
 
 > 🌏 [한국어 README](README.ko.md)
 
-## How It Works
-
-`patch_tool.php` runs the PMMP source tree through ~60 idempotent patch functions. Each patch:
-
-- Marks itself with `[BetterPMMP-PATCH]` so it is never applied twice.
-- Reports `APPLIED` / `SKIPPED` / `FAILED` in a summary at the end.
-- Is self-healing - re-running on an already-patched (or partially patched) tree is safe.
+## Usage
 
 ```bash
-php patch_tool.php <source_directory_path>
+php patch_tool.php <source_directory>
 ```
+
+`patch_tool.php` runs about 60 patches over the PMMP source. Each patch tags its edits with `[BetterPMMP-PATCH]`, so already-applied patches are skipped and re-running is safe. You get an `APPLIED` / `SKIPPED` / `FAILED` summary at the end.
 
 ## Features
 
 ### Developer Experience
 
-- **Plugin Hot Reload** - Reload plugins at runtime via the `/reload <pluginName>` command, no server restart. Plugins are fully unloaded and reloaded along with their event listeners, commands, and permissions. Reloading a plugin automatically cycles (disables then re-enables) the plugins that depend on it, in dependency order, so they re-bind to the new instance; any failure rolls back to the previously running version. Uses a versioned-namespace class cache invalidator (`ClassCacheInvalidator`) and a reverse dependency map (`PluginDependencyMap`) to reload dependents in the correct order.
-  - **Limitations:** Only **directory/source** plugins are reloadable; `.phar` and single-file script plugins are refused with a clear message and require a full restart. Because PHP cannot unload classes, each reload of a changed plugin keeps the previous class generation resident, so memory grows with the number of reloads in a session — restart to reclaim it. Dependents that reference a reloaded plugin's classes through static type hints or `instanceof` should be reloaded too (or the server restarted) if that plugin's public API changed.
-- **Restart Command** - `/restart` command plus a `start.cmd` restart loop for clean server cycling.
-- **Source-Based Startup** - Patches `start.cmd` to run from `source/src/PocketMine.php` instead of a `.phar`, so source edits take effect immediately.
-- **Cleaner Logs & Paths** - Tidier startup logs, info prefixes, GC logging, and consolidated data / log / crashdump paths.
+- **Plugin Hot Reload** — `/reload <plugin>` reloads a plugin at runtime without restarting the server. Its listeners, commands, and permissions are unloaded and re-registered, and any plugins depending on it are cycled in dependency order so they re-bind to the new instance. A failed reload rolls back to the last working version.
+  - Only directory/source plugins can be reloaded; `.phar` and single-file plugins are rejected and need a full restart.
+  - PHP can't unload classes, so each reload of a changed plugin leaves the old version in memory. Restart to reclaim it.
+- **Restart Command** — `/restart`, backed by a restart loop in `start.cmd`.
+- **Run From Source** — `start.cmd` runs `source/src/PocketMine.php` directly instead of a `.phar`, so edits take effect on the next start.
+- **Cleaner Logs & Paths** — tidier startup output and consolidated data / log / crashdump directories.
 
-### Performance Optimizations
+### Performance
 
-- **Block Input Lag Fix** - Snapshot-based block sync. Surrounding block states are captured before an interaction; only changed blocks are sent back, eliminating rubber-banding on place/break.
-- **Fixed Light** - Skips the async `LightPopulationTask` and fills light arrays with a fixed value, removing async submission, igbinary serialization, and BFS flood-fill overhead. Configurable in `pocketmine.yml`.
-- **Per-World View Distance** - Override `view-distance` per world (great for lobbies).
-- **Per-World Chunk Ticking** - Independent `tick-radius` and `blocks-per-subchunk-per-tick` per world; set both to `0` to fully disable random ticking on lobbies.
-- **FPS / Network Optimizations** - Entity broadcast batching, actor animation distance filtering, particle/sound distance filtering, chunk-send pacing, and item-entity suppression.
-- **Entity & World Tuning** - Move-in-place fast path, blocks-around caching, motion epsilon cleanup, neighbour-update throttling, block cache sizing, and safer entity tick/unload iteration.
-- **Misc Engine Tuning** - Handler-list merge/registration caching, network session handler guards, health float-comparison fix, respawn lock reset, online-player snapshot on removal, and class-map-authoritative autoloading.
+- **Block Input Lag Fix** — captures surrounding blocks before an interaction and sends back only the ones that changed, killing rubber-banding on place/break.
+- **Fixed Light** — skips `LightPopulationTask` and fills light arrays with a constant, dropping the async/serialization/flood-fill cost. Toggle in `pocketmine.yml`.
+- **Per-World View Distance** — override `view-distance` per world (handy for lobbies).
+- **Per-World Chunk Ticking** — set `tick-radius` and `blocks-per-subchunk-per-tick` per world; set both to `0` to disable random ticking entirely.
+- **Network & Entity Tuning** — broadcast batching, distance filtering for animations/particles/sounds, chunk-send pacing, block/neighbour caching, and assorted engine fixes.
 
 ### Gameplay
 
-- **Critical Hit** - Configurable critical-hit mechanics via `pocketmine.yml` / `server.properties`.
-- **Iron Door No-Interact** - Prevents hand interaction toggling iron doors.
+- **Critical Hits** — configurable via `pocketmine.yml` / `server.properties`.
+- **Iron Door No-Interact** — hand interaction no longer toggles iron doors.
 
 ## Requirements
 
-- PocketMine-MP 5.0.0 source code
-- PHP 8.x - the PMMP custom PHP binary from [pmmp/PHP-Binaries releases](https://github.com/pmmp/PHP-Binaries/releases)
-- Windows (start scripts target `start.cmd`)
+- PocketMine-MP 5.0.0 source
+- A PMMP PHP 8 binary from [pmmp/PHP-Binaries](https://github.com/pmmp/PHP-Binaries/releases)
+- Windows (the start scripts target `start.cmd`)
 
 ## Installation
 
-1. Place the PocketMine-MP 5.0.0 source in the `source/` folder.
-2. Provide a PHP binary. `start.cmd` looks for it in either location:
-   - **Inside the server** - `bin/php/php.exe` (the local binary is always preferred if present), or
-   - **On the system** - a `php.exe` on your `PATH` (outside the `source/` folder).
-
-   Download the matching build from [pmmp/PHP-Binaries releases](https://github.com/pmmp/PHP-Binaries/releases) and extract it to `bin/php/` for the in-server option.
-3. Run the patch tool:
-   ```bash
-   php patch_tool.php source
-   ```
-   (or run `makeBetterPMMP.bat`)
+1. Put the PocketMine-MP 5.0.0 source in `source/`.
+2. Provide a PHP binary — either `bin/php/php.exe` inside the server (preferred) or a `php.exe` on your `PATH`.
+3. Run `php patch_tool.php source` (or `makeBetterPMMP.bat`).
 4. Start the server with `start.cmd`.
 
-Patches are idempotent - re-run any time after updating the source.
+Patches are idempotent, so re-run after every source update.
 
 ## License
 
