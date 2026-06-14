@@ -3786,6 +3786,778 @@ function patchStandardBroadcasterMovementSendEvent(string $sourceDir): PatchResu
     return applyReplacePatch($targetFile, 'skip DataPacketSendEvent for movement broadcasts', $old, $new, 'DataPacketSendEvent anchor not found in StandardPacketBroadcaster.php');
 }
 
+function createTradeInventory(string $sourceDir): PatchResult
+{
+    $targetDir = $sourceDir . '/src/inventory';
+    $targetFile = $targetDir . '/TradeInventory.php';
+
+    if (!is_dir($targetDir)) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Inventory directory not found');
+    }
+
+    $fileContent = <<<'PHPFILE'
+<?php
+
+declare(strict_types=1);
+
+namespace pocketmine\inventory;
+
+use pocketmine\entity\Living;
+use pocketmine\item\Item;
+use pocketmine\nbt\NBT;
+use pocketmine\nbt\tag\CompoundTag;
+use pocketmine\nbt\tag\ListTag;
+use pocketmine\network\mcpe\protocol\types\CacheableNbt;
+use pocketmine\network\mcpe\protocol\types\entity\EntityMetadataProperties;
+use pocketmine\network\mcpe\protocol\types\entity\LongMetadataProperty;
+use pocketmine\network\mcpe\protocol\types\inventory\WindowTypes;
+use pocketmine\network\mcpe\protocol\UpdateTradePacket;
+use pocketmine\player\Player;
+use function count;
+
+/**
+ * [BetterPMMP-PATCH] Plugin-openable Mojang Trade V2 window backed by a real 2-slot inventory.
+ * Backported mechanism from pmmp/PocketMine-MP#6310 (custom-trade subset only).
+ */
+final class TradeInventory extends SimpleInventory{
+
+	/** @param list<array{0: Item, 1: Item|null, 2: Item}> $recipes [buyA, buyB, sell] */
+	public function __construct(
+		private readonly string $displayName,
+		private readonly Living $holder,
+		private readonly array $recipes
+	){
+		parent::__construct(2);
+	}
+
+	public function getHolder() : Living{
+		return $this->holder;
+	}
+
+	/** @return array{0: Item, 1: Item|null, 2: Item}|null */
+	public function getRecipe(int $id) : ?array{
+		return $this->recipes[$id] ?? null;
+	}
+
+	public function onOpen(Player $who) : void{
+		parent::onOpen($who);
+		//Send the trading-player binding only to the opener instead of mutating the shared entity metadata,
+		//so a second player opening the same entity does not clobber other traders' windows.
+		$this->holder->sendData([$who], [EntityMetadataProperties::TRADING_PLAYER_EID => new LongMetadataProperty($who->getId())]);
+	}
+
+	public function onClose(Player $who) : void{
+		foreach($this->getContents() as $item){
+			foreach($who->getInventory()->addItem($item) as $drop)
+				$who->getWorld()->dropItem($who->getPosition(), $drop);
+		}
+		$this->clearAll();
+		$this->holder->sendData([$who], [EntityMetadataProperties::TRADING_PLAYER_EID => new LongMetadataProperty(-1)]);
+		parent::onClose($who);
+	}
+
+	/** @phpstan-return CacheableNbt<\pocketmine\nbt\tag\CompoundTag> */
+	public function buildOffers() : CacheableNbt{
+		$recipesTag = [];
+		foreach($this->recipes as $i => $recipe){
+			[$buyA, $buyB, $sell] = $recipe;
+			$tag = CompoundTag::create()
+				->setTag("buyA", $buyA->nbtSerialize())
+				->setInt("buyCountA", $buyA->getCount())
+				->setInt("buyCountB", $buyB?->getCount() ?? 0)
+				->setTag("sell", $sell->nbtSerialize())
+				->setInt("uses", 0)
+				->setInt("maxUses", 9999999)
+				->setByte("rewardExp", 0)
+				->setInt("demand", 0)
+				->setInt("tier", 0)
+				->setInt("traderExp", 0)
+				->setFloat("priceMultiplierA", 0.0)
+				->setFloat("priceMultiplierB", 0.0)
+				->setInt("netId", $i + 1);
+			if($buyB !== null)
+				$tag->setTag("buyB", $buyB->nbtSerialize());
+			$recipesTag[] = $tag;
+		}
+
+		$nbt = CompoundTag::create()
+			->setTag("Recipes", new ListTag($recipesTag, NBT::TAG_Compound))
+			->setTag("TierExpRequirements", new ListTag([], NBT::TAG_Compound));
+		return new CacheableNbt($nbt);
+	}
+
+	public function buildOpenPacket(int $windowId) : UpdateTradePacket{
+		return UpdateTradePacket::create(
+			$windowId,
+			WindowTypes::TRADING,
+			0,
+			0,
+			$this->holder->getId(),
+			-1,
+			$this->displayName,
+			true,
+			true,
+			$this->buildOffers()
+		);
+	}
+
+	public function recipeCount() : int{
+		return count($this->recipes);
+	}
+}
+PHPFILE;
+
+    if (file_exists($targetFile) && patchRead($targetFile) === $fileContent) {
+        return new PatchResult($targetFile, PatchStatus::SKIPPED);
+    }
+
+    if (patchWrite($targetFile, $fileContent) === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write TradeInventory.php');
+    }
+
+    return new PatchResult($targetFile, PatchStatus::APPLIED);
+}
+
+function createTradingTransaction(string $sourceDir): PatchResult
+{
+    $targetDir = $sourceDir . '/src/inventory/transaction';
+    $targetFile = $targetDir . '/TradingTransaction.php';
+
+    if (!is_dir($targetDir)) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Inventory transaction directory not found');
+    }
+
+    $fileContent = <<<'PHPFILE'
+<?php
+
+declare(strict_types=1);
+
+namespace pocketmine\inventory\transaction;
+
+use pocketmine\item\Item;
+use pocketmine\player\Player;
+use function count;
+
+/**
+ * [BetterPMMP-PATCH] Validates and executes a single Trade V2 exchange.
+ * Backported mechanism from pmmp/PocketMine-MP#6310 (custom-trade subset only).
+ */
+final class TradingTransaction extends InventoryTransaction{
+
+	public function __construct(
+		Player $source,
+		private readonly Item $recipeBuyA,
+		private readonly ?Item $recipeBuyB,
+		private readonly Item $recipeSell
+	){
+		parent::__construct($source);
+	}
+
+	public function validate() : void{
+		if(count($this->actions) < 1)
+			throw new TransactionValidationException("Transaction must have at least one action to be executable");
+
+		/** @var Item[] $inputs */
+		$inputs = [];
+		/** @var Item[] $outputs */
+		$outputs = [];
+		$this->matchItems($outputs, $inputs);
+
+		$needA = $this->recipeBuyA->getCount();
+		$needB = $this->recipeBuyB?->getCount() ?? 0;
+
+		if($this->recipeBuyB !== null && $this->recipeBuyA->canStackWith($this->recipeBuyB)){
+			//buyA and buyB are the same item type (e.g. two identical armour pieces); the client splits them across
+			//both cost slots, so verify the combined total instead of greedily assigning everything to buyA.
+			$total = 0;
+			foreach($inputs as $input){
+				if(!$this->recipeBuyA->canStackWith($input))
+					throw new TransactionValidationException("Unexpected input item");
+				$total += $input->getCount();
+			}
+			if($total < $needA + $needB)
+				throw new TransactionValidationException("Invalid buy item count");
+		}else{
+			$buyACount = 0;
+			$buyBCount = 0;
+			foreach($inputs as $input){
+				if($this->recipeBuyA->canStackWith($input))
+					$buyACount += $input->getCount();
+				elseif($this->recipeBuyB !== null && $this->recipeBuyB->canStackWith($input))
+					$buyBCount += $input->getCount();
+				else
+					throw new TransactionValidationException("Unexpected input item");
+			}
+			if($buyACount < $needA)
+				throw new TransactionValidationException("Invalid buyA item");
+			if($this->recipeBuyB !== null && $buyBCount < $needB)
+				throw new TransactionValidationException("Invalid buyB item");
+		}
+
+		$outputCount = 0;
+		foreach($outputs as $output){
+			if(!$this->recipeSell->canStackWith($output))
+				throw new TransactionValidationException("Invalid output item");
+			$outputCount += $output->getCount();
+		}
+		if($outputCount !== $this->recipeSell->getCount())
+			throw new TransactionValidationException("Invalid output count");
+	}
+}
+PHPFILE;
+
+    if (file_exists($targetFile) && patchRead($targetFile) === $fileContent) {
+        return new PatchResult($targetFile, PatchStatus::SKIPPED);
+    }
+
+    if (patchWrite($targetFile, $fileContent) === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write TradingTransaction.php');
+    }
+
+    return new PatchResult($targetFile, PatchStatus::APPLIED);
+}
+
+function patchInventoryManagerTrade(string $sourceDir): PatchResult
+{
+    $targetFile = $sourceDir . '/src/network/mcpe/InventoryManager.php';
+
+    if (!file_exists($targetFile)) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'InventoryManager.php not found');
+    }
+
+    $content = patchRead($targetFile);
+    if ($content === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read InventoryManager.php');
+    }
+
+    if (str_contains($content, 'instanceof TradeInventory')) {
+        return new PatchResult($targetFile, PatchStatus::SKIPPED);
+    }
+
+    $edits = [
+        [
+            'use pocketmine\inventory\Inventory;' . "\n"
+                . 'use pocketmine\inventory\transaction\action\SlotChangeAction;',
+            'use pocketmine\inventory\Inventory;' . "\n"
+                . 'use pocketmine\inventory\TradeInventory;' . "\n"
+                . 'use pocketmine\inventory\transaction\action\SlotChangeAction;',
+            'Inventory use block anchor not found in InventoryManager.php',
+        ],
+        [
+            'use pocketmine\network\mcpe\protocol\PlayerEnchantOptionsPacket;' . "\n"
+                . 'use pocketmine\network\mcpe\protocol\types\BlockPosition;',
+            'use pocketmine\network\mcpe\protocol\PlayerEnchantOptionsPacket;' . "\n"
+                . 'use pocketmine\network\mcpe\protocol\UpdateTradePacket;' . "\n"
+                . 'use pocketmine\network\mcpe\protocol\types\BlockPosition;',
+            'Protocol use block anchor not found in InventoryManager.php',
+        ],
+        [
+            "\t\treturn match(true){\n"
+                . "\t\t\t\$inventory instanceof AnvilInventory => UIInventorySlotOffset::ANVIL,",
+            "\t\treturn match(true){\n"
+                . "\t\t\t/** [BetterPMMP-PATCH] Trade V2 window support */\n"
+                . "\t\t\t\$inventory instanceof TradeInventory => UIInventorySlotOffset::TRADE2_INGREDIENT,\n"
+                . "\t\t\t\$inventory instanceof AnvilInventory => UIInventorySlotOffset::ANVIL,",
+            'Complex slot mapping anchor not found in InventoryManager.php',
+        ],
+        [
+            "\t\t\t\t\t\tif(\$pk instanceof ContainerOpenPacket){\n"
+                . "\t\t\t\t\t\t\t//workaround useless bullshit in 1.21 - ContainerClose requires a type now for some reason\n"
+                . "\t\t\t\t\t\t\t\$windowType = \$pk->windowType;\n"
+                . "\t\t\t\t\t\t}",
+            "\t\t\t\t\t\tif(\$pk instanceof ContainerOpenPacket){\n"
+                . "\t\t\t\t\t\t\t//workaround useless bullshit in 1.21 - ContainerClose requires a type now for some reason\n"
+                . "\t\t\t\t\t\t\t\$windowType = \$pk->windowType;\n"
+                . "\t\t\t\t\t\t}elseif(\$pk instanceof UpdateTradePacket){\n"
+                . "\t\t\t\t\t\t\t\$windowType = WindowTypes::TRADING;\n"
+                . "\t\t\t\t\t\t}",
+            'Window type anchor not found in InventoryManager.php',
+        ],
+        [
+            "\t\t\treturn [ContainerOpenPacket::blockInv(\$id, \$windowType, \$blockPosition)];\n"
+                . "\t\t}\n"
+                . "\t\treturn null;",
+            "\t\t\treturn [ContainerOpenPacket::blockInv(\$id, \$windowType, \$blockPosition)];\n"
+                . "\t\t}\n"
+                . "\t\tif(\$inv instanceof TradeInventory){\n"
+                . "\t\t\treturn [\$inv->buildOpenPacket(\$id)];\n"
+                . "\t\t}\n"
+                . "\t\treturn null;",
+            'Container open anchor not found in InventoryManager.php',
+        ],
+    ];
+
+    foreach ($edits as [$old, $new, $matchError]) {
+        $newContent = str_replace($old, $new, $content);
+        if ($newContent === $content) {
+            return new PatchResult($targetFile, PatchStatus::FAILED, $matchError);
+        }
+        $content = $newContent;
+    }
+
+    if (patchWrite($targetFile, $content) === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched InventoryManager.php');
+    }
+
+    return new PatchResult($targetFile, PatchStatus::APPLIED);
+}
+
+function patchItemStackRequestExecutorTrade(string $sourceDir): PatchResult
+{
+    $targetFile = $sourceDir . '/src/network/mcpe/handler/ItemStackRequestExecutor.php';
+
+    if (!file_exists($targetFile)) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'ItemStackRequestExecutor.php not found');
+    }
+
+    $content = patchRead($targetFile);
+    if ($content === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read ItemStackRequestExecutor.php');
+    }
+
+    if (str_contains($content, 'beginTrading')) {
+        return new PatchResult($targetFile, PatchStatus::SKIPPED);
+    }
+
+    $mergeBlock = "\t\tif(\$mergeWithExisting){\n"
+        . "\t\t\t//Created/result items (e.g. villager trade output) must stack onto an existing matching partial stack first,\n"
+        . "\t\t\t//like vanilla. The client picks the destination from its own prediction and may choose an empty slot even\n"
+        . "\t\t\t//when a matching stack exists, so redirect to the first matching slot with room. The client predicted a\n"
+        . "\t\t\t//different slot, so a full resync is requested to reconcile both slots after the transaction executes.\n"
+        . "\t\t\t\$maxStackSize = min(\$inventory->getMaxStackSize(), \$item->getMaxStackSize());\n"
+        . "\t\t\t\$target = \$inventory->getItem(\$slot);\n"
+        . "\t\t\tif(\$target->isNull() || !\$target->canStackWith(\$item) || \$target->getCount() + \$count > \$maxStackSize){\n"
+        . "\t\t\t\tfor(\$i = 0, \$size = \$inventory->getSize(); \$i < \$size; ++\$i){\n"
+        . "\t\t\t\t\t\$candidate = \$inventory->getItem(\$i);\n"
+        . "\t\t\t\t\tif(!\$candidate->isNull() && \$candidate->canStackWith(\$item) && \$candidate->getCount() + \$count <= \$maxStackSize){\n"
+        . "\t\t\t\t\t\t\$slot = \$i;\n"
+        . "\t\t\t\t\t\t\$this->inventoryManager->requestSyncAll();\n"
+        . "\t\t\t\t\t\tbreak;\n"
+        . "\t\t\t\t\t}\n"
+        . "\t\t\t\t}\n"
+        . "\t\t\t}\n"
+        . "\t\t}\n\n";
+
+    $beginTrading = "\t/**\n"
+        . "\t * [BetterPMMP-PATCH] Trade V2 window support\n"
+        . "\t * @throws ItemStackRequestProcessException\n"
+        . "\t */\n"
+        . "\tprotected function beginTrading(TradeInventory \$window, int \$recipeId, int \$repetitions) : void{\n"
+        . "\t\tif(\$this->specialTransaction !== null){\n"
+        . "\t\t\tthrow new ItemStackRequestProcessException(\"Another special transaction is already in progress\");\n"
+        . "\t\t}\n"
+        . "\t\tif(\$repetitions < 1){\n"
+        . "\t\t\tthrow new ItemStackRequestProcessException(\"Cannot trade a recipe less than 1 time\");\n"
+        . "\t\t}\n"
+        . "\t\tif(\$repetitions > 256){\n"
+        . "\t\t\tthrow new ItemStackRequestProcessException(\"Cannot trade a recipe more than 256 times\");\n"
+        . "\t\t}\n"
+        . "\t\t\$recipe = \$window->getRecipe(\$recipeId - 1);\n"
+        . "\t\tif(\$recipe === null){\n"
+        . "\t\t\tthrow new ItemStackRequestProcessException(\"No such trade recipe index: \" . (\$recipeId - 1));\n"
+        . "\t\t}\n"
+        . "\t\t[\$buyA, \$buyB, \$sell] = \$recipe;\n"
+        . "\t\t//Shift-click sends a single request with repetitions > 1 to buy the maximum affordable amount at once.\n"
+        . "\t\t\$scaledBuyA = (clone \$buyA)->setCount(\$buyA->getCount() * \$repetitions);\n"
+        . "\t\t\$scaledBuyB = \$buyB !== null ? (clone \$buyB)->setCount(\$buyB->getCount() * \$repetitions) : null;\n"
+        . "\t\t\$scaledSell = (clone \$sell)->setCount(\$sell->getCount() * \$repetitions);\n"
+        . "\t\t\$this->specialTransaction = new TradingTransaction(\$this->player, \$scaledBuyA, \$scaledBuyB, \$scaledSell);\n"
+        . "\t\t\$this->setNextCreatedItem(\$scaledSell);\n"
+        . "\t}\n\n";
+
+    $edits = [
+        [
+            'use pocketmine\inventory\transaction\action\DropItemAction;' . "\n"
+                . 'use pocketmine\inventory\transaction\CraftingTransaction;',
+            'use pocketmine\inventory\transaction\action\DropItemAction;' . "\n"
+                . 'use pocketmine\inventory\TradeInventory;' . "\n"
+                . 'use pocketmine\inventory\transaction\CraftingTransaction;',
+            'DropItemAction use anchor not found in ItemStackRequestExecutor.php',
+        ],
+        [
+            'use pocketmine\inventory\transaction\InventoryTransaction;' . "\n"
+                . 'use pocketmine\inventory\transaction\TransactionBuilder;',
+            'use pocketmine\inventory\transaction\InventoryTransaction;' . "\n"
+                . 'use pocketmine\inventory\transaction\TradingTransaction;' . "\n"
+                . 'use pocketmine\inventory\transaction\TransactionBuilder;',
+            'InventoryTransaction use anchor not found in ItemStackRequestExecutor.php',
+        ],
+        [
+            "use function count;\nuse function spl_object_id;",
+            "use function count;\nuse function min;\nuse function spl_object_id;",
+            'Function imports anchor not found in ItemStackRequestExecutor.php',
+        ],
+        [
+            "\tprotected function transferItems(ItemStackRequestSlotInfo \$source, ItemStackRequestSlotInfo \$destination, int \$count) : void{\n"
+                . "\t\t\$removed = \$this->removeItemFromSlot(\$source, \$count);\n"
+                . "\t\t\$this->addItemToSlot(\$destination, \$removed, \$count);\n"
+                . "\t}",
+            "\tprotected function transferItems(ItemStackRequestSlotInfo \$source, ItemStackRequestSlotInfo \$destination, int \$count) : void{\n"
+                . "\t\t/** [BetterPMMP-PATCH] Trade V2 window support */\n"
+                . "\t\t\$fromTradeOutput =\n"
+                . "\t\t\t\$source->getContainerName()->getContainerId() === ContainerUIIds::CREATED_OUTPUT &&\n"
+                . "\t\t\t\$source->getSlotId() === UIInventorySlotOffset::CREATED_ITEM_OUTPUT &&\n"
+                . "\t\t\t\$this->player->getCurrentWindow() instanceof TradeInventory;\n"
+                . "\t\t\$removed = \$this->removeItemFromSlot(\$source, \$count);\n"
+                . "\t\t\$this->addItemToSlot(\$destination, \$removed, \$count, \$fromTradeOutput);\n"
+                . "\t}",
+            'transferItems anchor not found in ItemStackRequestExecutor.php',
+        ],
+        [
+            "\tprotected function addItemToSlot(ItemStackRequestSlotInfo \$slotInfo, Item \$item, int \$count) : void{",
+            "\tprotected function addItemToSlot(ItemStackRequestSlotInfo \$slotInfo, Item \$item, int \$count, bool \$mergeWithExisting = false) : void{",
+            'addItemToSlot signature anchor not found in ItemStackRequestExecutor.php',
+        ],
+        [
+            "\t\t\$existingItem = \$inventory->getItem(\$slot);\n"
+                . "\t\tif(!\$existingItem->isNull() && !\$existingItem->canStackWith(\$item)){",
+            $mergeBlock
+                . "\t\t\$existingItem = \$inventory->getItem(\$slot);\n"
+                . "\t\tif(!\$existingItem->isNull() && !\$existingItem->canStackWith(\$item)){",
+            'addItemToSlot body anchor not found in ItemStackRequestExecutor.php',
+        ],
+        [
+            "\t/**\n"
+                . "\t * @throws ItemStackRequestProcessException\n"
+                . "\t */\n"
+                . "\tprotected function beginCrafting(int \$recipeId, int \$repetitions) : void{",
+            $beginTrading
+                . "\t/**\n"
+                . "\t * @throws ItemStackRequestProcessException\n"
+                . "\t */\n"
+                . "\tprotected function beginCrafting(int \$recipeId, int \$repetitions) : void{",
+            'beginCrafting anchor not found in ItemStackRequestExecutor.php',
+        ],
+        [
+            "\t\tif(!\$this->specialTransaction instanceof CraftingTransaction && !\$this->specialTransaction instanceof EnchantingTransaction){",
+            "\t\tif(!\$this->specialTransaction instanceof CraftingTransaction && !\$this->specialTransaction instanceof EnchantingTransaction && !\$this->specialTransaction instanceof TradingTransaction){",
+            'assertDoingCrafting anchor not found in ItemStackRequestExecutor.php',
+        ],
+        [
+            "\t\t\t}else{\n"
+                . "\t\t\t\t\$this->beginCrafting(\$action->getRecipeId(), \$action->getRepetitions());\n"
+                . "\t\t\t}\n"
+                . "\t\t}elseif(\$action instanceof CraftRecipeAutoStackRequestAction){\n"
+                . "\t\t\t\$this->beginCrafting(\$action->getRecipeId(), \$action->getRepetitions());\n"
+                . "\t\t}elseif(\$action instanceof CraftingConsumeInputStackRequestAction){",
+            "\t\t\t}elseif(\$window instanceof TradeInventory){\n"
+                . "\t\t\t\t\$this->beginTrading(\$window, \$action->getRecipeId(), \$action->getRepetitions());\n"
+                . "\t\t\t}else{\n"
+                . "\t\t\t\t\$this->beginCrafting(\$action->getRecipeId(), \$action->getRepetitions());\n"
+                . "\t\t\t}\n"
+                . "\t\t}elseif(\$action instanceof CraftRecipeAutoStackRequestAction){\n"
+                . "\t\t\t\$window = \$this->player->getCurrentWindow();\n"
+                . "\t\t\tif(\$window instanceof TradeInventory){\n"
+                . "\t\t\t\t\$this->beginTrading(\$window, \$action->getRecipeId(), \$action->getRepetitions());\n"
+                . "\t\t\t}else{\n"
+                . "\t\t\t\t\$this->beginCrafting(\$action->getRecipeId(), \$action->getRepetitions());\n"
+                . "\t\t\t}\n"
+                . "\t\t}elseif(\$action instanceof CraftingConsumeInputStackRequestAction){",
+            'CraftRecipe action anchor not found in ItemStackRequestExecutor.php',
+        ],
+    ];
+
+    foreach ($edits as [$old, $new, $matchError]) {
+        $newContent = str_replace($old, $new, $content);
+        if ($newContent === $content) {
+            return new PatchResult($targetFile, PatchStatus::FAILED, $matchError);
+        }
+        $content = $newContent;
+    }
+
+    if (patchWrite($targetFile, $content) === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched ItemStackRequestExecutor.php');
+    }
+
+    return new PatchResult($targetFile, PatchStatus::APPLIED);
+}
+
+function patchAttributeMapNeedSend(string $sourceDir): PatchResult
+{
+    $targetFile = $sourceDir . '/src/entity/AttributeMap.php';
+    $fileLabel = basename($targetFile);
+
+    if (!file_exists($targetFile)) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, "{$fileLabel} not found");
+    }
+
+    $content = patchRead($targetFile);
+    if ($content === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, "Failed to read {$fileLabel}");
+    }
+
+    if (str_contains($content, 'Manual needSend collect')) {
+        return new PatchResult($targetFile, PatchStatus::SKIPPED);
+    }
+
+    $oldBody = "\tpublic function needSend() : array{\n"
+        . "\t\treturn array_filter(\$this->attributes, function(Attribute \$attribute) : bool{\n"
+        . "\t\t\treturn \$attribute->isSyncable() && \$attribute->isDesynchronized();\n"
+        . "\t\t});\n"
+        . "\t}";
+
+    $newBody = "\tpublic function needSend() : array{\n"
+        . "\t\t/* [BetterPMMP-PATCH] Manual needSend collect: drop the array_filter closure (per-element zend_call)\n"
+        . "\t\t * and share the empty array on the common zero-dirty case. Both consumers ignore keys, so the\n"
+        . "\t\t * re-indexed list is observably identical to the key-preserved filtered map. */\n"
+        . "\t\t\$dirty = [];\n"
+        . "\t\tforeach(\$this->attributes as \$attribute){\n"
+        . "\t\t\tif(\$attribute->isSyncable() && \$attribute->isDesynchronized()){\n"
+        . "\t\t\t\t\$dirty[] = \$attribute;\n"
+        . "\t\t\t}\n"
+        . "\t\t}\n"
+        . "\t\treturn \$dirty;\n"
+        . "\t}";
+
+    $newContent = str_replace($oldBody, $newBody, $content, $bodyCount);
+    if ($bodyCount !== 1) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to match needSend() body in AttributeMap.php');
+    }
+
+    $oldImport = "use function array_filter;\n\n";
+    $newContent = str_replace($oldImport, '', $newContent, $importCount);
+    if ($importCount !== 1) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to match array_filter import in AttributeMap.php');
+    }
+
+    if (patchWrite($targetFile, $newContent) === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, "Failed to write {$fileLabel}");
+    }
+
+    return new PatchResult($targetFile, PatchStatus::APPLIED);
+}
+
+function patchStandardBroadcasterVarintLength(string $sourceDir): PatchResult
+{
+    $targetFile = $sourceDir . '/src/network/mcpe/StandardPacketBroadcaster.php';
+    $fileLabel = basename($targetFile);
+
+    if (!file_exists($targetFile)) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, "{$fileLabel} not found");
+    }
+
+    $content = patchRead($targetFile);
+    if ($content === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, "Failed to read {$fileLabel}");
+    }
+
+    if (str_contains($content, 'BetterPMMP-PATCH: inline varint length')) {
+        return new PatchResult($targetFile, PatchStatus::SKIPPED);
+    }
+
+    $oldCalc = "\t\t\t//varint length prefix + packet buffer\n"
+        . "\t\t\t\$totalLength += (((int) log(strlen(\$buffer), 128)) + 1) + strlen(\$buffer);\n";
+
+    $newCalc = "\t\t\t//varint length prefix + packet buffer\n"
+        . "\t\t\t//[BetterPMMP-PATCH: inline varint length] replace libm log() with a branch-predicted\n"
+        . "\t\t\t//bit-range lookup (byte-perfect parity with vanilla log-truncation across all reachable lengths)\n"
+        . "\t\t\t\$len = strlen(\$buffer);\n"
+        . "\t\t\t\$totalLength += (\$len <= 0x7F ? 1 : (\$len <= 0x3FFF ? 2 : (\$len <= 0x1FFFFF ? 3 : (\$len <= 0xFFFFFFF ? 4 : 5)))) + \$len;\n";
+
+    $content = str_replace($oldCalc, $newCalc, $content, $calcCount);
+    if ($calcCount !== 1) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'varint length anchor not found in StandardPacketBroadcaster.php');
+    }
+
+    $content = str_replace("use function log;\n", '', $content, $useCount);
+    if ($useCount !== 1) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'use function log import not found in StandardPacketBroadcaster.php');
+    }
+
+    if (patchWrite($targetFile, $content) === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, "Failed to write {$fileLabel}");
+    }
+
+    return new PatchResult($targetFile, PatchStatus::APPLIED);
+}
+
+function patchExperienceOrbPvpTargetScanInterval(string $sourceDir): PatchResult
+{
+    $targetFile = $sourceDir . '/src/entity/object/ExperienceOrb.php';
+
+    $old = "\t\tif(\$this->lookForTargetTime >= 20){\n"
+        . "\t\t\tif(\$currentTarget === null){\n"
+        . "\t\t\t\t\$newTarget = \$this->getWorld()->getNearestEntity(\$this->location, self::MAX_TARGET_DISTANCE, Human::class);\n"
+        . "\n"
+        . "\t\t\t\tif(\$newTarget instanceof Human && !(\$newTarget instanceof Player && \$newTarget->isSpectator()) && \$newTarget->getXpManager()->canAttractXpOrbs()){\n"
+        . "\t\t\t\t\t\$currentTarget = \$newTarget;\n"
+        . "\t\t\t\t}\n"
+        . "\t\t\t}\n"
+        . "\n"
+        . "\t\t\t\$this->lookForTargetTime = 0;\n"
+        . "\t\t}else{\n"
+        . "\t\t\t\$this->lookForTargetTime += \$tickDiff;\n"
+        . "\t\t}";
+
+    $new = "\t\t/* [BetterPMMP-PATCH] PvP optimization: configurable target-scan interval. getNearestEntity()\n"
+        . "\t\t * scans every Human in a 1-4 chunk window per scan and runs for every targetless orb; raising the\n"
+        . "\t\t * interval thins those bulk-kill scans. Clamped to >= 1 so the scan can never be disabled.\n"
+        . "\t\t * Default 20 reproduces vanilla exactly. getPropertyInt returns int (no mixed cast). */\n"
+        . "\t\t\$pvpOrbScanInterval = max(1, \$this->server->getConfigGroup()->getPropertyInt('better-pmmp.pvp-optimization.xp-orb-scan-interval', 20));\n"
+        . "\t\tif(\$this->lookForTargetTime >= \$pvpOrbScanInterval){\n"
+        . "\t\t\tif(\$currentTarget === null){\n"
+        . "\t\t\t\t\$newTarget = \$this->getWorld()->getNearestEntity(\$this->location, self::MAX_TARGET_DISTANCE, Human::class);\n"
+        . "\n"
+        . "\t\t\t\tif(\$newTarget instanceof Human && !(\$newTarget instanceof Player && \$newTarget->isSpectator()) && \$newTarget->getXpManager()->canAttractXpOrbs()){\n"
+        . "\t\t\t\t\t\$currentTarget = \$newTarget;\n"
+        . "\t\t\t\t}\n"
+        . "\t\t\t}\n"
+        . "\n"
+        . "\t\t\t\$this->lookForTargetTime = 0;\n"
+        . "\t\t}else{\n"
+        . "\t\t\t\$this->lookForTargetTime += \$tickDiff;\n"
+        . "\t\t}";
+
+    return applyReplacePatch($targetFile, 'xp-orb-scan-interval', $old, $new, 'Failed to match lookForTargetTime scan block in ExperienceOrb.php');
+}
+
+function patchPocketmineYmlPvpXpOrbScanInterval(string $sourceDir): PatchResult
+{
+    $anchor = '    freeze-empty-worlds: false';
+    $insertion = $anchor . "\n"
+        . "    # How often (in ticks) each XP orb that has no target re-scans for the nearest player (vanilla: 20).\n"
+        . "    # The scan walks every Human entity in a 1-4 chunk window and runs per targetless orb, so in bulk\n"
+        . "    # kills the orbs cluster in exactly the dense chunks they must scan. Raising this thins that cost\n"
+        . "    # at the price of slower orb homing (e.g. 40 delays acquisition by up to ~1 extra second). Orbs\n"
+        . "    # already locked onto a player are unaffected. Clamped to >= 1; ignored entirely when xp-orbs is false.\n"
+        . "    xp-orb-scan-interval: 20";
+
+    return applyReplacePatch(
+        $sourceDir . '/resources/pocketmine.yml',
+        'xp-orb-scan-interval:',
+        $anchor,
+        $insertion,
+        'pvp-optimization anchor (freeze-empty-worlds) not found in pocketmine.yml'
+    );
+}
+
+function patchServerSkipVanillaRecipes(string $sourceDir): PatchResult
+{
+    $targetFile = $sourceDir . '/src/Server.php';
+
+    $old = "\t\t\t\$this->craftingManager = CraftingManagerFromDataHelper::make(BedrockDataFiles::RECIPES);\n";
+
+    $new = "\t\t\t/* [BetterPMMP-PATCH] vanilla-recipe-skip: gate the one-time recipe JSON deserialization behind a\n"
+        . "\t\t\t * config toggle. Default true reproduces vanilla byte-for-byte (a missing key returns true). When\n"
+        . "\t\t\t * false, skip the JsonMapper pass plus per-recipe base64+NBT decode and construct an empty\n"
+        . "\t\t\t * CraftingManager - it still seeds empty per-type furnace managers, so getCraftingManager() and\n"
+        . "\t\t\t * CraftingDataCache stay valid and every recipe lookup simply matches nothing. */\n"
+        . "\t\t\tif(\$this->configGroup->getPropertyBool('better-pmmp.load-vanilla-recipes', true)){\n"
+        . "\t\t\t\t\$this->craftingManager = CraftingManagerFromDataHelper::make(BedrockDataFiles::RECIPES);\n"
+        . "\t\t\t}else{\n"
+        . "\t\t\t\t\$this->craftingManager = new CraftingManager();\n"
+        . "\t\t\t}\n";
+
+    return applyReplacePatch($targetFile, 'better-pmmp.load-vanilla-recipes', $old, $new, 'Failed to match craftingManager assignment in Server.php');
+}
+
+function patchPocketmineYmlSkipVanillaRecipes(string $sourceDir): PatchResult
+{
+    $anchor = '  block-cache-size: 8192';
+    $insertion = $anchor . "\n"
+        . "  # [BetterPMMP-PATCH] Vanilla crafting recipe registration toggle.\n"
+        . "  # true (default) = vanilla: load all recipe JSON (crafting, furnace, brewing, campfire) at startup.\n"
+        . "  # false = skip vanilla recipe JSON deserialization at startup and boot with an empty CraftingManager.\n"
+        . "  # Plugins can still register their own recipes. Set false ONLY for a fully plugin-driven crafting/kit\n"
+        . "  # server: this disables ALL vanilla recipes (crafting table, furnace smelting, brewing, campfire).\n"
+        . "  # Benefit is one-time startup CPU saved on every restart (JsonMapper + per-recipe base64/NBT decode).\n"
+        . "  load-vanilla-recipes: true";
+
+    return applyReplacePatch(
+        $sourceDir . '/resources/pocketmine.yml',
+        'load-vanilla-recipes:',
+        $anchor,
+        $insertion,
+        'better-pmmp anchor (block-cache-size) not found in pocketmine.yml'
+    );
+}
+
+function patchWorldDisableRandomBlockTicking(string $sourceDir): PatchResult
+{
+    $targetFile = $sourceDir . '/src/world/World.php';
+
+    if (!file_exists($targetFile)) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'World.php not found');
+    }
+
+    $content = patchRead($targetFile);
+    if ($content === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read World.php');
+    }
+
+    if (str_contains($content, 'disable-random-block-ticking')) {
+        return new PatchResult($targetFile, PatchStatus::SKIPPED);
+    }
+
+    $oldInit = "\tprivate function initRandomTickBlocksFromConfig(ServerConfigGroup \$cfg) : void{\n"
+        . "\t\t\$dontTickBlocks = [];";
+    $newInit = "\tprivate function initRandomTickBlocksFromConfig(ServerConfigGroup \$cfg) : void{\n"
+        . "\t\t/* [BetterPMMP-PATCH] disable-random-block-ticking: when enabled, leave randomTickBlocks empty so\n"
+        . "\t\t * tickChunk()'s per-subchunk random-tick selection loop is skipped entirely (see the count() guard\n"
+        . "\t\t * there). Default false reproduces vanilla exactly. Removes the per-ticking-chunk-per-tick\n"
+        . "\t\t * mt_rand + getBlockStateId + isset loop on static PvP maps where crop growth, leaf decay and\n"
+        . "\t\t * ice/fire spread are irrelevant; entity onRandomUpdate and the chunk-tick radius are unaffected. */\n"
+        . "\t\tif(\$cfg->getPropertyBool('better-pmmp.disable-random-block-ticking', false)){\n"
+        . "\t\t\treturn;\n"
+        . "\t\t}\n"
+        . "\t\t\$dontTickBlocks = [];";
+
+    $content = str_replace($oldInit, $newInit, $content, $initCount);
+    if ($initCount !== 1) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'initRandomTickBlocksFromConfig anchor not found in World.php');
+    }
+
+    $oldTick = "\t\tforeach(\$this->getChunkEntities(\$chunkX, \$chunkZ) as \$entity){\n"
+        . "\t\t\t\$entity->onRandomUpdate();\n"
+        . "\t\t}\n"
+        . "\n"
+        . "\t\t\$blockFactory = \$this->blockStateRegistry;";
+    $newTick = "\t\tforeach(\$this->getChunkEntities(\$chunkX, \$chunkZ) as \$entity){\n"
+        . "\t\t\t\$entity->onRandomUpdate();\n"
+        . "\t\t}\n"
+        . "\n"
+        . "\t\t/* [BetterPMMP-PATCH] disable-random-block-ticking: with no block type registered for random\n"
+        . "\t\t * ticking the selection loop below can only ever miss (its isset() never hits), so skipping it is\n"
+        . "\t\t * byte-for-byte vanilla-equivalent. better-pmmp.disable-random-block-ticking empties randomTickBlocks\n"
+        . "\t\t * to take this path; the entity onRandomUpdate iteration above still runs. */\n"
+        . "\t\tif(count(\$this->randomTickBlocks) === 0){\n"
+        . "\t\t\treturn;\n"
+        . "\t\t}\n"
+        . "\n"
+        . "\t\t\$blockFactory = \$this->blockStateRegistry;";
+
+    $content = str_replace($oldTick, $newTick, $content, $tickCount);
+    if ($tickCount !== 1) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'tickChunk random-tick loop anchor not found in World.php');
+    }
+
+    if (patchWrite($targetFile, $content) === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched World.php');
+    }
+
+    return new PatchResult($targetFile, PatchStatus::APPLIED);
+}
+
+function patchPocketmineYmlDisableRandomBlockTicking(string $sourceDir): PatchResult
+{
+    $anchor = '  neighbour-update-limit: 512';
+    $insertion = $anchor . "\n"
+        . "  # [BetterPMMP-PATCH] Disable random block ticking (crop growth, leaf decay, ice/snow melt, fire\n"
+        . "  # spread, grass/mycelium spread, sapling and sugarcane growth, etc.). When true, the per-subchunk\n"
+        . "  # random-tick selection loop in every ticking chunk is skipped each tick; entity item/xp updates and\n"
+        . "  # the chunk-tick radius are unaffected. Default false = vanilla. Set true on static PvP/arena maps\n"
+        . "  # where no block needs to grow or spread - removes a recurring per-tick CPU cost.\n"
+        . "  disable-random-block-ticking: false";
+
+    return applyReplacePatch(
+        $sourceDir . '/resources/pocketmine.yml',
+        'disable-random-block-ticking:',
+        $anchor,
+        $insertion,
+        'better-pmmp anchor (neighbour-update-limit) not found in pocketmine.yml'
+    );
+}
+
 if (!isset($argv[1])) {
     fwrite(STDOUT, "BetterPMMP Patch Tool\nUsage: php patch_tool.php <source_directory_path>\n\n  <source_directory_path>  Path to the PMMP source directory to patch\n");
     exit(1);
@@ -3887,6 +4659,18 @@ $patchFunctions = [
     'patchNetworkSessionAuthInputReceiveEvent' => $sourceDir,
     'patchNetworkSessionMovementSendEvent' => $sourceDir,
     'patchStandardBroadcasterMovementSendEvent' => $sourceDir,
+    'createTradeInventory' => $sourceDir,
+    'createTradingTransaction' => $sourceDir,
+    'patchInventoryManagerTrade' => $sourceDir,
+    'patchItemStackRequestExecutorTrade' => $sourceDir,
+    'patchAttributeMapNeedSend' => $sourceDir,
+    'patchStandardBroadcasterVarintLength' => $sourceDir,
+    'patchExperienceOrbPvpTargetScanInterval' => $sourceDir,
+    'patchPocketmineYmlPvpXpOrbScanInterval' => $sourceDir,
+    'patchServerSkipVanillaRecipes' => $sourceDir,
+    'patchPocketmineYmlSkipVanillaRecipes' => $sourceDir,
+    'patchWorldDisableRandomBlockTicking' => $sourceDir,
+    'patchPocketmineYmlDisableRandomBlockTicking' => $sourceDir,
 ];
 
 foreach ($patchFunctions as $func => $dir) {

@@ -1,5 +1,8 @@
+patch_tool.php|Function patchRead() should return string|false but return statement is missing.
+patch_tool.php|Function patchWrite() should return int|false but return statement is missing.
 src/GarbageCollectorManager.php|Property pocketmine/GarbageCollectorManager::$logger is never read, only written.
 src/entity/Entity.php|Cannot cast mixed to float.
+src/entity/Entity.php|Cannot cast mixed to int.
 src/entity/object/ItemEntity.php|Cannot cast mixed to int.
 src/player/Player.php|Cannot cast mixed to float.
 src/player/Player.php|Cannot cast mixed to int.
