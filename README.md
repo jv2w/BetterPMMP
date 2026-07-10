@@ -1,20 +1,18 @@
 # BetterPMMP
 
-A patch tool for **PocketMine-MP 5.0.0** that applies performance, gameplay, and quality-of-life fixes directly to the source.
+A maintained continuation of **PocketMine-MP**, the Minecraft: Bedrock Edition server software, with performance, gameplay, and quality-of-life improvements baked directly into the source.
 
 > 🌏 [한국어 README](README.ko.md)
 
-## Usage
+## About
 
-```bash
-php patch_tool.php <source_directory>
-```
+[PocketMine-MP](https://github.com/pmmp/PocketMine-MP) was archived by its maintainers on 2026-07-09; the upstream team no longer ships updates. BetterPMMP is a derivative work that carries the codebase forward. It is **based on PocketMine-MP 5.44.3** and ships the complete server source in [source/](source/), so there is no separate patch step — clone and run.
 
-`patch_tool.php` runs about 50 patches over the PMMP source. Each patch tags its edits with `[BetterPMMP-PATCH]`, so already-applied patches are skipped and re-running is safe. You get an `APPLIED` / `SKIPPED` / `FAILED` summary at the end.
-
-Every patch defaults to vanilla-observable behaviour. The optional tuning knobs in `pocketmine.yml` are opt-in.
+BetterPMMP is not affiliated with Mojang or with the original PocketMine Team. See [NOTICE](NOTICE) for attribution and modification details.
 
 ## Features
+
+All improvements default to vanilla-observable behaviour. The tuning knobs in `pocketmine.yml` are opt-in.
 
 ### Developer Experience
 
@@ -38,19 +36,16 @@ Every patch defaults to vanilla-observable behaviour. The optional tuning knobs 
 
 ## Requirements
 
-- PocketMine-MP 5.0.0 source
-- A PMMP PHP 8 binary from [pmmp/PHP-Binaries](https://github.com/pmmp/PHP-Binaries/releases)
-- Windows (the start scripts target `start.cmd`)
+- Windows (the start script is `start.cmd`)
+- A PHP 8 binary. One is bundled at `source/bin/php/php.exe`; if it is missing, download a PM5 build from [pmmp/PHP-Binaries](https://github.com/pmmp/PHP-Binaries/releases) or use a `php.exe` on your `PATH`.
 
 ## Installation
 
-1. Put the PocketMine-MP 5.0.0 source in `source/`.
-2. Provide a PHP binary — either `bin/php/php.exe` inside the server (preferred) or a `php.exe` on your `PATH`.
-3. Run `php patch_tool.php source` (or `makeBetterPMMP.bat`).
-4. Start the server with `start.cmd`.
+1. Clone or download this repository.
+2. Start the server with `start.cmd`.
 
-Patches are idempotent, so re-run after every source update.
+That's it — the source in `source/` already contains every BetterPMMP change.
 
 ## License
 
-MIT
+BetterPMMP is licensed under the **GNU Lesser General Public License v3.0 or later** (LGPL-3.0-or-later), the same license as PocketMine-MP. See [LICENSE](LICENSE) for the full text and [NOTICE](NOTICE) for attribution.

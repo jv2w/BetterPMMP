@@ -1,0 +1,56 @@
+BetterPMMP
+==========
+
+BetterPMMP is a continuation and derivative work of PocketMine-MP, a server
+software for Minecraft: Bedrock Edition. It exists to keep the PocketMine-MP
+codebase maintained after the upstream project was archived.
+
+Upstream project : PocketMine-MP  <https://github.com/pmmp/PocketMine-MP>
+Based on         : PocketMine-MP 5.44.3
+This distribution: 2026
+
+
+Copyright and license
+---------------------
+
+PocketMine-MP is Copyright (C) 2013-2026 PocketMine Team and contributors.
+BetterPMMP modifications are Copyright (C) 2026 Jinwoo An and the BetterPMMP
+contributors.
+
+Both the original work and the BetterPMMP modifications are licensed under the
+GNU Lesser General Public License, version 3, or (at your option) any later
+version (LGPL-3.0-or-later). See the LICENSE file for the full license text.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+
+
+Notice of modifications (LGPL-3.0 / GPL-3.0 section 5a)
+------------------------------------------------------
+
+This is a modified version of PocketMine-MP. It has been changed from the
+original PocketMine-MP 5.44.3 source by the BetterPMMP project in 2026. Source
+files modified or added by BetterPMMP are marked in-line with the tag
+[BetterPMMP-PATCH]. The complete corresponding source code is included in the
+source/ directory of this distribution.
+
+
+Third-party components
+----------------------
+
+The source/vendor/ directory contains third-party libraries, each distributed
+under its own license as stated in that library's own LICENSE file, which is
+retained unmodified.
+
+The source/bin/ directory contains a build of PHP together with its extensions
+and supporting libraries, distributed under the PHP License v3.01 and the
+respective licenses of the bundled components. See source/bin/php/license.txt.
+
+
+Trademark
+---------
+
+PocketMine-MP and BetterPMMP are not affiliated with Mojang. All brands and
+trademarks belong to their respective owners. This software is not
+Mojang-approved software, nor is it associated with Mojang or Microsoft.
