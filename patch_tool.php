@@ -179,860 +179,6 @@ BAT;
     return new PatchResult($targetFile, PatchStatus::APPLIED);
 }
 
-function patchPluginManager(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/plugin/PluginManager.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'PluginManager.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read PluginManager.php');
-    }
-
-    $originalContent = $content;
-
-    $useInsertions = [];
-    foreach (['strlen', 'substr', 'rtrim'] as $fn) {
-        if (!str_contains($content, "use function {$fn};")) {
-            $useInsertions[] = "use function {$fn};";
-        }
-    }
-    if (count($useInsertions) > 0) {
-        $useList = implode("\n", $useInsertions);
-        $useAnchor = 'use function strtolower;';
-        if (str_contains($content, $useAnchor)) {
-            $content = str_replace($useAnchor, $useAnchor . "\n" . $useList, $content);
-        } elseif (preg_match('/^use\s+function\s+[^;]+;$/m', $content, $useMatch) === 1) {
-            $content = str_replace($useMatch[0], $useMatch[0] . "\n" . $useList, $content);
-        }
-    }
-
-    if (!str_contains($content, 'private PluginDependencyMap $dependencyMap;')) {
-        $propertyDecl = "\n\tprivate PluginDependencyMap \$dependencyMap;\n";
-        $propertyAnchor = "protected array \$fileAssociations = [];\n";
-        if (str_contains($content, $propertyAnchor)) {
-            $content = str_replace($propertyAnchor, $propertyAnchor . $propertyDecl, $content);
-        } elseif (preg_match('/class\s+PluginManager\b[^{]*\{/', $content, $classMatch) === 1) {
-            $content = str_replace($classMatch[0], $classMatch[0] . $propertyDecl, $content);
-        }
-    }
-
-    if (!str_contains($content, '$this->dependencyMap = new PluginDependencyMap()')) {
-        $initCode = "\n\t\t\$this->dependencyMap = new PluginDependencyMap();";
-        $ctorAnchor = "\t\tprivate ?PluginGraylist \$graylist = null\n\t){";
-        if (str_contains($content, $ctorAnchor)) {
-            $content = str_replace($ctorAnchor, $ctorAnchor . $initCode, $content);
-        } elseif (preg_match('/public\s+function\s+__construct\s*\([^{]*\{/', $content, $ctorMatch, PREG_OFFSET_CAPTURE) === 1) {
-            $insertPos = $ctorMatch[0][1] + strlen($ctorMatch[0][0]);
-            $content = substr($content, 0, $insertPos) . $initCode . substr($content, $insertPos);
-        }
-    }
-
-    if (!str_contains($content, 'public function reloadPlugin')) {
-        $reloadMethod = <<<'RELOADMETHOD'
-
-	/** [BetterPMMP-PATCH] reloadPlugin method */
-	public function reloadPlugin(Plugin $plugin): bool
-	{
-		$pluginName = $plugin->getDescription()->getName();
-		$logger = $this->server->getLogger();
-
-		$prefixedPath = (new \ReflectionClass(PluginBase::class))->getMethod('getFile')->invoke($plugin);
-		if (!\is_string($prefixedPath)) {
-			$logger->critical("Failed to reload plugin {$pluginName}: invalid plugin file path");
-			return false;
-		}
-		$loader = $plugin->getPluginLoader();
-		$protocol = $loader->getAccessProtocol();
-		$rawPath = $prefixedPath;
-		if ($protocol !== '' && str_starts_with($prefixedPath, $protocol)) {
-			$rawPath = substr($prefixedPath, strlen($protocol));
-		}
-		$rawPath = rtrim($rawPath, '/' . DIRECTORY_SEPARATOR);
-
-		if (!is_dir($rawPath)) {
-			$logger->critical("Cannot hot-reload plugin {$pluginName}: only directory (source) plugins are reloadable; phar/script plugins require a full server restart");
-			return false;
-		}
-
-		$newDescription = $loader->getPluginDescription($rawPath);
-		if ($newDescription === null) {
-			$logger->critical("Failed to reload plugin {$pluginName}: could not read plugin description from {$rawPath}");
-			return false;
-		}
-
-		$disabledDependents = [];
-		foreach (\array_reverse($this->dependencyMap->getTransitiveDependents($pluginName)) as $depName) {
-			$depPlugin = $this->plugins[$depName] ?? null;
-			if ($depPlugin !== null && $depPlugin->isEnabled()) {
-				$disabledDependents[] = $depName;
-				try {
-					$this->disablePlugin($depPlugin);
-				} catch (\Throwable $e) {
-					$logger->warning("Exception disabling dependent {$depName}: " . $e->getMessage());
-				}
-			}
-		}
-
-		try {
-			$this->disablePlugin($plugin);
-		} catch (\Throwable $e) {
-			$logger->warning("Exception during disable of {$pluginName}: " . $e->getMessage());
-		}
-
-		$commandMap = $this->server->getCommandMap();
-		$commandsToRemove = [];
-		foreach ($commandMap->getCommands() as $command) {
-			if ($command instanceof PluginOwned && $command->getOwningPlugin() === $plugin) {
-				$commandsToRemove[] = $command;
-			}
-		}
-		foreach ($commandsToRemove as $command) {
-			$commandMap->unregister($command);
-		}
-
-		$permManager = PermissionManager::getInstance();
-		$opRoot = $permManager->getPermission(DefaultPermissions::ROOT_OPERATOR);
-		$everyoneRoot = $permManager->getPermission(DefaultPermissions::ROOT_USER);
-		foreach ($plugin->getDescription()->getPermissions() as $permsGroup) {
-			foreach ($permsGroup as $perm) {
-				$opRoot?->removeChild($perm->getName());
-				$everyoneRoot?->removeChild($perm->getName());
-				$permManager->removePermission($perm);
-			}
-		}
-
-		unset($this->plugins[$pluginName], $this->enabledPlugins[$pluginName]);
-
-		$restore = function () use ($plugin, $pluginName, $disabledDependents, $logger): void {
-			$this->plugins[$pluginName] = $plugin;
-			$this->registerReloadPermissions($plugin->getDescription());
-			$commandMap = $this->server->getCommandMap();
-			$staleCommands = [];
-			foreach ($commandMap->getCommands() as $command) {
-				if ($command instanceof PluginOwned && $command->getOwningPlugin()->getDescription()->getName() === $pluginName) {
-					$staleCommands[] = $command;
-				}
-			}
-			foreach ($staleCommands as $command) {
-				$commandMap->unregister($command);
-			}
-			$commandReflect = new \ReflectionMethod(PluginBase::class, 'registerYamlCommands');
-			$commandReflect->setAccessible(true);
-			$commandReflect->invoke($plugin);
-			try {
-				$this->enablePlugin($plugin);
-			} catch (\Throwable $e) {
-				$logger->critical("Rollback failed to re-enable {$pluginName}: " . $e->getMessage());
-			}
-			foreach (\array_reverse($disabledDependents) as $depName) {
-				$depPlugin = $this->plugins[$depName] ?? null;
-				if ($depPlugin !== null && !$depPlugin->isEnabled()) {
-					try {
-						$this->enablePlugin($depPlugin);
-					} catch (\Throwable $e) {
-						$logger->critical("Rollback failed to re-enable dependent {$depName}: " . $e->getMessage());
-					}
-				}
-			}
-			$this->dependencyMap->rebuild($this->plugins);
-		};
-
-		$rootNamespace = ClassCacheInvalidator::detectRootNamespace($rawPath);
-		$version = ClassCacheInvalidator::invalidate($rawPath, $rootNamespace);
-
-		$newPlugin = null;
-		if ($rootNamespace !== '') {
-			$mainClass = $newDescription->getMain();
-			$versionedMainClass = ClassCacheInvalidator::getVersionedClassName($mainClass, $rootNamespace, $version);
-
-			if (class_exists($versionedMainClass, false) && is_a($versionedMainClass, Plugin::class, true)) {
-				$this->registerReloadPermissions($newDescription);
-
-				$dataFolder = $this->getDataDirectory($rawPath, $newDescription->getName());
-				$prefixed = $protocol . $rawPath;
-				$loader->loadPlugin($prefixed);
-
-				try {
-					$newPlugin = new $versionedMainClass($loader, $this->server, $newDescription, $dataFolder, $prefixed, new DiskResourceProvider($prefixed . '/resources/'));
-				} catch (\Throwable $e) {
-					$logger->critical("Failed to reload plugin {$pluginName}: " . $e->getMessage());
-					$logger->logException($e);
-					$restore();
-					return false;
-				}
-
-				$this->plugins[$newPlugin->getDescription()->getName()] = $newPlugin;
-				$logger->info("Plugin {$pluginName} reloaded (version {$version})");
-			} else {
-				$logger->warning("Versioned class {$versionedMainClass} unavailable for {$pluginName}, using standard reload");
-				try {
-					$newPlugin = $this->internalLoadPlugin($rawPath, $loader, $newDescription);
-				} catch (\Throwable $e) {
-					$logger->critical("Failed to reload {$pluginName}: " . $e->getMessage());
-					$logger->logException($e);
-					$restore();
-					return false;
-				}
-			}
-		} else {
-			try {
-				$newPlugin = $this->internalLoadPlugin($rawPath, $loader, $newDescription);
-			} catch (\Throwable $e) {
-				$logger->critical("Failed to reload plugin {$pluginName}: " . $e->getMessage());
-				$logger->logException($e);
-				$restore();
-				return false;
-			}
-		}
-
-		if ($newPlugin === null) {
-			$logger->critical("Failed to reload plugin {$pluginName}: internalLoadPlugin returned null");
-			$restore();
-			return false;
-		}
-
-		try {
-			if (!$this->enablePlugin($newPlugin)) {
-				$logger->critical("Failed to enable plugin {$pluginName} after reload");
-				unset($this->plugins[$newPlugin->getDescription()->getName()]);
-				$restore();
-				return false;
-			}
-		} catch (\Throwable $e) {
-			$logger->critical("Exception enabling plugin {$pluginName}: " . $e->getMessage());
-			$logger->logException($e);
-			unset($this->plugins[$newPlugin->getDescription()->getName()]);
-			$restore();
-			return false;
-		}
-
-		foreach (\array_reverse($disabledDependents) as $depName) {
-			$depPlugin = $this->plugins[$depName] ?? null;
-			if ($depPlugin !== null && !$depPlugin->isEnabled()) {
-				try {
-					if (!$this->enablePlugin($depPlugin)) {
-						$logger->critical("Failed to re-enable dependent {$depName} after reloading {$pluginName}");
-					}
-				} catch (\Throwable $e) {
-					$logger->critical("Exception re-enabling dependent {$depName}: " . $e->getMessage());
-					$logger->logException($e);
-				}
-			}
-		}
-
-		$this->dependencyMap->rebuild($this->plugins);
-
-		return true;
-	}
-
-	/** [BetterPMMP-PATCH] re-register a reloading plugin's declared permissions */
-	private function registerReloadPermissions(PluginDescription $description): void
-	{
-		$permManager = PermissionManager::getInstance();
-		$opRoot = $permManager->getPermission(DefaultPermissions::ROOT_OPERATOR);
-		$everyoneRoot = $permManager->getPermission(DefaultPermissions::ROOT_USER);
-		foreach (Utils::stringifyKeys($description->getPermissions()) as $default => $perms) {
-			foreach ($perms as $perm) {
-				if ($permManager->getPermission($perm->getName()) !== null) {
-					$permManager->removePermission($perm);
-				}
-				$permManager->addPermission($perm);
-				if ($default === PermissionParser::DEFAULT_TRUE) {
-					$everyoneRoot?->addChild($perm->getName(), true);
-				} elseif ($default === PermissionParser::DEFAULT_OP) {
-					$opRoot?->addChild($perm->getName(), true);
-				} elseif ($default === PermissionParser::DEFAULT_NOT_OP) {
-					$everyoneRoot?->addChild($perm->getName(), true);
-					$opRoot?->addChild($perm->getName(), false);
-				}
-			}
-		}
-	}
-RELOADMETHOD;
-
-        $tickAnchor = 'public function tickSchedulers(int $currentTick) : void';
-        if (str_contains($content, $tickAnchor)) {
-            $content = str_replace($tickAnchor, $reloadMethod . "\n\n\t" . $tickAnchor, $content);
-        } elseif (preg_match('/public\s+function\s+tickSchedulers\s*\(\s*int\s+\$currentTick\s*\)\s*:\s*void/', $content, $tickMatch) === 1) {
-            $content = str_replace($tickMatch[0], $reloadMethod . "\n\n\t" . $tickMatch[0], $content);
-        }
-    }
-
-    if (!str_contains($content, '[BetterPMMP-PATCH] loadplugins-buildmap')) {
-        $buildMapCode = "\n\t\t/** [BetterPMMP-PATCH] loadplugins-buildmap */\n\t\t\$this->dependencyMap->rebuild(\$this->plugins);\n";
-        $guardAnchor = '$this->loadPluginsGuard = false;';
-        if (str_contains($content, $guardAnchor)) {
-            $content = str_replace($guardAnchor, $guardAnchor . $buildMapCode, $content);
-        } elseif (preg_match('/\$this\s*->\s*loadPluginsGuard\s*=\s*false\s*;/', $content, $guardMatch) === 1) {
-            $content = str_replace($guardMatch[0], $guardMatch[0] . $buildMapCode, $content);
-        }
-    }
-
-    if ($content === $originalContent) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    if (patchWrite($targetFile, $content) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched PluginManager.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function createReloadPluginCommand(string $sourceDir): PatchResult
-{
-    $targetDir = $sourceDir . '/src/command/defaults';
-    $targetFile = $targetDir . '/ReloadPluginCommand.php';
-
-    if (!is_dir($targetDir)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Command defaults directory not found');
-    }
-
-    $commandContent = <<<'PHPFILE'
-<?php
-
-declare(strict_types=1);
-
-namespace pocketmine\command\defaults;
-
-use pocketmine\command\CommandSender;
-use pocketmine\permission\DefaultPermissionNames;
-use pocketmine\player\Player;
-use function count;
-use function implode;
-
-/** [BetterPMMP-PATCH] */
-class ReloadPluginCommand extends VanillaCommand{
-
-	private static string $lastPluginName = '';
-
-	public function __construct(){
-		parent::__construct(
-			"reload",
-			"Reload a plugin",
-			"/reload <pluginName>"
-		);
-		$this->setPermission(DefaultPermissionNames::COMMAND_RELOAD);
-	}
-
-	public function execute(CommandSender $sender, string $commandLabel, array $args){
-		if($sender instanceof Player && !$sender->getServer()->isOp($sender->getName())){
-			$sender->sendMessage('§cYou don\'t have permission to reload.');
-			return true;
-		}
-
-		$pluginName = count($args) > 0 ? implode(" ", $args) : self::$lastPluginName;
-
-		if($pluginName === ''){
-			$sender->sendMessage('§cUsage: /reload <pluginName>');
-			return true;
-		}
-
-		$plugin = $sender->getServer()->getPluginManager()->getPlugin($pluginName);
-
-		if($plugin === null){
-			$sender->sendMessage('§cCan\'t find plugin.');
-			return true;
-		}
-
-		self::$lastPluginName = $pluginName;
-
-		try{
-			$result = $sender->getServer()->getPluginManager()->reloadPlugin($plugin);
-		}catch(\Throwable $e){
-			$sender->getServer()->getLogger()->logException($e);
-			$result = false;
-		}
-
-		if($result){
-			$sender->sendMessage('§aPlugin reloaded successfully.');
-		}else{
-			$sender->sendMessage('§cFailed to reload plugin.');
-		}
-
-		return true;
-	}
-
-}
-PHPFILE;
-
-    if (file_exists($targetFile) && patchRead($targetFile) === $commandContent) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    if (patchWrite($targetFile, $commandContent) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write ReloadPluginCommand.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchSimpleCommandMap(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/command/SimpleCommandMap.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'SimpleCommandMap.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read SimpleCommandMap.php');
-    }
-
-    if (str_contains($content, 'new ReloadPluginCommand()')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    if (!str_contains($content, 'use pocketmine\command\defaults\ReloadPluginCommand;')) {
-        $useAnchor = 'use pocketmine\command\defaults\PluginsCommand;';
-        $content = str_replace(
-            $useAnchor,
-            $useAnchor . "\nuse pocketmine\\command\\defaults\\ReloadPluginCommand; /** [BetterPMMP-PATCH] */",
-            $content,
-            $useCount
-        );
-        if ($useCount !== 1) {
-            return new PatchResult($targetFile, PatchStatus::FAILED, 'PluginsCommand use anchor not found in SimpleCommandMap.php');
-        }
-    }
-
-    $registerAnchor = 'new PluginsCommand(),';
-    $content = str_replace(
-        $registerAnchor,
-        $registerAnchor . "\n\t\t\tnew ReloadPluginCommand(),",
-        $content,
-        $registerCount
-    );
-    if ($registerCount !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'PluginsCommand registration anchor not found in SimpleCommandMap.php');
-    }
-
-    if (patchWrite($targetFile, $content) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched SimpleCommandMap.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function createClassCacheInvalidator(string $sourceDir): PatchResult
-{
-    $targetDir = $sourceDir . '/src/plugin';
-    $targetFile = $targetDir . '/ClassCacheInvalidator.php';
-
-    if (!is_dir($targetDir)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Plugin directory not found');
-    }
-
-    $classContent = <<<'PHPFILE'
-<?php
-
-declare(strict_types=1);
-
-/** [BetterPMMP-PATCH] */
-
-namespace pocketmine\plugin;
-
-use function count;
-use function explode;
-use function file_get_contents;
-use function function_exists;
-use function implode;
-use function is_dir;
-use function min;
-use function preg_match;
-use function preg_replace;
-use function str_ends_with;
-use function str_starts_with;
-use const DIRECTORY_SEPARATOR;
-
-class ClassCacheInvalidator
-{
-
-	private static int $reloadVersion = 0;
-
-	public static function invalidate(string $pluginPath, string $rootNamespace): int
-	{
-		$files = self::scanPhpFiles($pluginPath);
-		if (count($files) === 0) {
-			return self::$reloadVersion;
-		}
-
-		++self::$reloadVersion;
-		$version = self::$reloadVersion;
-
-		if (function_exists('opcache_invalidate')) {
-			foreach ($files as $filePath) {
-				opcache_invalidate($filePath, true);
-			}
-		}
-
-		if ($rootNamespace !== '') {
-			$remaining = $files;
-			for ($pass = 0; $pass < 10 && count($remaining) > 0; $pass++) {
-				$failed = [];
-				foreach ($remaining as $filePath) {
-					if (!self::evalWithVersionedNamespace($filePath, $version, $rootNamespace)) {
-						$failed[] = $filePath;
-					}
-				}
-				if (count($failed) === count($remaining)) {
-					foreach ($failed as $failedPath) {
-						\pocketmine\Server::getInstance()->getLogger()->warning(
-							"[BetterPMMP] Failed to load versioned class from {$failedPath}"
-						);
-					}
-					break;
-				}
-				$remaining = $failed;
-			}
-		}
-
-		return $version;
-	}
-
-	public static function getVersionedClassName(string $originalClass, string $rootNamespace, int $version): string
-	{
-		if ($rootNamespace === '' || $version === 0) {
-			return $originalClass;
-		}
-		$prefix = $rootNamespace . '\\';
-		if (str_starts_with($originalClass, $prefix)) {
-			return $rootNamespace . '\\v' . $version . '\\' . substr($originalClass, strlen($prefix));
-		}
-		if ($originalClass === $rootNamespace) {
-			return $rootNamespace . '\\v' . $version;
-		}
-		return $originalClass;
-	}
-
-	public static function detectRootNamespace(string $pluginPath): string
-	{
-		$namespaces = [];
-		foreach (self::scanPhpFiles($pluginPath) as $filePath) {
-			$source = @file_get_contents($filePath);
-			if ($source !== false && preg_match('/^\s*namespace\s+([^\s;{]+)/m', $source, $m) === 1) {
-				$namespaces[] = $m[1];
-			}
-		}
-
-		if (count($namespaces) === 0) {
-			return '';
-		}
-		if (count($namespaces) === 1) {
-			return $namespaces[0];
-		}
-
-		$commonParts = explode('\\', $namespaces[0]);
-		foreach ($namespaces as $ns) {
-			$parts = explode('\\', $ns);
-			$newCommon = [];
-			for ($i = 0; $i < min(count($commonParts), count($parts)); $i++) {
-				if ($commonParts[$i] === $parts[$i]) {
-					$newCommon[] = $commonParts[$i];
-				} else {
-					break;
-				}
-			}
-			$commonParts = $newCommon;
-			if (count($commonParts) === 0) {
-				break;
-			}
-		}
-
-		return implode('\\', $commonParts);
-	}
-
-	/** @return list<string> */
-	private static function scanPhpFiles(string $pluginPath): array
-	{
-		$srcPath = $pluginPath . DIRECTORY_SEPARATOR . 'src';
-		$scanTarget = is_dir($srcPath) ? $srcPath : $pluginPath;
-		if (!is_dir($scanTarget)) {
-			return [];
-		}
-
-		$files = [];
-		$iterator = new \RecursiveIteratorIterator(
-			new \RecursiveDirectoryIterator($scanTarget, \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::CURRENT_AS_PATHNAME)
-		);
-		foreach ($iterator as $filePath) {
-			if (\is_string($filePath) && str_ends_with($filePath, '.php')) {
-				$files[] = $filePath;
-			}
-		}
-
-		return $files;
-	}
-
-	private static function evalWithVersionedNamespace(string $filePath, int $version, string $rootNamespace): bool
-	{
-		$source = file_get_contents($filePath);
-		if ($source === false) {
-			return true;
-		}
-
-		$source = self::applyVersionToSource($source, $version, $rootNamespace);
-
-		$source = preg_replace('/^<\?php\s*/i', '', $source);
-		if ($source === null) {
-			return true;
-		}
-
-		try {
-			eval($source);
-			return true;
-		} catch (\Throwable) {
-			return false;
-		}
-	}
-
-	private static function applyVersionToSource(string $source, int $version, string $rootNamespace): string
-	{
-		$insert = '\\v' . $version;
-		$prefix = $rootNamespace . '\\';
-		$result = '';
-		$afterNamespace = false;
-		foreach (\token_get_all($source) as $token) {
-			if (!\is_array($token)) {
-				$afterNamespace = false;
-				$result .= $token;
-				continue;
-			}
-			$id = $token[0];
-			$text = $token[1];
-			if ($id === \T_WHITESPACE || $id === \T_COMMENT || $id === \T_DOC_COMMENT) {
-				$result .= $text;
-				continue;
-			}
-			if ($id === \T_NAMESPACE) {
-				$afterNamespace = true;
-				$result .= $text;
-				continue;
-			}
-			if ($id === \T_NAME_QUALIFIED || $id === \T_NAME_FULLY_QUALIFIED) {
-				$result .= self::versionName($text, $rootNamespace, $prefix, $insert);
-				$afterNamespace = false;
-				continue;
-			}
-			if ($id === \T_STRING && $afterNamespace && $text === $rootNamespace) {
-				$result .= $text . $insert;
-				$afterNamespace = false;
-				continue;
-			}
-			$afterNamespace = false;
-			$result .= $text;
-		}
-		return $result;
-	}
-
-	private static function versionName(string $name, string $rootNamespace, string $prefix, string $insert): string
-	{
-		$leading = '';
-		$bare = $name;
-		if (str_starts_with($bare, '\\')) {
-			$leading = '\\';
-			$bare = substr($bare, 1);
-		}
-		if ($bare === $rootNamespace) {
-			return $leading . $bare . $insert;
-		}
-		if (str_starts_with($bare, $prefix)) {
-			return $leading . $rootNamespace . $insert . '\\' . substr($bare, strlen($prefix));
-		}
-		return $name;
-	}
-}
-PHPFILE;
-
-    if (file_exists($targetFile) && patchRead($targetFile) === $classContent) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    if (patchWrite($targetFile, $classContent) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write ClassCacheInvalidator.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function createPluginDependencyMap(string $sourceDir): PatchResult
-{
-    $targetDir = $sourceDir . '/src/plugin';
-    $targetFile = $targetDir . '/PluginDependencyMap.php';
-
-    if (!is_dir($targetDir)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Plugin directory not found');
-    }
-
-    $classContent = <<<'PHPFILE'
-<?php
-
-declare(strict_types=1);
-
-/** [BetterPMMP-PATCH] */
-
-namespace pocketmine\plugin;
-
-final class PluginDependencyMap
-{
-
-    /** @phpstan-var array<string, list<string>> */
-    private array $reverseDependencyMap = [];
-
-    /**
-     * @param Plugin[] $plugins
-     * @phpstan-param array<string, Plugin> $plugins
-     */
-    public function rebuild(array $plugins): void
-    {
-        $this->reverseDependencyMap = [];
-
-        foreach ($plugins as $plugin) {
-            $description = $plugin->getDescription();
-            $pluginName = $description->getName();
-            foreach ([...$description->getDepend(), ...$description->getSoftDepend()] as $depName) {
-                $this->reverseDependencyMap[$depName][] = $pluginName;
-            }
-        }
-    }
-
-    /** @return list<string> */
-    public function getTransitiveDependents(string $pluginName): array
-    {
-        $inSet = [];
-        $queue = [$pluginName];
-        for ($i = 0; $i < \count($queue); ++$i) {
-            foreach ($this->reverseDependencyMap[$queue[$i]] ?? [] as $dependent) {
-                if ($dependent !== $pluginName && !isset($inSet[$dependent])) {
-                    $inSet[$dependent] = true;
-                    $queue[] = $dependent;
-                }
-            }
-        }
-        if (\count($inSet) === 0) {
-            return [];
-        }
-
-        $indegree = [];
-        foreach ($inSet as $name => $ignored) {
-            $indegree[$name] = 0;
-        }
-        foreach ($indegree as $name => $ignored) {
-            foreach ($this->reverseDependencyMap[$name] ?? [] as $dependent) {
-                if (isset($indegree[$dependent])) {
-                    ++$indegree[$dependent];
-                }
-            }
-        }
-
-        $ordered = [];
-        $ready = [];
-        foreach ($indegree as $name => $degree) {
-            if ($degree === 0) {
-                $ready[] = $name;
-            }
-        }
-        for ($i = 0; $i < \count($ready); ++$i) {
-            $name = $ready[$i];
-            $ordered[] = $name;
-            foreach ($this->reverseDependencyMap[$name] ?? [] as $dependent) {
-                if (isset($indegree[$dependent])) {
-                    --$indegree[$dependent];
-                    if ($indegree[$dependent] === 0) {
-                        $ready[] = $dependent;
-                    }
-                }
-            }
-        }
-
-        foreach ($indegree as $name => $degree) {
-            if ($degree > 0) {
-                $ordered[] = $name;
-            }
-        }
-
-        return $ordered;
-    }
-}
-PHPFILE;
-
-    if (file_exists($targetFile) && patchRead($targetFile) === $classContent) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    if (patchWrite($targetFile, $classContent) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write PluginDependencyMap.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchReloadPermission(string $sourceDir): PatchResult
-{
-    $targets = [
-        [
-            $sourceDir . '/src/permission/DefaultPermissionNames.php',
-            'COMMAND_RELOAD',
-            'public const COMMAND_PLUGINS = "pocketmine.command.plugins";',
-            "public const COMMAND_PLUGINS = \"pocketmine.command.plugins\";\n\tpublic const COMMAND_RELOAD = \"pocketmine.command.reload\";",
-        ],
-        [
-            $sourceDir . '/src/permission/DefaultPermissions.php',
-            'Names::COMMAND_RELOAD',
-            'Names::COMMAND_PLUGINS,',
-            "Names::COMMAND_PLUGINS,\n\t\t\tNames::COMMAND_RELOAD,",
-        ],
-        [
-            $sourceDir . '/generated/lang/KnownTranslationKeys.php',
-            'POCKETMINE_PERMISSION_COMMAND_RELOAD',
-            'public const POCKETMINE_PERMISSION_COMMAND_PLUGINS = "pocketmine.permission.command.plugins";',
-            "public const POCKETMINE_PERMISSION_COMMAND_PLUGINS = \"pocketmine.permission.command.plugins\";\n\tpublic const POCKETMINE_PERMISSION_COMMAND_RELOAD = \"pocketmine.permission.command.reload\";",
-        ],
-        [
-            $sourceDir . '/generated/lang/KnownTranslationParameterInfo.php',
-            'POCKETMINE_PERMISSION_COMMAND_RELOAD',
-            'Keys::POCKETMINE_PERMISSION_COMMAND_PLUGINS => [],',
-            "Keys::POCKETMINE_PERMISSION_COMMAND_PLUGINS => [],\n\t\tKeys::POCKETMINE_PERMISSION_COMMAND_RELOAD => [],",
-        ],
-        [
-            $sourceDir . '/resources/translations/eng.ini',
-            'pocketmine.permission.command.reload=',
-            'pocketmine.permission.command.plugins=Allows the user to view the list of plugins',
-            "pocketmine.permission.command.plugins=Allows the user to view the list of plugins\npocketmine.permission.command.reload=Allows the user to reload a plugin",
-        ],
-    ];
-
-    $applied = false;
-    foreach ($targets as [$file, $marker, $old, $new]) {
-        $fileLabel = basename($file);
-        if (!file_exists($file)) {
-            return new PatchResult($file, PatchStatus::FAILED, "{$fileLabel} not found");
-        }
-        $content = patchRead($file);
-        if ($content === false) {
-            return new PatchResult($file, PatchStatus::FAILED, "Failed to read {$fileLabel}");
-        }
-        if (str_contains($content, $marker)) {
-            continue;
-        }
-        $content = str_replace($old, $new, $content, $count);
-        if ($count !== 1) {
-            return new PatchResult($file, PatchStatus::FAILED, "Reload permission anchor not found in {$fileLabel}");
-        }
-        if (patchWrite($file, $content) === false) {
-            return new PatchResult($file, PatchStatus::FAILED, "Failed to write {$fileLabel}");
-        }
-        $applied = true;
-    }
-
-    return new PatchResult($targets[0][0], $applied ? PatchStatus::APPLIED : PatchStatus::SKIPPED);
-}
-
 function patchComposerSyncCheck(string $sourceDir): PatchResult
 {
     $targetFile = $sourceDir . '/src/PocketMine.php';
@@ -1905,29 +1051,6 @@ YAML;
     return new PatchResult($targetFile, PatchStatus::APPLIED);
 }
 
-function patchYmlServerPropertiesBetterPmmp(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/generated/YmlServerProperties.php';
-
-    $old = "\tpublic const WORLDS = 'worlds';\n}";
-
-    $new = "\t/** [BetterPMMP-PATCH] BetterPMMP optimization config constants */\n"
-        . "\tpublic const BETTER_PMMP = 'better-pmmp';\n"
-        . "\tpublic const BETTER_PMMP_FIXED_LIGHT = 'better-pmmp.fixed-light';\n"
-        . "\tpublic const BETTER_PMMP_FIXED_LIGHT_ENABLED = 'better-pmmp.fixed-light.enabled';\n"
-        . "\tpublic const BETTER_PMMP_FIXED_LIGHT_LEVEL = 'better-pmmp.fixed-light.level';\n"
-        . "\tpublic const BETTER_PMMP_PER_WORLD_VIEW_DISTANCE = 'better-pmmp.per-world-view-distance';\n"
-        . "\tpublic const BETTER_PMMP_CHUNK_OPTIMIZATION = 'better-pmmp.chunk-optimization';\n"
-        . "\tpublic const BETTER_PMMP_CHUNK_OPTIMIZATION_BATCH_RECHECK_LIMIT = 'better-pmmp.chunk-optimization.batch-recheck-limit';\n"
-        . "\tpublic const BETTER_PMMP_PER_WORLD_CHUNK_TICKING = 'better-pmmp.per-world-chunk-ticking';\n"
-        . "\tpublic const BETTER_PMMP_NEIGHBOUR_UPDATE_LIMIT = 'better-pmmp.neighbour-update-limit';\n"
-        . "\tpublic const BETTER_PMMP_BLOCK_CACHE_SIZE = 'better-pmmp.block-cache-size';\n"
-        . "\n"
-        . "\tpublic const WORLDS = 'worlds';\n}";
-
-    return applyReplacePatch($targetFile, 'BETTER_PMMP', $old, $new, 'Failed to match WORLDS constant pattern in YmlServerProperties.php');
-}
-
 function patchWorldFixedLight(string $sourceDir): PatchResult
 {
     $targetFile = $sourceDir . '/src/world/World.php';
@@ -2301,16 +1424,19 @@ function patchEntitySmartBlocksAroundCache(string $sourceDir): PatchResult
         return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read Entity.php');
     }
 
-    if (str_contains($content, 'lastBlockFloorX')) {
+    if (str_contains($content, 'lastBlockCellMinX')) {
         return new PatchResult($targetFile, PatchStatus::SKIPPED);
     }
     $content = str_replace(
         "\tprotected ?array \$blocksAround = null;",
         "\tprotected ?array \$blocksAround = null;\n"
-        . "\t/** [BetterPMMP-PATCH] Smart blocksAround cache tracking */\n"
-        . "\tprivate int \$lastBlockFloorX = PHP_INT_MIN;\n"
-        . "\tprivate int \$lastBlockFloorY = PHP_INT_MIN;\n"
-        . "\tprivate int \$lastBlockFloorZ = PHP_INT_MIN;",
+        . "\t/** [BetterPMMP-PATCH] Smart blocksAround cache tracking - the block cell range getBlocksIntersected() last spanned */\n"
+        . "\tprivate int \$lastBlockCellMinX = PHP_INT_MIN;\n"
+        . "\tprivate int \$lastBlockCellMinY = PHP_INT_MIN;\n"
+        . "\tprivate int \$lastBlockCellMinZ = PHP_INT_MIN;\n"
+        . "\tprivate int \$lastBlockCellMaxX = PHP_INT_MIN;\n"
+        . "\tprivate int \$lastBlockCellMaxY = PHP_INT_MIN;\n"
+        . "\tprivate int \$lastBlockCellMaxZ = PHP_INT_MIN;",
         $content,
         $fieldCount
     );
@@ -2335,21 +1461,32 @@ function patchEntitySmartBlocksAroundCache(string $sourceDir): PatchResult
     $old = "\t\t\$this->getWorld()->onEntityMoved(\$this);\n"
         . "\t\t\$this->checkBlockIntersections();";
 
-    $new = "\t\t/** [BetterPMMP-PATCH] Smart blocksAround cache - invalidate only when block grid position changes post-move */\n"
-        . "\t\t\$newFloorX = (int) floor(\$this->location->x);\n"
-        . "\t\t\$newFloorY = (int) floor(\$this->location->y);\n"
-        . "\t\t\$newFloorZ = (int) floor(\$this->location->z);\n"
-        . "\t\tif(\$newFloorX !== \$this->lastBlockFloorX || \$newFloorY !== \$this->lastBlockFloorY || \$newFloorZ !== \$this->lastBlockFloorZ){\n"
+    $new = "\t\t/** [BetterPMMP-PATCH] Smart blocksAround cache - invalidate only when the bounding box spans a\n"
+        . "\t\t * different block cell range, which is exactly what getBlocksIntersected() iterates. Keyed on the\n"
+        . "\t\t * AABB rather than the entity centre, so a centre that stays put while an edge crosses into the\n"
+        . "\t\t * next cell still invalidates. The 0.001 inset mirrors getBlocksAroundWithEntityInsideActions(). */\n"
+        . "\t\t\$bbInset = 0.001;\n"
+        . "\t\t\$newCellMinX = (int) floor(\$this->boundingBox->minX + \$bbInset);\n"
+        . "\t\t\$newCellMinY = (int) floor(\$this->boundingBox->minY + \$bbInset);\n"
+        . "\t\t\$newCellMinZ = (int) floor(\$this->boundingBox->minZ + \$bbInset);\n"
+        . "\t\t\$newCellMaxX = (int) floor(\$this->boundingBox->maxX - \$bbInset);\n"
+        . "\t\t\$newCellMaxY = (int) floor(\$this->boundingBox->maxY - \$bbInset);\n"
+        . "\t\t\$newCellMaxZ = (int) floor(\$this->boundingBox->maxZ - \$bbInset);\n"
+        . "\t\tif(\$newCellMinX !== \$this->lastBlockCellMinX || \$newCellMinY !== \$this->lastBlockCellMinY || \$newCellMinZ !== \$this->lastBlockCellMinZ\n"
+        . "\t\t\t|| \$newCellMaxX !== \$this->lastBlockCellMaxX || \$newCellMaxY !== \$this->lastBlockCellMaxY || \$newCellMaxZ !== \$this->lastBlockCellMaxZ){\n"
         . "\t\t\t\$this->blocksAround = null;\n"
-        . "\t\t\t\$this->lastBlockFloorX = \$newFloorX;\n"
-        . "\t\t\t\$this->lastBlockFloorY = \$newFloorY;\n"
-        . "\t\t\t\$this->lastBlockFloorZ = \$newFloorZ;\n"
+        . "\t\t\t\$this->lastBlockCellMinX = \$newCellMinX;\n"
+        . "\t\t\t\$this->lastBlockCellMinY = \$newCellMinY;\n"
+        . "\t\t\t\$this->lastBlockCellMinZ = \$newCellMinZ;\n"
+        . "\t\t\t\$this->lastBlockCellMaxX = \$newCellMaxX;\n"
+        . "\t\t\t\$this->lastBlockCellMaxY = \$newCellMaxY;\n"
+        . "\t\t\t\$this->lastBlockCellMaxZ = \$newCellMaxZ;\n"
         . "\t\t}\n"
         . "\t\t\$this->getWorld()->onEntityMoved(\$this);\n"
         . "\t\t\$this->checkBlockIntersections();";
 
     $newContent = str_replace($old, $new, $content);
-    if ($newContent === $content || !str_contains($newContent, 'private int $lastBlockFloorX')) {
+    if ($newContent === $content || !str_contains($newContent, 'private int $lastBlockCellMinX')) {
         return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to patch smart blocksAround cache in Entity.php - anchor mismatch');
     }
 
@@ -2368,8 +1505,9 @@ function patchPocketmineYmlCriticalHit(string $sourceDir): PatchResult
   critical-hit:
     # If true, critical hits can land even while sprinting. Vanilla requires not sprinting.
     ignore-sprint: false
-    # Minimum fall distance required for a critical hit. Vanilla: 0.5. Set to 0.0 to trigger even from ground.
-    min-fall-distance: 0.5
+    # Minimum fall distance required for a critical hit. Vanilla is 0.0, which lets a critical land
+    # from the moment the player starts falling. Raise it to demand a longer fall before a hit crits.
+    min-fall-distance: 0.0
 YAML;
 
     return applyReplacePatch(
@@ -2378,25 +1516,6 @@ YAML;
         $anchor,
         $anchor . "\n" . $critBlock,
         'better-pmmp anchor (block-cache-size) not found in pocketmine.yml'
-    );
-}
-
-function patchYmlServerPropertiesCriticalHit(string $sourceDir): PatchResult
-{
-    $old = "\tpublic const WORLDS = 'worlds';\n}";
-    $new = "\t/** [BetterPMMP-PATCH] Critical hit config constants */\n"
-        . "\tpublic const BETTER_PMMP_CRITICAL_HIT = 'better-pmmp.critical-hit';\n"
-        . "\tpublic const BETTER_PMMP_CRITICAL_HIT_IGNORE_SPRINT = 'better-pmmp.critical-hit.ignore-sprint';\n"
-        . "\tpublic const BETTER_PMMP_CRITICAL_HIT_MIN_FALL_DISTANCE = 'better-pmmp.critical-hit.min-fall-distance';\n"
-        . "\n"
-        . "\tpublic const WORLDS = 'worlds';\n}";
-
-    return applyReplacePatch(
-        $sourceDir . '/generated/YmlServerProperties.php',
-        'BETTER_PMMP_CRITICAL_HIT_IGNORE_SPRINT',
-        $old,
-        $new,
-        'Failed to match WORLDS constant in YmlServerProperties.php'
     );
 }
 
@@ -2428,7 +1547,7 @@ function patchPlayerCriticalHit(string $sourceDir): PatchResult
 
     $replacement = $indent . "/** [BetterPMMP-PATCH] Configurable critical hit logic */\n"
         . $indent . "\$config = \$this->server->getConfigGroup();\n"
-        . $indent . "\$critMinFall = (float) \$config->getProperty('better-pmmp.critical-hit.min-fall-distance', 0.5);\n"
+        . $indent . "\$critMinFall = (float) \$config->getProperty('better-pmmp.critical-hit.min-fall-distance', 0.0);\n"
         . $indent . "\$critIgnoreSprint = (bool) \$config->getProperty('better-pmmp.critical-hit.ignore-sprint', false);\n"
         . $indent . "if((\$critIgnoreSprint || !\$this->isSprinting()) && !\$this->isFlying() && \$this->fallDistance > \$critMinFall && !\$this->effectManager->has(VanillaEffects::BLINDNESS()) && !\$this->isUnderwater()){\n"
         . $innerIndent . "\$ev->setModifier(\$ev->getFinalDamage() / 2, EntityDamageEvent::MODIFIER_CRITICAL);\n"
@@ -2446,685 +1565,11 @@ function patchPlayerCriticalHit(string $sourceDir): PatchResult
     return new PatchResult($targetFile, PatchStatus::APPLIED);
 }
 
-function patchNetworkSessionSetHandlerGuard(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/network/mcpe/NetworkSession.php';
-
-    $old = "\tpublic function setHandler(?PacketHandler \$handler) : void{\n"
-        . "\t\tif(\$this->connected){ //TODO: this is fine since we can't handle anything from a disconnected session, but it might produce surprises in some cases";
-
-    $new = "\t/** [BetterPMMP-PATCH] setHandler disconnect guard - prevents handler assignment during disconnect cleanup */\n"
-        . "\tpublic function setHandler(?PacketHandler \$handler) : void{\n"
-        . "\t\tif(\$this->connected && !\$this->disconnectGuard){";
-
-    return applyReplacePatch($targetFile, 'setHandler disconnect guard', $old, $new, 'Failed to match setHandler() in NetworkSession.php');
-}
-
-function patchPlayerRespawnLockReset(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/player/Player.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Player.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read Player.php');
-    }
-
-    if (str_contains($content, 'Respawn lock reset on disconnect')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    $old1 = "\t\t\tfunction(Position \$safeSpawn) : void{\n"
-        . "\t\t\t\tif(!\$this->isConnected()){\n"
-        . "\t\t\t\t\treturn;\n"
-        . "\t\t\t\t}";
-
-    $new1 = "\t\t\tfunction(Position \$safeSpawn) : void{\n"
-        . "\t\t\t\tif(!\$this->isConnected()){\n"
-        . "\t\t\t\t\t/** [BetterPMMP-PATCH] Respawn lock reset on disconnect */\n"
-        . "\t\t\t\t\t\$this->respawnLocked = false;\n"
-        . "\t\t\t\t\treturn;\n"
-        . "\t\t\t\t}";
-
-    $newContent = str_replace($old1, $new1, $content);
-    if ($newContent === $content) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to match respawn success callback in Player.php');
-    }
-
-    $old2 = "\t\t\tfunction() : void{\n"
-        . "\t\t\t\tif(\$this->isConnected()){\n"
-        . "\t\t\t\t\t\$this->getNetworkSession()->disconnectWithError(KnownTranslationFactory::pocketmine_disconnect_error_respawn());";
-
-    $new2 = "\t\t\tfunction() : void{\n"
-        . "\t\t\t\t/** [BetterPMMP-PATCH] Respawn lock reset on error */\n"
-        . "\t\t\t\t\$this->respawnLocked = false;\n"
-        . "\t\t\t\tif(\$this->isConnected()){\n"
-        . "\t\t\t\t\t\$this->getNetworkSession()->disconnectWithError(KnownTranslationFactory::pocketmine_disconnect_error_respawn());";
-
-    $newContent = str_replace($old2, $new2, $newContent);
-    if ($newContent === $content || !str_contains($newContent, 'Respawn lock reset on error')) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to match respawn error callback in Player.php');
-    }
-
-    if (patchWrite($targetFile, $newContent) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched Player.php (respawn lock reset)');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchHandlerListMergePerformance(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/event/HandlerList.php';
-
-    $old = "\t\t\$listenersByPriority = [];\n"
-        . "\t\tforeach(\$handlerLists as \$currentList){\n"
-        . "\t\t\tforeach(\$currentList->handlerSlots as \$priority => \$listeners){\n"
-        . "\t\t\t\t\$listenersByPriority[\$priority] = array_merge(\$listenersByPriority[\$priority] ?? [], \$listeners);\n"
-        . "\t\t\t}\n"
-        . "\t\t}\n"
-        . "\n"
-        . "\t\t//TODO: why on earth do the priorities have higher values for lower priority?\n"
-        . "\t\tkrsort(\$listenersByPriority, SORT_NUMERIC);\n"
-        . "\n"
-        . "\t\treturn \$this->handlerCache->list = array_merge(...\$listenersByPriority);";
-
-    $new = "\t\t/** [BetterPMMP-PATCH] Single-pass handler list merge - O(n) instead of O(n^2) */\n"
-        . "\t\t\$listenersByPriority = [];\n"
-        . "\t\tforeach(\$handlerLists as \$currentList){\n"
-        . "\t\t\tforeach(\$currentList->handlerSlots as \$priority => \$listeners){\n"
-        . "\t\t\t\t\$listenersByPriority[\$priority][] = \$listeners;\n"
-        . "\t\t\t}\n"
-        . "\t\t}\n"
-        . "\n"
-        . "\t\tkrsort(\$listenersByPriority, SORT_NUMERIC);\n"
-        . "\n"
-        . "\t\t\$result = [];\n"
-        . "\t\tforeach(\$listenersByPriority as \$listenersArrays){\n"
-        . "\t\t\tforeach(\$listenersArrays as \$listeners){\n"
-        . "\t\t\t\tforeach(\$listeners as \$listener){\n"
-        . "\t\t\t\t\t\$result[] = \$listener;\n"
-        . "\t\t\t\t}\n"
-        . "\t\t\t}\n"
-        . "\t\t}\n"
-        . "\t\treturn \$this->handlerCache->list = \$result;";
-
-    return applyReplacePatch($targetFile, 'Single-pass handler list merge', $old, $new, 'Failed to match getListenerList() merge in HandlerList.php');
-}
-
-function patchNetworkSessionDisconnectGuardTiming(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/network/mcpe/NetworkSession.php';
-
-    $old = "\t\t\t\$this->disconnectGuard = true;\n"
-        . "\t\t\t\$func();\n"
-        . "\t\t\t\$this->disconnectGuard = false;\n"
-        . "\t\t\t\$this->flushGamePacketQueue();";
-
-    $new = "\t\t\t\$this->disconnectGuard = true;\n"
-        . "\t\t\t\$func();\n"
-        . "\t\t\t/** [BetterPMMP-PATCH] Keep disconnectGuard active through full cleanup - session is never reused */\n"
-        . "\t\t\t\$this->flushGamePacketQueue();";
-
-    return applyReplacePatch($targetFile, 'Keep disconnectGuard active through full cleanup', $old, $new, 'Failed to match tryDisconnect() guard reset in NetworkSession.php');
-}
-
-function patchClassMapAuthoritative(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/vendor/composer/autoload_real.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'autoload_real.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read autoload_real.php');
-    }
-
-    if (str_contains($content, '[BetterPMMP-PATCH] classmap-authoritative disabled')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    if (!str_contains($content, '$loader->setClassMapAuthoritative(true);')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    $newContent = str_replace(
-        '$loader->setClassMapAuthoritative(true);',
-        '/** [BetterPMMP-PATCH] classmap-authoritative disabled to allow PSR-4 fallback for patched classes */' . "\n        \$loader->setClassMapAuthoritative(false);",
-        $content
-    );
-
-    if ($newContent === $content) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to patch autoload_real.php');
-    }
-
-    if (patchWrite($targetFile, $newContent) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched autoload_real.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchPocketmineYmlFpsOptimization(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/resources/pocketmine.yml';
-
-    $anchor = "  block-cache-size: 8192";
-    $insertion = $anchor . "\n"
-        . "  # [BetterPMMP-PATCH] Client-side FPS optimization\n"
-        . "  # Reduces redundant/out-of-range packets sent to players to relieve client frame drops.\n"
-        . "  # All filters preserve gameplay correctness - teleport and forced sync bypass every filter.\n"
-        . "  fps-optimization:\n"
-        . "    # Skip Entity broadcastMovement/broadcastMotion for viewers beyond motion-distance blocks.\n"
-        . "    # Also suppresses redundant broadcasts when position/rotation/motion did not actually change.\n"
-        . "    entity-broadcast:\n"
-        . "      enabled: true\n"
-        . "      motion-distance: 96\n"
-        . "      position-epsilon: 0.001\n"
-        . "      rotation-epsilon: 0.5\n"
-        . "      motion-epsilon: 0.0001\n"
-        . "    # World::addParticle / addSound viewer filtering by squared distance.\n"
-        . "    particle-sound:\n"
-        . "      enabled: true\n"
-        . "      particle-distance: 48\n"
-        . "      sound-distance: 32\n"
-        . "    # Entity::broadcastAnimation viewer filtering.\n"
-        . "    animation:\n"
-        . "      enabled: true\n"
-        . "      distance: 64\n"
-        . "    # Smooth chunk delivery for the first ramp-up-ticks ticks after teleport/spawn.\n"
-        . "    chunk-pacing:\n"
-        . "      enabled: true\n"
-        . "      initial-chunks-per-tick: 2\n"
-        . "      ramp-up-ticks: 20\n"
-        . "    # When a chunk has more than threshold-per-chunk ItemEntities, suppress broadcastMovement\n"
-        . "    # for items that are stationary on the ground. Pickup and merge still work normally.\n"
-        . "    item-entity:\n"
-        . "      enabled: true\n"
-        . "      threshold-per-chunk: 16";
-
-    return applyReplacePatch($targetFile, 'fps-optimization:', $anchor, $insertion, 'better-pmmp anchor (block-cache-size) not found in pocketmine.yml');
-}
-
-function patchYmlServerPropertiesFpsOptimization(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/generated/YmlServerProperties.php';
-
-    $anchor = "\tpublic const BETTER_PMMP_BLOCK_CACHE_SIZE = 'better-pmmp.block-cache-size';\n";
-    $insert = $anchor
-        . "\t/** [BetterPMMP-PATCH] FPS optimization config constants */\n"
-        . "\tpublic const BETTER_PMMP_FPS_OPTIMIZATION = 'better-pmmp.fps-optimization';\n"
-        . "\tpublic const BETTER_PMMP_FPS_ENTITY_BROADCAST_ENABLED = 'better-pmmp.fps-optimization.entity-broadcast.enabled';\n"
-        . "\tpublic const BETTER_PMMP_FPS_ENTITY_BROADCAST_MOTION_DISTANCE = 'better-pmmp.fps-optimization.entity-broadcast.motion-distance';\n"
-        . "\tpublic const BETTER_PMMP_FPS_ENTITY_BROADCAST_POSITION_EPSILON = 'better-pmmp.fps-optimization.entity-broadcast.position-epsilon';\n"
-        . "\tpublic const BETTER_PMMP_FPS_ENTITY_BROADCAST_ROTATION_EPSILON = 'better-pmmp.fps-optimization.entity-broadcast.rotation-epsilon';\n"
-        . "\tpublic const BETTER_PMMP_FPS_ENTITY_BROADCAST_MOTION_EPSILON = 'better-pmmp.fps-optimization.entity-broadcast.motion-epsilon';\n"
-        . "\tpublic const BETTER_PMMP_FPS_PARTICLE_SOUND_ENABLED = 'better-pmmp.fps-optimization.particle-sound.enabled';\n"
-        . "\tpublic const BETTER_PMMP_FPS_PARTICLE_SOUND_PARTICLE_DISTANCE = 'better-pmmp.fps-optimization.particle-sound.particle-distance';\n"
-        . "\tpublic const BETTER_PMMP_FPS_PARTICLE_SOUND_SOUND_DISTANCE = 'better-pmmp.fps-optimization.particle-sound.sound-distance';\n"
-        . "\tpublic const BETTER_PMMP_FPS_ANIMATION_ENABLED = 'better-pmmp.fps-optimization.animation.enabled';\n"
-        . "\tpublic const BETTER_PMMP_FPS_ANIMATION_DISTANCE = 'better-pmmp.fps-optimization.animation.distance';\n"
-        . "\tpublic const BETTER_PMMP_FPS_CHUNK_PACING_ENABLED = 'better-pmmp.fps-optimization.chunk-pacing.enabled';\n"
-        . "\tpublic const BETTER_PMMP_FPS_CHUNK_PACING_INITIAL = 'better-pmmp.fps-optimization.chunk-pacing.initial-chunks-per-tick';\n"
-        . "\tpublic const BETTER_PMMP_FPS_CHUNK_PACING_RAMP_TICKS = 'better-pmmp.fps-optimization.chunk-pacing.ramp-up-ticks';\n"
-        . "\tpublic const BETTER_PMMP_FPS_ITEM_ENTITY_ENABLED = 'better-pmmp.fps-optimization.item-entity.enabled';\n"
-        . "\tpublic const BETTER_PMMP_FPS_ITEM_ENTITY_THRESHOLD = 'better-pmmp.fps-optimization.item-entity.threshold-per-chunk';\n";
-
-    return applyReplacePatch($targetFile, 'BETTER_PMMP_FPS_OPTIMIZATION', $anchor, $insert, 'BETTER_PMMP_BLOCK_CACHE_SIZE anchor not found');
-}
-
-function patchFpsEntityBroadcastOptimization(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/entity/Entity.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Entity.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read Entity.php');
-    }
-
-    if (str_contains($content, 'filterFpsBroadcastViewers')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    $oldMove = "\tprotected function broadcastMovement(bool \$teleport = false) : void{\n"
-        . "\t\tNetworkBroadcastUtils::broadcastPackets(\$this->hasSpawned, [MoveActorAbsolutePacket::create(\n"
-        . "\t\t\t\$this->id,\n"
-        . "\t\t\t\$this->getOffsetPosition(\$this->location),\n"
-        . "\t\t\t\$this->location->pitch,\n"
-        . "\t\t\t\$this->location->yaw,\n"
-        . "\t\t\t\$this->location->yaw,\n"
-        . "\t\t\t(\n"
-        . "\t\t\t\t//TODO: We should be setting FLAG_TELEPORT here to disable client-side movement interpolation, but it\n"
-        . "\t\t\t\t//breaks player teleporting (observers see the player rubberband back to the pre-teleport position while\n"
-        . "\t\t\t\t//the teleported player sees themselves at the correct position), and does nothing whatsoever for\n"
-        . "\t\t\t\t//non-player entities (movement is still interpolated). Both of these are client bugs.\n"
-        . "\t\t\t\t//See https://github.com/pmmp/PocketMine-MP/issues/4394\n"
-        . "\t\t\t\t(\$this->onGround ? MoveActorAbsolutePacket::FLAG_GROUND : 0)\n"
-        . "\t\t\t)\n"
-        . "\t\t)]);\n"
-        . "\t}";
-
-    $newMove = "\tprotected function broadcastMovement(bool \$teleport = false) : void{\n"
-        . "\t\t/** [BetterPMMP-PATCH] FPS optimization: redundancy check + distance filter */\n"
-        . "\t\t\$fpsConfig = \\pocketmine\\Server::getInstance()->getConfigGroup();\n"
-        . "\t\t\$fpsEnabled = (bool) \$fpsConfig->getProperty('better-pmmp.fps-optimization.entity-broadcast.enabled', true);\n"
-        . "\t\t\$fpsGround = \$this->onGround;\n"
-        . "\t\t\$fpsX = \$this->location->x; \$fpsY = \$this->location->y; \$fpsZ = \$this->location->z;\n"
-        . "\t\t\$fpsYaw = \$this->location->yaw; \$fpsPitch = \$this->location->pitch;\n"
-        . "\t\tif(!\$teleport && \$fpsEnabled && \$this->fpsRedundantMovementSuppressed(\$fpsConfig, \$fpsX, \$fpsY, \$fpsZ, \$fpsYaw, \$fpsPitch, \$fpsGround)){\n"
-        . "\t\t\treturn;\n"
-        . "\t\t}\n"
-        . "\t\t\$fpsTargets = (\$fpsEnabled && !\$teleport) ? \$this->filterFpsBroadcastViewers(\$fpsConfig, \$this->hasSpawned) : \$this->hasSpawned;\n"
-        . "\t\tif(count(\$fpsTargets) > 0){\n"
-        . "\t\t\tNetworkBroadcastUtils::broadcastPackets(\$fpsTargets, [MoveActorAbsolutePacket::create(\n"
-        . "\t\t\t\t\$this->id,\n"
-        . "\t\t\t\t\$this->getOffsetPosition(\$this->location),\n"
-        . "\t\t\t\t\$fpsPitch,\n"
-        . "\t\t\t\t\$fpsYaw,\n"
-        . "\t\t\t\t\$fpsYaw,\n"
-        . "\t\t\t\t(\$fpsGround ? MoveActorAbsolutePacket::FLAG_GROUND : 0)\n"
-        . "\t\t\t)]);\n"
-        . "\t\t}\n"
-        . "\t\t\$this->fpsLastBroadcastX = \$fpsX; \$this->fpsLastBroadcastY = \$fpsY; \$this->fpsLastBroadcastZ = \$fpsZ;\n"
-        . "\t\t\$this->fpsLastBroadcastYaw = \$fpsYaw; \$this->fpsLastBroadcastPitch = \$fpsPitch; \$this->fpsLastBroadcastGround = \$fpsGround;\n"
-        . "\t}";
-
-    $content = str_replace($oldMove, $newMove, $content, $count1);
-    if ($count1 !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'broadcastMovement match failed');
-    }
-
-    $oldMotion = "\tprotected function broadcastMotion() : void{\n"
-        . "\t\tNetworkBroadcastUtils::broadcastPackets(\$this->hasSpawned, [SetActorMotionPacket::create(\$this->id, \$this->getMotion(), tick: 0)]);\n"
-        . "\t}";
-    $newMotion = "\tprotected function broadcastMotion() : void{\n"
-        . "\t\t/** [BetterPMMP-PATCH] FPS optimization: motion redundancy + distance filter */\n"
-        . "\t\t\$fpsConfig = \\pocketmine\\Server::getInstance()->getConfigGroup();\n"
-        . "\t\t\$fpsEnabled = (bool) \$fpsConfig->getProperty('better-pmmp.fps-optimization.entity-broadcast.enabled', true);\n"
-        . "\t\t\$fpsMotion = \$this->getMotion();\n"
-        . "\t\tif(\$fpsEnabled && \$this->fpsRedundantMotionSuppressed(\$fpsConfig, \$fpsMotion->x, \$fpsMotion->y, \$fpsMotion->z)){\n"
-        . "\t\t\treturn;\n"
-        . "\t\t}\n"
-        . "\t\t\$fpsTargets = \$fpsEnabled ? \$this->filterFpsBroadcastViewers(\$fpsConfig, \$this->hasSpawned) : \$this->hasSpawned;\n"
-        . "\t\t\$this->fpsLastBroadcastMotionX = \$fpsMotion->x; \$this->fpsLastBroadcastMotionY = \$fpsMotion->y; \$this->fpsLastBroadcastMotionZ = \$fpsMotion->z;\n"
-        . "\t\tif(count(\$fpsTargets) === 0) return;\n"
-        . "\t\tNetworkBroadcastUtils::broadcastPackets(\$fpsTargets, [SetActorMotionPacket::create(\$this->id, \$fpsMotion, tick: 0)]);\n"
-        . "\t}";
-    $content = str_replace($oldMotion, $newMotion, $content, $count2);
-    if ($count2 !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'broadcastMotion match failed');
-    }
-
-    $helperAnchor = "\tpublic function getOffsetPosition(Vector3 \$vector3) : Vector3{\n"
-        . "\t\treturn \$vector3;\n"
-        . "\t}";
-    $helperBlock = $helperAnchor . "\n"
-        . "\n"
-        . "\t/** [BetterPMMP-PATCH] FPS optimization state */\n"
-        . "\tprotected float \$fpsLastBroadcastX = NAN;\n"
-        . "\tprotected float \$fpsLastBroadcastY = NAN;\n"
-        . "\tprotected float \$fpsLastBroadcastZ = NAN;\n"
-        . "\tprotected float \$fpsLastBroadcastYaw = NAN;\n"
-        . "\tprotected float \$fpsLastBroadcastPitch = NAN;\n"
-        . "\tprotected bool \$fpsLastBroadcastGround = false;\n"
-        . "\tprotected float \$fpsLastBroadcastMotionX = 0.0;\n"
-        . "\tprotected float \$fpsLastBroadcastMotionY = 0.0;\n"
-        . "\tprotected float \$fpsLastBroadcastMotionZ = 0.0;\n"
-        . "\n"
-        . "\t/**\n"
-        . "\t * @param array<int, \\pocketmine\\player\\Player> \$viewers\n"
-        . "\t * @return array<int, \\pocketmine\\player\\Player>\n"
-        . "\t */\n"
-        . "\tprivate function filterFpsBroadcastViewers(\\pocketmine\\ServerConfigGroup \$config, array \$viewers) : array{\n"
-        . "\t\tif(count(\$viewers) === 0){\n"
-        . "\t\t\treturn \$viewers;\n"
-        . "\t\t}\n"
-        . "\t\t\$maxDist = (float) \$config->getProperty('better-pmmp.fps-optimization.entity-broadcast.motion-distance', 96);\n"
-        . "\t\tif(\$maxDist <= 0){\n"
-        . "\t\t\treturn \$viewers;\n"
-        . "\t\t}\n"
-        . "\t\t\$maxSq = \$maxDist * \$maxDist;\n"
-        . "\t\t\$ex = \$this->location->x;\n"
-        . "\t\t\$ez = \$this->location->z;\n"
-        . "\t\t\$out = [];\n"
-        . "\t\tforeach(\$viewers as \$k => \$pl){\n"
-        . "\t\t\t\$loc = \$pl->getLocation();\n"
-        . "\t\t\t\$dx = \$loc->x - \$ex;\n"
-        . "\t\t\t\$dz = \$loc->z - \$ez;\n"
-        . "\t\t\tif(\$dx * \$dx + \$dz * \$dz <= \$maxSq){\n"
-        . "\t\t\t\t\$out[\$k] = \$pl;\n"
-        . "\t\t\t}\n"
-        . "\t\t}\n"
-        . "\t\treturn \$out;\n"
-        . "\t}\n"
-        . "\n"
-        . "\tprivate function fpsRedundantMovementSuppressed(\\pocketmine\\ServerConfigGroup \$config, float \$x, float \$y, float \$z, float \$yaw, float \$pitch, bool \$ground) : bool{\n"
-        . "\t\tif(is_nan(\$this->fpsLastBroadcastX) || \$ground !== \$this->fpsLastBroadcastGround){\n"
-        . "\t\t\treturn false;\n"
-        . "\t\t}\n"
-        . "\t\t\$posEps = (float) \$config->getProperty('better-pmmp.fps-optimization.entity-broadcast.position-epsilon', 0.001);\n"
-        . "\t\t\$rotEps = (float) \$config->getProperty('better-pmmp.fps-optimization.entity-broadcast.rotation-epsilon', 0.5);\n"
-        . "\t\t\$dx = \$x - \$this->fpsLastBroadcastX; \$dy = \$y - \$this->fpsLastBroadcastY; \$dz = \$z - \$this->fpsLastBroadcastZ;\n"
-        . "\t\tif(\$dx * \$dx + \$dy * \$dy + \$dz * \$dz > \$posEps * \$posEps){\n"
-        . "\t\t\treturn false;\n"
-        . "\t\t}\n"
-        . "\t\t\$dyaw = \$yaw - \$this->fpsLastBroadcastYaw;\n"
-        . "\t\t\$dpitch = \$pitch - \$this->fpsLastBroadcastPitch;\n"
-        . "\t\tif(\$dyaw < 0) \$dyaw = -\$dyaw;\n"
-        . "\t\tif(\$dpitch < 0) \$dpitch = -\$dpitch;\n"
-        . "\t\treturn \$dyaw <= \$rotEps && \$dpitch <= \$rotEps;\n"
-        . "\t}\n"
-        . "\n"
-        . "\tprivate function fpsRedundantMotionSuppressed(\\pocketmine\\ServerConfigGroup \$config, float \$mx, float \$my, float \$mz) : bool{\n"
-        . "\t\t\$eps = (float) \$config->getProperty('better-pmmp.fps-optimization.entity-broadcast.motion-epsilon', 0.0001);\n"
-        . "\t\t\$dx = \$mx - \$this->fpsLastBroadcastMotionX;\n"
-        . "\t\t\$dy = \$my - \$this->fpsLastBroadcastMotionY;\n"
-        . "\t\t\$dz = \$mz - \$this->fpsLastBroadcastMotionZ;\n"
-        . "\t\tif(\$dx < 0) \$dx = -\$dx; if(\$dy < 0) \$dy = -\$dy; if(\$dz < 0) \$dz = -\$dz;\n"
-        . "\t\tif(\$dx > \$eps || \$dy > \$eps || \$dz > \$eps) return false;\n"
-        . "\t\t\$mxA = \$mx; if(\$mxA < 0) \$mxA = -\$mxA;\n"
-        . "\t\t\$myA = \$my; if(\$myA < 0) \$myA = -\$myA;\n"
-        . "\t\t\$mzA = \$mz; if(\$mzA < 0) \$mzA = -\$mzA;\n"
-        . "\t\treturn \$mxA <= \$eps && \$myA <= \$eps && \$mzA <= \$eps;\n"
-        . "\t}";
-
-    $content = str_replace($helperAnchor, $helperBlock, $content, $count3);
-    if ($count3 !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'helper insertion anchor (getOffsetPosition) not matched');
-    }
-
-    if (patchWrite($targetFile, $content) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched Entity.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchFpsActorAnimationDistanceFilter(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/entity/Entity.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Entity.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read Entity.php');
-    }
-
-    if (str_contains($content, 'filterFpsAnimationViewers')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    $old = "\tpublic function broadcastAnimation(Animation \$animation, ?array \$targets = null) : void{\n"
-        . "\t\tNetworkBroadcastUtils::broadcastPackets(\$targets ?? \$this->getViewers(), \$animation->encode());\n"
-        . "\t}";
-    $new = "\tpublic function broadcastAnimation(Animation \$animation, ?array \$targets = null) : void{\n"
-        . "\t\t/** [BetterPMMP-PATCH] FPS optimization: animation viewer distance filter */\n"
-        . "\t\t\$fpsTargets = \$targets ?? \$this->getViewers();\n"
-        . "\t\tif(\$targets === null){\n"
-        . "\t\t\t\$fpsTargets = \$this->filterFpsAnimationViewers(\$fpsTargets);\n"
-        . "\t\t}\n"
-        . "\t\tif(count(\$fpsTargets) === 0) return;\n"
-        . "\t\tNetworkBroadcastUtils::broadcastPackets(\$fpsTargets, \$animation->encode());\n"
-        . "\t}\n"
-        . "\n"
-        . "\t/**\n"
-        . "\t * @param array<int, \\pocketmine\\player\\Player> \$viewers\n"
-        . "\t * @return array<int, \\pocketmine\\player\\Player>\n"
-        . "\t */\n"
-        . "\tprivate function filterFpsAnimationViewers(array \$viewers) : array{\n"
-        . "\t\tif(count(\$viewers) === 0) return \$viewers;\n"
-        . "\t\t\$config = \\pocketmine\\Server::getInstance()->getConfigGroup();\n"
-        . "\t\tif(!(bool) \$config->getProperty('better-pmmp.fps-optimization.animation.enabled', true)) return \$viewers;\n"
-        . "\t\t\$maxDist = (float) \$config->getProperty('better-pmmp.fps-optimization.animation.distance', 64);\n"
-        . "\t\tif(\$maxDist <= 0) return \$viewers;\n"
-        . "\t\t\$maxSq = \$maxDist * \$maxDist;\n"
-        . "\t\t\$ex = \$this->location->x; \$ez = \$this->location->z;\n"
-        . "\t\t\$out = [];\n"
-        . "\t\tforeach(\$viewers as \$k => \$pl){\n"
-        . "\t\t\t\$loc = \$pl->getLocation();\n"
-        . "\t\t\t\$dx = \$loc->x - \$ex; \$dz = \$loc->z - \$ez;\n"
-        . "\t\t\tif(\$dx * \$dx + \$dz * \$dz <= \$maxSq) \$out[\$k] = \$pl;\n"
-        . "\t\t}\n"
-        . "\t\treturn \$out;\n"
-        . "\t}";
-
-    $newContent = str_replace($old, $new, $content, $count);
-    if ($count !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'broadcastAnimation match failed');
-    }
-
-    if (patchWrite($targetFile, $newContent) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched Entity.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchFpsParticleSoundDistanceFilter(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/world/World.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'World.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read World.php');
-    }
-
-    if (str_contains($content, 'filterFpsViewersByDistanceSq')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    $oldSound = "\tpublic function addSound(Vector3 \$pos, Sound \$sound, ?array \$players = null) : void{\n"
-        . "\t\t\$players ??= \$this->getViewersForPosition(\$pos);";
-    $newSound = "\tpublic function addSound(Vector3 \$pos, Sound \$sound, ?array \$players = null) : void{\n"
-        . "\t\t/** [BetterPMMP-PATCH] FPS optimization: sound distance filter */\n"
-        . "\t\t\$fpsImplicit = \$players === null;\n"
-        . "\t\t\$players ??= \$this->getViewersForPosition(\$pos);\n"
-        . "\t\tif(\$fpsImplicit){\n"
-        . "\t\t\t\$players = \$this->filterFpsViewersByDistanceSq(\$pos, \$players, 'sound-distance', 32.0);\n"
-        . "\t\t\tif(count(\$players) === 0) return;\n"
-        . "\t\t}";
-
-    $content = str_replace($oldSound, $newSound, $content, $cs);
-    if ($cs !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'addSound anchor not matched');
-    }
-
-    $oldParticle = "\tpublic function addParticle(Vector3 \$pos, Particle \$particle, ?array \$players = null) : void{\n"
-        . "\t\t\$players ??= \$this->getViewersForPosition(\$pos);";
-    $newParticle = "\tpublic function addParticle(Vector3 \$pos, Particle \$particle, ?array \$players = null) : void{\n"
-        . "\t\t/** [BetterPMMP-PATCH] FPS optimization: particle distance filter */\n"
-        . "\t\t\$fpsImplicit = \$players === null;\n"
-        . "\t\t\$players ??= \$this->getViewersForPosition(\$pos);\n"
-        . "\t\tif(\$fpsImplicit){\n"
-        . "\t\t\t\$players = \$this->filterFpsViewersByDistanceSq(\$pos, \$players, 'particle-distance', 48.0);\n"
-        . "\t\t\tif(count(\$players) === 0) return;\n"
-        . "\t\t}";
-
-    $content = str_replace($oldParticle, $newParticle, $content, $cp);
-    if ($cp !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'addParticle anchor not matched');
-    }
-
-    $helperAnchor = "\tpublic function getViewersForPosition(Vector3 \$pos) : array{\n"
-        . "\t\treturn \$this->getChunkPlayers(\$pos->getFloorX() >> Chunk::COORD_BIT_SIZE, \$pos->getFloorZ() >> Chunk::COORD_BIT_SIZE);\n"
-        . "\t}";
-    $helperBlock = $helperAnchor . "\n"
-        . "\n"
-        . "\t/**\n"
-        . "\t * [BetterPMMP-PATCH] FPS optimization: filter viewers by squared distance from a position.\n"
-        . "\t * @param array<int, \\pocketmine\\player\\Player> \$viewers\n"
-        . "\t * @return array<int, \\pocketmine\\player\\Player>\n"
-        . "\t */\n"
-        . "\tprivate function filterFpsViewersByDistanceSq(Vector3 \$pos, array \$viewers, string \$key, float \$default) : array{\n"
-        . "\t\tif(count(\$viewers) === 0) return \$viewers;\n"
-        . "\t\t\$config = \$this->server->getConfigGroup();\n"
-        . "\t\tif(!(bool) \$config->getProperty('better-pmmp.fps-optimization.particle-sound.enabled', true)) return \$viewers;\n"
-        . "\t\t\$maxDist = (float) \$config->getProperty('better-pmmp.fps-optimization.particle-sound.' . \$key, \$default);\n"
-        . "\t\tif(\$maxDist <= 0) return \$viewers;\n"
-        . "\t\t\$maxSq = \$maxDist * \$maxDist;\n"
-        . "\t\t\$px = \$pos->x; \$pz = \$pos->z;\n"
-        . "\t\t\$out = [];\n"
-        . "\t\tforeach(\$viewers as \$k => \$pl){\n"
-        . "\t\t\t\$loc = \$pl->getLocation();\n"
-        . "\t\t\t\$dx = \$loc->x - \$px; \$dz = \$loc->z - \$pz;\n"
-        . "\t\t\tif(\$dx * \$dx + \$dz * \$dz <= \$maxSq) \$out[\$k] = \$pl;\n"
-        . "\t\t}\n"
-        . "\t\treturn \$out;\n"
-        . "\t}";
-
-    $content = str_replace($helperAnchor, $helperBlock, $content, $ch);
-    if ($ch !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'helper anchor (getViewersForPosition) not matched');
-    }
-
-    if (patchWrite($targetFile, $content) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched World.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchFpsChunkSendPacing(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/player/Player.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Player.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read Player.php');
-    }
-
-    if (str_contains($content, 'fpsChunkPacingTicks')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    $oldLimit = "\t\t\$limit = \$this->chunksPerTick - count(\$this->activeChunkGenerationRequests);";
-    $newLimit = "\t\t/** [BetterPMMP-PATCH] FPS optimization: chunk send pacing (smooth ramp-up) */\n"
-        . "\t\t\$fpsChunksPerTick = \$this->chunksPerTick;\n"
-        . "\t\t\$fpsConfig = \$this->server->getConfigGroup();\n"
-        . "\t\tif((bool) \$fpsConfig->getProperty('better-pmmp.fps-optimization.chunk-pacing.enabled', true)){\n"
-        . "\t\t\t\$fpsRamp = (int) \$fpsConfig->getProperty('better-pmmp.fps-optimization.chunk-pacing.ramp-up-ticks', 20);\n"
-        . "\t\t\t\$fpsInitial = (int) \$fpsConfig->getProperty('better-pmmp.fps-optimization.chunk-pacing.initial-chunks-per-tick', 2);\n"
-        . "\t\t\tif(\$fpsRamp > 0 && \$this->fpsChunkPacingTicks < \$fpsRamp){\n"
-        . "\t\t\t\t\$fpsProgress = \$this->fpsChunkPacingTicks / \$fpsRamp;\n"
-        . "\t\t\t\t\$fpsChunksPerTick = max(\$fpsInitial, (int) round(\$fpsInitial + (\$this->chunksPerTick - \$fpsInitial) * \$fpsProgress));\n"
-        . "\t\t\t\t\$this->fpsChunkPacingTicks++;\n"
-        . "\t\t\t}\n"
-        . "\t\t}\n"
-        . "\t\t\$limit = \$fpsChunksPerTick - count(\$this->activeChunkGenerationRequests);";
-
-    $content = str_replace($oldLimit, $newLimit, $content, $cl);
-    if ($cl !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'requestChunks limit anchor not matched');
-    }
-
-    $propAnchor = "\tprotected int \$chunksPerTick;";
-    $propNew = $propAnchor . "\n"
-        . "\t/** [BetterPMMP-PATCH] FPS optimization: chunk pacing tick counter */\n"
-        . "\tprotected int \$fpsChunkPacingTicks = 0;";
-    $content = str_replace($propAnchor, $propNew, $content, $cprop);
-    if ($cprop !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'chunksPerTick property anchor not matched');
-    }
-
-    if (patchWrite($targetFile, $content) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched Player.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchFpsItemEntitySuppression(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/entity/object/ItemEntity.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'ItemEntity.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read ItemEntity.php');
-    }
-
-    if (str_contains($content, 'fpsShouldSuppressBroadcast')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    $anchor = "class ItemEntity extends Entity{\n";
-    $insert = $anchor
-        . "\n"
-        . "\t/** [BetterPMMP-PATCH] FPS optimization: suppress redundant motion broadcast for stationary items in dense chunks */\n"
-        . "\tprotected function broadcastMovement(bool \$teleport = false) : void{\n"
-        . "\t\tif(!\$teleport && \$this->fpsShouldSuppressBroadcast()){\n"
-        . "\t\t\treturn;\n"
-        . "\t\t}\n"
-        . "\t\tparent::broadcastMovement(\$teleport);\n"
-        . "\t}\n"
-        . "\n"
-        . "\tprotected function broadcastMotion() : void{\n"
-        . "\t\tif(\$this->fpsShouldSuppressBroadcast()){\n"
-        . "\t\t\treturn;\n"
-        . "\t\t}\n"
-        . "\t\tparent::broadcastMotion();\n"
-        . "\t}\n"
-        . "\n"
-        . "\tprivate function fpsShouldSuppressBroadcast() : bool{\n"
-        . "\t\tif(!\$this->onGround) return false;\n"
-        . "\t\t\$m = \$this->motion;\n"
-        . "\t\tif(\$m->x !== 0.0 || \$m->y !== 0.0 || \$m->z !== 0.0) return false;\n"
-        . "\t\t\$config = \\pocketmine\\Server::getInstance()->getConfigGroup();\n"
-        . "\t\tif(!(bool) \$config->getProperty('better-pmmp.fps-optimization.item-entity.enabled', true)) return false;\n"
-        . "\t\t\$threshold = (int) \$config->getProperty('better-pmmp.fps-optimization.item-entity.threshold-per-chunk', 16);\n"
-        . "\t\tif(\$threshold <= 0) return false;\n"
-        . "\t\t\$cx = \$this->location->getFloorX() >> 4;\n"
-        . "\t\t\$cz = \$this->location->getFloorZ() >> 4;\n"
-        . "\t\t\$count = 0;\n"
-        . "\t\tforeach(\$this->getWorld()->getChunkEntities(\$cx, \$cz) as \$e){\n"
-        . "\t\t\tif(\$e instanceof ItemEntity){\n"
-        . "\t\t\t\t\$count++;\n"
-        . "\t\t\t\tif(\$count > \$threshold) return true;\n"
-        . "\t\t\t}\n"
-        . "\t\t}\n"
-        . "\t\treturn false;\n"
-        . "\t}\n";
-
-    $newContent = str_replace($anchor, $insert, $content, $count);
-    if ($count !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'ItemEntity class anchor not matched');
-    }
-
-    if (patchWrite($targetFile, $newContent) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched ItemEntity.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
 function patchPocketmineYmlPvpOptimization(string $sourceDir): PatchResult
 {
     $targetFile = $sourceDir . '/resources/pocketmine.yml';
 
-    $anchor = "      threshold-per-chunk: 16";
+    $anchor = "  block-cache-size: 8192";
     $insertion = $anchor . "\n"
         . "  # [BetterPMMP-PATCH] PvP server optimization\n"
         . "  # Toggles for vanilla systems that PvP-focused servers (lifesteal, KitPvP, arena) rarely need\n"
@@ -3149,24 +1594,7 @@ function patchPocketmineYmlPvpOptimization(string $sourceDir): PatchResult
         . "    # fewer item entities ticking after fights. <= 0 means vanilla default.\n"
         . "    item-despawn-ticks: 6000";
 
-    return applyReplacePatch($targetFile, 'pvp-optimization:', $anchor, $insertion, 'fps-optimization anchor (threshold-per-chunk) not found in pocketmine.yml');
-}
-
-function patchYmlServerPropertiesPvpOptimization(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/generated/YmlServerProperties.php';
-
-    $anchor = "\tpublic const BETTER_PMMP_FPS_ITEM_ENTITY_THRESHOLD = 'better-pmmp.fps-optimization.item-entity.threshold-per-chunk';\n";
-    $insert = $anchor
-        . "\t/** [BetterPMMP-PATCH] PvP optimization config constants */\n"
-        . "\tpublic const BETTER_PMMP_PVP_OPTIMIZATION = 'better-pmmp.pvp-optimization';\n"
-        . "\tpublic const BETTER_PMMP_PVP_SKIP_LIGHT_UPDATES = 'better-pmmp.pvp-optimization.skip-light-updates';\n"
-        . "\tpublic const BETTER_PMMP_PVP_XP_ORBS = 'better-pmmp.pvp-optimization.xp-orbs';\n"
-        . "\tpublic const BETTER_PMMP_PVP_EXPLOSION_BLOCK_DESTRUCTION = 'better-pmmp.pvp-optimization.explosion-block-destruction';\n"
-        . "\tpublic const BETTER_PMMP_PVP_ITEM_MERGING = 'better-pmmp.pvp-optimization.item-merging';\n"
-        . "\tpublic const BETTER_PMMP_PVP_ITEM_DESPAWN_TICKS = 'better-pmmp.pvp-optimization.item-despawn-ticks';\n";
-
-    return applyReplacePatch($targetFile, 'BETTER_PMMP_PVP_OPTIMIZATION', $anchor, $insert, 'BETTER_PMMP_FPS_ITEM_ENTITY_THRESHOLD anchor not found in YmlServerProperties.php');
+    return applyReplacePatch($targetFile, 'pvp-optimization:', $anchor, $insertion, 'better-pmmp anchor (block-cache-size) not found in pocketmine.yml');
 }
 
 function patchWorldPvpSkipLightUpdates(string $sourceDir): PatchResult
@@ -3288,22 +1716,32 @@ function patchPocketmineYmlPvpTickToggles(string $sourceDir): PatchResult
     return applyReplacePatch($targetFile, 'movement-broadcast-period:', $anchor, $insertion, 'pvp-optimization anchor (item-despawn-ticks) not found in pocketmine.yml');
 }
 
-function patchYmlServerPropertiesPvpTickToggles(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/generated/YmlServerProperties.php';
-
-    $anchor = "\tpublic const BETTER_PMMP_PVP_ITEM_DESPAWN_TICKS = 'better-pmmp.pvp-optimization.item-despawn-ticks';\n";
-    $insert = $anchor
-        . "\tpublic const BETTER_PMMP_PVP_MOVEMENT_BROADCAST_PERIOD = 'better-pmmp.pvp-optimization.movement-broadcast-period';\n"
-        . "\tpublic const BETTER_PMMP_PVP_PICKUP_SCAN_PERIOD = 'better-pmmp.pvp-optimization.pickup-scan-period';\n"
-        . "\tpublic const BETTER_PMMP_PVP_FREEZE_EMPTY_WORLDS = 'better-pmmp.pvp-optimization.freeze-empty-worlds';\n";
-
-    return applyReplacePatch($targetFile, 'BETTER_PMMP_PVP_MOVEMENT_BROADCAST_PERIOD', $anchor, $insert, 'BETTER_PMMP_PVP_ITEM_DESPAWN_TICKS anchor not found in YmlServerProperties.php');
-}
-
 function patchEntityPvpMovementBroadcastPeriod(string $sourceDir): PatchResult
 {
     $targetFile = $sourceDir . '/src/entity/Entity.php';
+
+    if (!file_exists($targetFile)) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Entity.php not found');
+    }
+
+    $content = patchRead($targetFile);
+    if ($content === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read Entity.php');
+    }
+
+    if (str_contains($content, 'pvpMovementBroadcastPeriod')) {
+        return new PatchResult($targetFile, PatchStatus::SKIPPED);
+    }
+
+    $oldProperty = "\tprotected function updateMovement(bool \$teleport = false) : void{";
+    $newProperty = "\t/** [BetterPMMP-PATCH] PvP optimization: cached movement broadcast period */\n"
+        . "\tprivate ?int \$pvpMovementBroadcastPeriod = null;\n"
+        . "\n"
+        . "\tprotected function updateMovement(bool \$teleport = false) : void{";
+    $content = str_replace($oldProperty, $newProperty, $content, $propCount);
+    if ($propCount !== 1) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'updateMovement signature anchor not found in Entity.php');
+    }
 
     $old = "\t\tif(\$teleport || \$diffPosition > 0.0001 || \$diffRotation > 1.0 || (!\$wasStill && \$still)){\n"
         . "\t\t\t\$this->lastLocation = \$this->location->asLocation();\n"
@@ -3315,7 +1753,7 @@ function patchEntityPvpMovementBroadcastPeriod(string $sourceDir): PatchResult
         . "\t\t\t/** [BetterPMMP-PATCH] PvP optimization: movement broadcast period - skip off-cycle sends.\n"
         . "\t\t\t * lastLocation is left untouched on skip, so the accumulated diff re-enters this branch\n"
         . "\t\t\t * and the final position is still broadcast after the entity stops moving. */\n"
-        . "\t\t\t\$pvpMovePeriod = (int) \$this->server->getConfigGroup()->getProperty('better-pmmp.pvp-optimization.movement-broadcast-period', 1);\n"
+        . "\t\t\t\$pvpMovePeriod = \$this->pvpMovementBroadcastPeriod ??= (int) \$this->server->getConfigGroup()->getProperty('better-pmmp.pvp-optimization.movement-broadcast-period', 1);\n"
         . "\t\t\tif(\$teleport || \$pvpMovePeriod <= 1 || ((\$this->server->getTick() + \$this->id) % \$pvpMovePeriod) === 0){\n"
         . "\t\t\t\t\$this->lastLocation = \$this->location->asLocation();\n"
         . "\n"
@@ -3323,7 +1761,16 @@ function patchEntityPvpMovementBroadcastPeriod(string $sourceDir): PatchResult
         . "\t\t\t}\n"
         . "\t\t}";
 
-    return applyReplacePatch($targetFile, 'movement broadcast period - skip off-cycle', $old, $new, 'Failed to match updateMovement() broadcast block in Entity.php');
+    $content = str_replace($old, $new, $content, $broadcastCount);
+    if ($broadcastCount !== 1) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to match updateMovement() broadcast block in Entity.php');
+    }
+
+    if (patchWrite($targetFile, $content) === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched Entity.php');
+    }
+
+    return new PatchResult($targetFile, PatchStatus::APPLIED);
 }
 
 function patchPlayerPvpMovementBroadcastPeriod(string $sourceDir): PatchResult
@@ -3347,6 +1794,9 @@ function patchPlayerPvpMovementBroadcastPeriod(string $sourceDir): PatchResult
     $newProperty = "\t/** [BetterPMMP-PATCH] PvP optimization: movement broadcast skipped this cycle, flush pending */\n"
         . "\tprivate bool \$pvpMoveBroadcastPending = false;\n"
         . "\n"
+        . "\t/** [BetterPMMP-PATCH] PvP optimization: cached movement broadcast period */\n"
+        . "\tprivate ?int \$pvpMoveBroadcastPeriod = null;\n"
+        . "\n"
         . "\tprotected function processMostRecentMovements() : void{";
     $content = str_replace($oldProperty, $newProperty, $content, $propCount);
     if ($propCount !== 1) {
@@ -3358,7 +1808,7 @@ function patchPlayerPvpMovementBroadcastPeriod(string $sourceDir): PatchResult
     $newBroadcast = "\t\t\t\$this->lastLocation = \$to;\n"
         . "\t\t\t/** [BetterPMMP-PATCH] PvP optimization: player movement broadcast period - PlayerMoveEvent and\n"
         . "\t\t\t * exhaustion above stay per-tick, only the packet send is decimated. */\n"
-        . "\t\t\t\$pvpMovePeriod = (int) \$this->server->getConfigGroup()->getProperty('better-pmmp.pvp-optimization.movement-broadcast-period', 1);\n"
+        . "\t\t\t\$pvpMovePeriod = \$this->pvpMoveBroadcastPeriod ??= (int) \$this->server->getConfigGroup()->getProperty('better-pmmp.pvp-optimization.movement-broadcast-period', 1);\n"
         . "\t\t\tif(\$pvpMovePeriod <= 1 || ((\$this->server->getTick() + \$this->id) % \$pvpMovePeriod) === 0){\n"
         . "\t\t\t\t\$this->pvpMoveBroadcastPending = false;\n"
         . "\t\t\t\t\$this->broadcastMovement();\n"
@@ -3405,6 +1855,29 @@ function patchPlayerPvpPickupScanPeriod(string $sourceDir): PatchResult
 {
     $targetFile = $sourceDir . '/src/player/Player.php';
 
+    if (!file_exists($targetFile)) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Player.php not found');
+    }
+
+    $content = patchRead($targetFile);
+    if ($content === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read Player.php');
+    }
+
+    if (str_contains($content, 'pvpPickupScanPeriod')) {
+        return new PatchResult($targetFile, PatchStatus::SKIPPED);
+    }
+
+    $oldProperty = "\tpublic function onUpdate(int \$currentTick) : bool{";
+    $newProperty = "\t/** [BetterPMMP-PATCH] PvP optimization: cached pickup scan period */\n"
+        . "\tprivate ?int \$pvpPickupScanPeriod = null;\n"
+        . "\n"
+        . "\tpublic function onUpdate(int \$currentTick) : bool{";
+    $content = str_replace($oldProperty, $newProperty, $content, $propCount);
+    if ($propCount !== 1) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'onUpdate signature anchor not found in Player.php');
+    }
+
     $old = "\t\t\tif(!\$this->isSpectator() && \$this->isAlive()){\n"
         . "\t\t\t\tTimings::\$playerCheckNearEntities->startTiming();\n"
         . "\t\t\t\t\$this->checkNearEntities();\n"
@@ -3413,14 +1886,23 @@ function patchPlayerPvpPickupScanPeriod(string $sourceDir): PatchResult
 
     $new = "\t\t\t/** [BetterPMMP-PATCH] PvP optimization: pickup scan period - the nearby-entity sweep is\n"
         . "\t\t\t * O(entities around each player) every tick; vanilla pickup delay is 10 ticks anyway */\n"
-        . "\t\t\t\$pvpScanPeriod = (int) \$this->server->getConfigGroup()->getProperty('better-pmmp.pvp-optimization.pickup-scan-period', 1);\n"
+        . "\t\t\t\$pvpScanPeriod = \$this->pvpPickupScanPeriod ??= (int) \$this->server->getConfigGroup()->getProperty('better-pmmp.pvp-optimization.pickup-scan-period', 1);\n"
         . "\t\t\tif(!\$this->isSpectator() && \$this->isAlive() && (\$pvpScanPeriod <= 1 || ((\$currentTick + \$this->id) % \$pvpScanPeriod) === 0)){\n"
         . "\t\t\t\tTimings::\$playerCheckNearEntities->startTiming();\n"
         . "\t\t\t\t\$this->checkNearEntities();\n"
         . "\t\t\t\tTimings::\$playerCheckNearEntities->stopTiming();\n"
         . "\t\t\t}";
 
-    return applyReplacePatch($targetFile, 'pickup scan period', $old, $new, 'Failed to match checkNearEntities block in Player.php onUpdate()');
+    $content = str_replace($old, $new, $content, $scanCount);
+    if ($scanCount !== 1) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to match checkNearEntities block in Player.php onUpdate()');
+    }
+
+    if (patchWrite($targetFile, $content) === false) {
+        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched Player.php');
+    }
+
+    return new PatchResult($targetFile, PatchStatus::APPLIED);
 }
 
 function patchWorldPvpFreezeEmptyWorlds(string $sourceDir): PatchResult
@@ -3473,21 +1955,6 @@ function patchPocketmineYmlEventOptimization(string $sourceDir): PatchResult
         . "    skip-movement-send-event: false";
 
     return applyReplacePatch($targetFile, 'event-optimization:', $anchor, $insertion, 'pvp-optimization anchor (freeze-empty-worlds) not found in pocketmine.yml');
-}
-
-function patchYmlServerPropertiesEventOptimization(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/generated/YmlServerProperties.php';
-
-    $anchor = "\tpublic const BETTER_PMMP_PVP_FREEZE_EMPTY_WORLDS = 'better-pmmp.pvp-optimization.freeze-empty-worlds';\n";
-    $insert = $anchor
-        . "\t/** [BetterPMMP-PATCH] Event engine optimization config constants */\n"
-        . "\tpublic const BETTER_PMMP_EVENT_OPTIMIZATION = 'better-pmmp.event-optimization';\n"
-        . "\tpublic const BETTER_PMMP_EVENT_MOVE_EVENT_PERIOD = 'better-pmmp.event-optimization.move-event-period';\n"
-        . "\tpublic const BETTER_PMMP_EVENT_SKIP_AUTH_INPUT_RECEIVE_EVENT = 'better-pmmp.event-optimization.skip-auth-input-receive-event';\n"
-        . "\tpublic const BETTER_PMMP_EVENT_SKIP_MOVEMENT_SEND_EVENT = 'better-pmmp.event-optimization.skip-movement-send-event';\n";
-
-    return applyReplacePatch($targetFile, 'BETTER_PMMP_EVENT_OPTIMIZATION', $anchor, $insert, 'BETTER_PMMP_PVP_FREEZE_EMPTY_WORLDS anchor not found in YmlServerProperties.php');
 }
 
 function patchEventCallFastPath(string $sourceDir): PatchResult
@@ -3595,45 +2062,6 @@ function patchRegisteredListenerFastPath(string $sourceDir): PatchResult
         . "\tpublic function isHandlingCancelled() : bool{";
 
     return applyReplacePatch($targetFile, 'callEventFast', $old, $new, 'isHandlingCancelled anchor not found in RegisteredListener.php');
-}
-
-function patchTaskHandlerFastPath(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/scheduler/TaskHandler.php';
-
-    $old = "\tpublic function run() : void{\n"
-        . "\t\t\$this->timings->startTiming();\n"
-        . "\t\ttry{\n"
-        . "\t\t\t\$this->task->onRun();\n"
-        . "\t\t}catch(CancelTaskException \$e){\n"
-        . "\t\t\t\$this->cancel();\n"
-        . "\t\t}finally{\n"
-        . "\t\t\t\$this->timings->stopTiming();\n"
-        . "\t\t}\n"
-        . "\t}";
-
-    $new = "\tpublic function run() : void{\n"
-        . "\t\t/** [BetterPMMP-PATCH] event engine fast-path: skip per-run timing wrappers while timings are\n"
-        . "\t\t * disabled - repeating interval tasks pay this on every single run */\n"
-        . "\t\tif(!TimingsHandler::isEnabled()){\n"
-        . "\t\t\ttry{\n"
-        . "\t\t\t\t\$this->task->onRun();\n"
-        . "\t\t\t}catch(CancelTaskException \$e){\n"
-        . "\t\t\t\t\$this->cancel();\n"
-        . "\t\t\t}\n"
-        . "\t\t\treturn;\n"
-        . "\t\t}\n"
-        . "\t\t\$this->timings->startTiming();\n"
-        . "\t\ttry{\n"
-        . "\t\t\t\$this->task->onRun();\n"
-        . "\t\t}catch(CancelTaskException \$e){\n"
-        . "\t\t\t\$this->cancel();\n"
-        . "\t\t}finally{\n"
-        . "\t\t\t\$this->timings->stopTiming();\n"
-        . "\t\t}\n"
-        . "\t}";
-
-    return applyReplacePatch($targetFile, 'skip per-run timing wrappers', $old, $new, 'run() anchor not found in TaskHandler.php');
 }
 
 function patchPlayerMoveEventPeriod(string $sourceDir): PatchResult
@@ -3786,492 +2214,6 @@ function patchStandardBroadcasterMovementSendEvent(string $sourceDir): PatchResu
     return applyReplacePatch($targetFile, 'skip DataPacketSendEvent for movement broadcasts', $old, $new, 'DataPacketSendEvent anchor not found in StandardPacketBroadcaster.php');
 }
 
-function createTradeInventory(string $sourceDir): PatchResult
-{
-    $targetDir = $sourceDir . '/src/inventory';
-    $targetFile = $targetDir . '/TradeInventory.php';
-
-    if (!is_dir($targetDir)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Inventory directory not found');
-    }
-
-    $fileContent = <<<'PHPFILE'
-<?php
-
-declare(strict_types=1);
-
-namespace pocketmine\inventory;
-
-use pocketmine\entity\Living;
-use pocketmine\item\Item;
-use pocketmine\nbt\NBT;
-use pocketmine\nbt\tag\CompoundTag;
-use pocketmine\nbt\tag\ListTag;
-use pocketmine\network\mcpe\protocol\types\CacheableNbt;
-use pocketmine\network\mcpe\protocol\types\entity\EntityMetadataProperties;
-use pocketmine\network\mcpe\protocol\types\entity\LongMetadataProperty;
-use pocketmine\network\mcpe\protocol\types\inventory\WindowTypes;
-use pocketmine\network\mcpe\protocol\UpdateTradePacket;
-use pocketmine\player\Player;
-use function count;
-
-/**
- * [BetterPMMP-PATCH] Plugin-openable Mojang Trade V2 window backed by a real 2-slot inventory.
- * Backported mechanism from pmmp/PocketMine-MP#6310 (custom-trade subset only).
- */
-final class TradeInventory extends SimpleInventory{
-
-	/** @param list<array{0: Item, 1: Item|null, 2: Item}> $recipes [buyA, buyB, sell] */
-	public function __construct(
-		private readonly string $displayName,
-		private readonly Living $holder,
-		private readonly array $recipes
-	){
-		parent::__construct(2);
-	}
-
-	public function getHolder() : Living{
-		return $this->holder;
-	}
-
-	/** @return array{0: Item, 1: Item|null, 2: Item}|null */
-	public function getRecipe(int $id) : ?array{
-		return $this->recipes[$id] ?? null;
-	}
-
-	public function onOpen(Player $who) : void{
-		parent::onOpen($who);
-		//Send the trading-player binding only to the opener instead of mutating the shared entity metadata,
-		//so a second player opening the same entity does not clobber other traders' windows.
-		$this->holder->sendData([$who], [EntityMetadataProperties::TRADING_PLAYER_EID => new LongMetadataProperty($who->getId())]);
-	}
-
-	public function onClose(Player $who) : void{
-		foreach($this->getContents() as $item){
-			foreach($who->getInventory()->addItem($item) as $drop)
-				$who->getWorld()->dropItem($who->getPosition(), $drop);
-		}
-		$this->clearAll();
-		$this->holder->sendData([$who], [EntityMetadataProperties::TRADING_PLAYER_EID => new LongMetadataProperty(-1)]);
-		parent::onClose($who);
-	}
-
-	/** @phpstan-return CacheableNbt<\pocketmine\nbt\tag\CompoundTag> */
-	public function buildOffers() : CacheableNbt{
-		$recipesTag = [];
-		foreach($this->recipes as $i => $recipe){
-			[$buyA, $buyB, $sell] = $recipe;
-			$tag = CompoundTag::create()
-				->setTag("buyA", $buyA->nbtSerialize())
-				->setInt("buyCountA", $buyA->getCount())
-				->setInt("buyCountB", $buyB?->getCount() ?? 0)
-				->setTag("sell", $sell->nbtSerialize())
-				->setInt("uses", 0)
-				->setInt("maxUses", 9999999)
-				->setByte("rewardExp", 0)
-				->setInt("demand", 0)
-				->setInt("tier", 0)
-				->setInt("traderExp", 0)
-				->setFloat("priceMultiplierA", 0.0)
-				->setFloat("priceMultiplierB", 0.0)
-				->setInt("netId", $i + 1);
-			if($buyB !== null)
-				$tag->setTag("buyB", $buyB->nbtSerialize());
-			$recipesTag[] = $tag;
-		}
-
-		$nbt = CompoundTag::create()
-			->setTag("Recipes", new ListTag($recipesTag, NBT::TAG_Compound))
-			->setTag("TierExpRequirements", new ListTag([], NBT::TAG_Compound));
-		return new CacheableNbt($nbt);
-	}
-
-	public function buildOpenPacket(int $windowId) : UpdateTradePacket{
-		return UpdateTradePacket::create(
-			$windowId,
-			WindowTypes::TRADING,
-			0,
-			0,
-			$this->holder->getId(),
-			-1,
-			$this->displayName,
-			true,
-			true,
-			$this->buildOffers()
-		);
-	}
-
-	public function recipeCount() : int{
-		return count($this->recipes);
-	}
-}
-PHPFILE;
-
-    if (file_exists($targetFile) && patchRead($targetFile) === $fileContent) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    if (patchWrite($targetFile, $fileContent) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write TradeInventory.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function createTradingTransaction(string $sourceDir): PatchResult
-{
-    $targetDir = $sourceDir . '/src/inventory/transaction';
-    $targetFile = $targetDir . '/TradingTransaction.php';
-
-    if (!is_dir($targetDir)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Inventory transaction directory not found');
-    }
-
-    $fileContent = <<<'PHPFILE'
-<?php
-
-declare(strict_types=1);
-
-namespace pocketmine\inventory\transaction;
-
-use pocketmine\item\Item;
-use pocketmine\player\Player;
-use function count;
-
-/**
- * [BetterPMMP-PATCH] Validates and executes a single Trade V2 exchange.
- * Backported mechanism from pmmp/PocketMine-MP#6310 (custom-trade subset only).
- */
-final class TradingTransaction extends InventoryTransaction{
-
-	public function __construct(
-		Player $source,
-		private readonly Item $recipeBuyA,
-		private readonly ?Item $recipeBuyB,
-		private readonly Item $recipeSell
-	){
-		parent::__construct($source);
-	}
-
-	public function validate() : void{
-		if(count($this->actions) < 1)
-			throw new TransactionValidationException("Transaction must have at least one action to be executable");
-
-		/** @var Item[] $inputs */
-		$inputs = [];
-		/** @var Item[] $outputs */
-		$outputs = [];
-		$this->matchItems($outputs, $inputs);
-
-		$needA = $this->recipeBuyA->getCount();
-		$needB = $this->recipeBuyB?->getCount() ?? 0;
-
-		if($this->recipeBuyB !== null && $this->recipeBuyA->canStackWith($this->recipeBuyB)){
-			//buyA and buyB are the same item type (e.g. two identical armour pieces); the client splits them across
-			//both cost slots, so verify the combined total instead of greedily assigning everything to buyA.
-			$total = 0;
-			foreach($inputs as $input){
-				if(!$this->recipeBuyA->canStackWith($input))
-					throw new TransactionValidationException("Unexpected input item");
-				$total += $input->getCount();
-			}
-			if($total < $needA + $needB)
-				throw new TransactionValidationException("Invalid buy item count");
-		}else{
-			$buyACount = 0;
-			$buyBCount = 0;
-			foreach($inputs as $input){
-				if($this->recipeBuyA->canStackWith($input))
-					$buyACount += $input->getCount();
-				elseif($this->recipeBuyB !== null && $this->recipeBuyB->canStackWith($input))
-					$buyBCount += $input->getCount();
-				else
-					throw new TransactionValidationException("Unexpected input item");
-			}
-			if($buyACount < $needA)
-				throw new TransactionValidationException("Invalid buyA item");
-			if($this->recipeBuyB !== null && $buyBCount < $needB)
-				throw new TransactionValidationException("Invalid buyB item");
-		}
-
-		$outputCount = 0;
-		foreach($outputs as $output){
-			if(!$this->recipeSell->canStackWith($output))
-				throw new TransactionValidationException("Invalid output item");
-			$outputCount += $output->getCount();
-		}
-		if($outputCount !== $this->recipeSell->getCount())
-			throw new TransactionValidationException("Invalid output count");
-	}
-}
-PHPFILE;
-
-    if (file_exists($targetFile) && patchRead($targetFile) === $fileContent) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    if (patchWrite($targetFile, $fileContent) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write TradingTransaction.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchInventoryManagerTrade(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/network/mcpe/InventoryManager.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'InventoryManager.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read InventoryManager.php');
-    }
-
-    if (str_contains($content, 'instanceof TradeInventory')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    $edits = [
-        [
-            'use pocketmine\inventory\Inventory;' . "\n"
-                . 'use pocketmine\inventory\transaction\action\SlotChangeAction;',
-            'use pocketmine\inventory\Inventory;' . "\n"
-                . 'use pocketmine\inventory\TradeInventory;' . "\n"
-                . 'use pocketmine\inventory\transaction\action\SlotChangeAction;',
-            'Inventory use block anchor not found in InventoryManager.php',
-        ],
-        [
-            'use pocketmine\network\mcpe\protocol\PlayerEnchantOptionsPacket;' . "\n"
-                . 'use pocketmine\network\mcpe\protocol\types\BlockPosition;',
-            'use pocketmine\network\mcpe\protocol\PlayerEnchantOptionsPacket;' . "\n"
-                . 'use pocketmine\network\mcpe\protocol\UpdateTradePacket;' . "\n"
-                . 'use pocketmine\network\mcpe\protocol\types\BlockPosition;',
-            'Protocol use block anchor not found in InventoryManager.php',
-        ],
-        [
-            "\t\treturn match(true){\n"
-                . "\t\t\t\$inventory instanceof AnvilInventory => UIInventorySlotOffset::ANVIL,",
-            "\t\treturn match(true){\n"
-                . "\t\t\t/** [BetterPMMP-PATCH] Trade V2 window support */\n"
-                . "\t\t\t\$inventory instanceof TradeInventory => UIInventorySlotOffset::TRADE2_INGREDIENT,\n"
-                . "\t\t\t\$inventory instanceof AnvilInventory => UIInventorySlotOffset::ANVIL,",
-            'Complex slot mapping anchor not found in InventoryManager.php',
-        ],
-        [
-            "\t\t\t\t\t\tif(\$pk instanceof ContainerOpenPacket){\n"
-                . "\t\t\t\t\t\t\t//workaround useless bullshit in 1.21 - ContainerClose requires a type now for some reason\n"
-                . "\t\t\t\t\t\t\t\$windowType = \$pk->windowType;\n"
-                . "\t\t\t\t\t\t}",
-            "\t\t\t\t\t\tif(\$pk instanceof ContainerOpenPacket){\n"
-                . "\t\t\t\t\t\t\t//workaround useless bullshit in 1.21 - ContainerClose requires a type now for some reason\n"
-                . "\t\t\t\t\t\t\t\$windowType = \$pk->windowType;\n"
-                . "\t\t\t\t\t\t}elseif(\$pk instanceof UpdateTradePacket){\n"
-                . "\t\t\t\t\t\t\t\$windowType = WindowTypes::TRADING;\n"
-                . "\t\t\t\t\t\t}",
-            'Window type anchor not found in InventoryManager.php',
-        ],
-        [
-            "\t\t\treturn [ContainerOpenPacket::blockInv(\$id, \$windowType, \$blockPosition)];\n"
-                . "\t\t}\n"
-                . "\t\treturn null;",
-            "\t\t\treturn [ContainerOpenPacket::blockInv(\$id, \$windowType, \$blockPosition)];\n"
-                . "\t\t}\n"
-                . "\t\tif(\$inv instanceof TradeInventory){\n"
-                . "\t\t\treturn [\$inv->buildOpenPacket(\$id)];\n"
-                . "\t\t}\n"
-                . "\t\treturn null;",
-            'Container open anchor not found in InventoryManager.php',
-        ],
-    ];
-
-    foreach ($edits as [$old, $new, $matchError]) {
-        $newContent = str_replace($old, $new, $content);
-        if ($newContent === $content) {
-            return new PatchResult($targetFile, PatchStatus::FAILED, $matchError);
-        }
-        $content = $newContent;
-    }
-
-    if (patchWrite($targetFile, $content) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched InventoryManager.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchItemStackRequestExecutorTrade(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/network/mcpe/handler/ItemStackRequestExecutor.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'ItemStackRequestExecutor.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read ItemStackRequestExecutor.php');
-    }
-
-    if (str_contains($content, 'beginTrading')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    $mergeBlock = "\t\tif(\$mergeWithExisting){\n"
-        . "\t\t\t//Created/result items (e.g. villager trade output) must stack onto an existing matching partial stack first,\n"
-        . "\t\t\t//like vanilla. The client picks the destination from its own prediction and may choose an empty slot even\n"
-        . "\t\t\t//when a matching stack exists, so redirect to the first matching slot with room. The client predicted a\n"
-        . "\t\t\t//different slot, so a full resync is requested to reconcile both slots after the transaction executes.\n"
-        . "\t\t\t\$maxStackSize = min(\$inventory->getMaxStackSize(), \$item->getMaxStackSize());\n"
-        . "\t\t\t\$target = \$inventory->getItem(\$slot);\n"
-        . "\t\t\tif(\$target->isNull() || !\$target->canStackWith(\$item) || \$target->getCount() + \$count > \$maxStackSize){\n"
-        . "\t\t\t\tfor(\$i = 0, \$size = \$inventory->getSize(); \$i < \$size; ++\$i){\n"
-        . "\t\t\t\t\t\$candidate = \$inventory->getItem(\$i);\n"
-        . "\t\t\t\t\tif(!\$candidate->isNull() && \$candidate->canStackWith(\$item) && \$candidate->getCount() + \$count <= \$maxStackSize){\n"
-        . "\t\t\t\t\t\t\$slot = \$i;\n"
-        . "\t\t\t\t\t\t\$this->inventoryManager->requestSyncAll();\n"
-        . "\t\t\t\t\t\tbreak;\n"
-        . "\t\t\t\t\t}\n"
-        . "\t\t\t\t}\n"
-        . "\t\t\t}\n"
-        . "\t\t}\n\n";
-
-    $beginTrading = "\t/**\n"
-        . "\t * [BetterPMMP-PATCH] Trade V2 window support\n"
-        . "\t * @throws ItemStackRequestProcessException\n"
-        . "\t */\n"
-        . "\tprotected function beginTrading(TradeInventory \$window, int \$recipeId, int \$repetitions) : void{\n"
-        . "\t\tif(\$this->specialTransaction !== null){\n"
-        . "\t\t\tthrow new ItemStackRequestProcessException(\"Another special transaction is already in progress\");\n"
-        . "\t\t}\n"
-        . "\t\tif(\$repetitions < 1){\n"
-        . "\t\t\tthrow new ItemStackRequestProcessException(\"Cannot trade a recipe less than 1 time\");\n"
-        . "\t\t}\n"
-        . "\t\tif(\$repetitions > 256){\n"
-        . "\t\t\tthrow new ItemStackRequestProcessException(\"Cannot trade a recipe more than 256 times\");\n"
-        . "\t\t}\n"
-        . "\t\t\$recipe = \$window->getRecipe(\$recipeId - 1);\n"
-        . "\t\tif(\$recipe === null){\n"
-        . "\t\t\tthrow new ItemStackRequestProcessException(\"No such trade recipe index: \" . (\$recipeId - 1));\n"
-        . "\t\t}\n"
-        . "\t\t[\$buyA, \$buyB, \$sell] = \$recipe;\n"
-        . "\t\t//Shift-click sends a single request with repetitions > 1 to buy the maximum affordable amount at once.\n"
-        . "\t\t\$scaledBuyA = (clone \$buyA)->setCount(\$buyA->getCount() * \$repetitions);\n"
-        . "\t\t\$scaledBuyB = \$buyB !== null ? (clone \$buyB)->setCount(\$buyB->getCount() * \$repetitions) : null;\n"
-        . "\t\t\$scaledSell = (clone \$sell)->setCount(\$sell->getCount() * \$repetitions);\n"
-        . "\t\t\$this->specialTransaction = new TradingTransaction(\$this->player, \$scaledBuyA, \$scaledBuyB, \$scaledSell);\n"
-        . "\t\t\$this->setNextCreatedItem(\$scaledSell);\n"
-        . "\t}\n\n";
-
-    $edits = [
-        [
-            'use pocketmine\inventory\transaction\action\DropItemAction;' . "\n"
-                . 'use pocketmine\inventory\transaction\CraftingTransaction;',
-            'use pocketmine\inventory\transaction\action\DropItemAction;' . "\n"
-                . 'use pocketmine\inventory\TradeInventory;' . "\n"
-                . 'use pocketmine\inventory\transaction\CraftingTransaction;',
-            'DropItemAction use anchor not found in ItemStackRequestExecutor.php',
-        ],
-        [
-            'use pocketmine\inventory\transaction\InventoryTransaction;' . "\n"
-                . 'use pocketmine\inventory\transaction\TransactionBuilder;',
-            'use pocketmine\inventory\transaction\InventoryTransaction;' . "\n"
-                . 'use pocketmine\inventory\transaction\TradingTransaction;' . "\n"
-                . 'use pocketmine\inventory\transaction\TransactionBuilder;',
-            'InventoryTransaction use anchor not found in ItemStackRequestExecutor.php',
-        ],
-        [
-            "use function count;\nuse function spl_object_id;",
-            "use function count;\nuse function min;\nuse function spl_object_id;",
-            'Function imports anchor not found in ItemStackRequestExecutor.php',
-        ],
-        [
-            "\tprotected function transferItems(ItemStackRequestSlotInfo \$source, ItemStackRequestSlotInfo \$destination, int \$count) : void{\n"
-                . "\t\t\$removed = \$this->removeItemFromSlot(\$source, \$count);\n"
-                . "\t\t\$this->addItemToSlot(\$destination, \$removed, \$count);\n"
-                . "\t}",
-            "\tprotected function transferItems(ItemStackRequestSlotInfo \$source, ItemStackRequestSlotInfo \$destination, int \$count) : void{\n"
-                . "\t\t/** [BetterPMMP-PATCH] Trade V2 window support */\n"
-                . "\t\t\$fromTradeOutput =\n"
-                . "\t\t\t\$source->getContainerName()->getContainerId() === ContainerUIIds::CREATED_OUTPUT &&\n"
-                . "\t\t\t\$source->getSlotId() === UIInventorySlotOffset::CREATED_ITEM_OUTPUT &&\n"
-                . "\t\t\t\$this->player->getCurrentWindow() instanceof TradeInventory;\n"
-                . "\t\t\$removed = \$this->removeItemFromSlot(\$source, \$count);\n"
-                . "\t\t\$this->addItemToSlot(\$destination, \$removed, \$count, \$fromTradeOutput);\n"
-                . "\t}",
-            'transferItems anchor not found in ItemStackRequestExecutor.php',
-        ],
-        [
-            "\tprotected function addItemToSlot(ItemStackRequestSlotInfo \$slotInfo, Item \$item, int \$count) : void{",
-            "\tprotected function addItemToSlot(ItemStackRequestSlotInfo \$slotInfo, Item \$item, int \$count, bool \$mergeWithExisting = false) : void{",
-            'addItemToSlot signature anchor not found in ItemStackRequestExecutor.php',
-        ],
-        [
-            "\t\t\$existingItem = \$inventory->getItem(\$slot);\n"
-                . "\t\tif(!\$existingItem->isNull() && !\$existingItem->canStackWith(\$item)){",
-            $mergeBlock
-                . "\t\t\$existingItem = \$inventory->getItem(\$slot);\n"
-                . "\t\tif(!\$existingItem->isNull() && !\$existingItem->canStackWith(\$item)){",
-            'addItemToSlot body anchor not found in ItemStackRequestExecutor.php',
-        ],
-        [
-            "\t/**\n"
-                . "\t * @throws ItemStackRequestProcessException\n"
-                . "\t */\n"
-                . "\tprotected function beginCrafting(int \$recipeId, int \$repetitions) : void{",
-            $beginTrading
-                . "\t/**\n"
-                . "\t * @throws ItemStackRequestProcessException\n"
-                . "\t */\n"
-                . "\tprotected function beginCrafting(int \$recipeId, int \$repetitions) : void{",
-            'beginCrafting anchor not found in ItemStackRequestExecutor.php',
-        ],
-        [
-            "\t\tif(!\$this->specialTransaction instanceof CraftingTransaction && !\$this->specialTransaction instanceof EnchantingTransaction){",
-            "\t\tif(!\$this->specialTransaction instanceof CraftingTransaction && !\$this->specialTransaction instanceof EnchantingTransaction && !\$this->specialTransaction instanceof TradingTransaction){",
-            'assertDoingCrafting anchor not found in ItemStackRequestExecutor.php',
-        ],
-        [
-            "\t\t\t}else{\n"
-                . "\t\t\t\t\$this->beginCrafting(\$action->getRecipeId(), \$action->getRepetitions());\n"
-                . "\t\t\t}\n"
-                . "\t\t}elseif(\$action instanceof CraftRecipeAutoStackRequestAction){\n"
-                . "\t\t\t\$this->beginCrafting(\$action->getRecipeId(), \$action->getRepetitions());\n"
-                . "\t\t}elseif(\$action instanceof CraftingConsumeInputStackRequestAction){",
-            "\t\t\t}elseif(\$window instanceof TradeInventory){\n"
-                . "\t\t\t\t\$this->beginTrading(\$window, \$action->getRecipeId(), \$action->getRepetitions());\n"
-                . "\t\t\t}else{\n"
-                . "\t\t\t\t\$this->beginCrafting(\$action->getRecipeId(), \$action->getRepetitions());\n"
-                . "\t\t\t}\n"
-                . "\t\t}elseif(\$action instanceof CraftRecipeAutoStackRequestAction){\n"
-                . "\t\t\t\$window = \$this->player->getCurrentWindow();\n"
-                . "\t\t\tif(\$window instanceof TradeInventory){\n"
-                . "\t\t\t\t\$this->beginTrading(\$window, \$action->getRecipeId(), \$action->getRepetitions());\n"
-                . "\t\t\t}else{\n"
-                . "\t\t\t\t\$this->beginCrafting(\$action->getRecipeId(), \$action->getRepetitions());\n"
-                . "\t\t\t}\n"
-                . "\t\t}elseif(\$action instanceof CraftingConsumeInputStackRequestAction){",
-            'CraftRecipe action anchor not found in ItemStackRequestExecutor.php',
-        ],
-    ];
-
-    foreach ($edits as [$old, $new, $matchError]) {
-        $newContent = str_replace($old, $new, $content);
-        if ($newContent === $content) {
-            return new PatchResult($targetFile, PatchStatus::FAILED, $matchError);
-        }
-        $content = $newContent;
-    }
-
-    if (patchWrite($targetFile, $content) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched ItemStackRequestExecutor.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
 function patchAttributeMapNeedSend(string $sourceDir): PatchResult
 {
     $targetFile = $sourceDir . '/src/entity/AttributeMap.php';
@@ -4371,66 +2313,6 @@ function patchStandardBroadcasterVarintLength(string $sourceDir): PatchResult
     return new PatchResult($targetFile, PatchStatus::APPLIED);
 }
 
-function patchExperienceOrbPvpTargetScanInterval(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/entity/object/ExperienceOrb.php';
-
-    $old = "\t\tif(\$this->lookForTargetTime >= 20){\n"
-        . "\t\t\tif(\$currentTarget === null){\n"
-        . "\t\t\t\t\$newTarget = \$this->getWorld()->getNearestEntity(\$this->location, self::MAX_TARGET_DISTANCE, Human::class);\n"
-        . "\n"
-        . "\t\t\t\tif(\$newTarget instanceof Human && !(\$newTarget instanceof Player && \$newTarget->isSpectator()) && \$newTarget->getXpManager()->canAttractXpOrbs()){\n"
-        . "\t\t\t\t\t\$currentTarget = \$newTarget;\n"
-        . "\t\t\t\t}\n"
-        . "\t\t\t}\n"
-        . "\n"
-        . "\t\t\t\$this->lookForTargetTime = 0;\n"
-        . "\t\t}else{\n"
-        . "\t\t\t\$this->lookForTargetTime += \$tickDiff;\n"
-        . "\t\t}";
-
-    $new = "\t\t/* [BetterPMMP-PATCH] PvP optimization: configurable target-scan interval. getNearestEntity()\n"
-        . "\t\t * scans every Human in a 1-4 chunk window per scan and runs for every targetless orb; raising the\n"
-        . "\t\t * interval thins those bulk-kill scans. Clamped to >= 1 so the scan can never be disabled.\n"
-        . "\t\t * Default 20 reproduces vanilla exactly. getPropertyInt returns int (no mixed cast). */\n"
-        . "\t\t\$pvpOrbScanInterval = max(1, \$this->server->getConfigGroup()->getPropertyInt('better-pmmp.pvp-optimization.xp-orb-scan-interval', 20));\n"
-        . "\t\tif(\$this->lookForTargetTime >= \$pvpOrbScanInterval){\n"
-        . "\t\t\tif(\$currentTarget === null){\n"
-        . "\t\t\t\t\$newTarget = \$this->getWorld()->getNearestEntity(\$this->location, self::MAX_TARGET_DISTANCE, Human::class);\n"
-        . "\n"
-        . "\t\t\t\tif(\$newTarget instanceof Human && !(\$newTarget instanceof Player && \$newTarget->isSpectator()) && \$newTarget->getXpManager()->canAttractXpOrbs()){\n"
-        . "\t\t\t\t\t\$currentTarget = \$newTarget;\n"
-        . "\t\t\t\t}\n"
-        . "\t\t\t}\n"
-        . "\n"
-        . "\t\t\t\$this->lookForTargetTime = 0;\n"
-        . "\t\t}else{\n"
-        . "\t\t\t\$this->lookForTargetTime += \$tickDiff;\n"
-        . "\t\t}";
-
-    return applyReplacePatch($targetFile, 'xp-orb-scan-interval', $old, $new, 'Failed to match lookForTargetTime scan block in ExperienceOrb.php');
-}
-
-function patchPocketmineYmlPvpXpOrbScanInterval(string $sourceDir): PatchResult
-{
-    $anchor = '    freeze-empty-worlds: false';
-    $insertion = $anchor . "\n"
-        . "    # How often (in ticks) each XP orb that has no target re-scans for the nearest player (vanilla: 20).\n"
-        . "    # The scan walks every Human entity in a 1-4 chunk window and runs per targetless orb, so in bulk\n"
-        . "    # kills the orbs cluster in exactly the dense chunks they must scan. Raising this thins that cost\n"
-        . "    # at the price of slower orb homing (e.g. 40 delays acquisition by up to ~1 extra second). Orbs\n"
-        . "    # already locked onto a player are unaffected. Clamped to >= 1; ignored entirely when xp-orbs is false.\n"
-        . "    xp-orb-scan-interval: 20";
-
-    return applyReplacePatch(
-        $sourceDir . '/resources/pocketmine.yml',
-        'xp-orb-scan-interval:',
-        $anchor,
-        $insertion,
-        'pvp-optimization anchor (freeze-empty-worlds) not found in pocketmine.yml'
-    );
-}
-
 function patchServerSkipVanillaRecipes(string $sourceDir): PatchResult
 {
     $targetFile = $sourceDir . '/src/Server.php';
@@ -4472,92 +2354,6 @@ function patchPocketmineYmlSkipVanillaRecipes(string $sourceDir): PatchResult
     );
 }
 
-function patchWorldDisableRandomBlockTicking(string $sourceDir): PatchResult
-{
-    $targetFile = $sourceDir . '/src/world/World.php';
-
-    if (!file_exists($targetFile)) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'World.php not found');
-    }
-
-    $content = patchRead($targetFile);
-    if ($content === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to read World.php');
-    }
-
-    if (str_contains($content, 'disable-random-block-ticking')) {
-        return new PatchResult($targetFile, PatchStatus::SKIPPED);
-    }
-
-    $oldInit = "\tprivate function initRandomTickBlocksFromConfig(ServerConfigGroup \$cfg) : void{\n"
-        . "\t\t\$dontTickBlocks = [];";
-    $newInit = "\tprivate function initRandomTickBlocksFromConfig(ServerConfigGroup \$cfg) : void{\n"
-        . "\t\t/* [BetterPMMP-PATCH] disable-random-block-ticking: when enabled, leave randomTickBlocks empty so\n"
-        . "\t\t * tickChunk()'s per-subchunk random-tick selection loop is skipped entirely (see the count() guard\n"
-        . "\t\t * there). Default false reproduces vanilla exactly. Removes the per-ticking-chunk-per-tick\n"
-        . "\t\t * mt_rand + getBlockStateId + isset loop on static PvP maps where crop growth, leaf decay and\n"
-        . "\t\t * ice/fire spread are irrelevant; entity onRandomUpdate and the chunk-tick radius are unaffected. */\n"
-        . "\t\tif(\$cfg->getPropertyBool('better-pmmp.disable-random-block-ticking', false)){\n"
-        . "\t\t\treturn;\n"
-        . "\t\t}\n"
-        . "\t\t\$dontTickBlocks = [];";
-
-    $content = str_replace($oldInit, $newInit, $content, $initCount);
-    if ($initCount !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'initRandomTickBlocksFromConfig anchor not found in World.php');
-    }
-
-    $oldTick = "\t\tforeach(\$this->getChunkEntities(\$chunkX, \$chunkZ) as \$entity){\n"
-        . "\t\t\t\$entity->onRandomUpdate();\n"
-        . "\t\t}\n"
-        . "\n"
-        . "\t\t\$blockFactory = \$this->blockStateRegistry;";
-    $newTick = "\t\tforeach(\$this->getChunkEntities(\$chunkX, \$chunkZ) as \$entity){\n"
-        . "\t\t\t\$entity->onRandomUpdate();\n"
-        . "\t\t}\n"
-        . "\n"
-        . "\t\t/* [BetterPMMP-PATCH] disable-random-block-ticking: with no block type registered for random\n"
-        . "\t\t * ticking the selection loop below can only ever miss (its isset() never hits), so skipping it is\n"
-        . "\t\t * byte-for-byte vanilla-equivalent. better-pmmp.disable-random-block-ticking empties randomTickBlocks\n"
-        . "\t\t * to take this path; the entity onRandomUpdate iteration above still runs. */\n"
-        . "\t\tif(count(\$this->randomTickBlocks) === 0){\n"
-        . "\t\t\treturn;\n"
-        . "\t\t}\n"
-        . "\n"
-        . "\t\t\$blockFactory = \$this->blockStateRegistry;";
-
-    $content = str_replace($oldTick, $newTick, $content, $tickCount);
-    if ($tickCount !== 1) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'tickChunk random-tick loop anchor not found in World.php');
-    }
-
-    if (patchWrite($targetFile, $content) === false) {
-        return new PatchResult($targetFile, PatchStatus::FAILED, 'Failed to write patched World.php');
-    }
-
-    return new PatchResult($targetFile, PatchStatus::APPLIED);
-}
-
-function patchPocketmineYmlDisableRandomBlockTicking(string $sourceDir): PatchResult
-{
-    $anchor = '  neighbour-update-limit: 512';
-    $insertion = $anchor . "\n"
-        . "  # [BetterPMMP-PATCH] Disable random block ticking (crop growth, leaf decay, ice/snow melt, fire\n"
-        . "  # spread, grass/mycelium spread, sapling and sugarcane growth, etc.). When true, the per-subchunk\n"
-        . "  # random-tick selection loop in every ticking chunk is skipped each tick; entity item/xp updates and\n"
-        . "  # the chunk-tick radius are unaffected. Default false = vanilla. Set true on static PvP/arena maps\n"
-        . "  # where no block needs to grow or spread - removes a recurring per-tick CPU cost.\n"
-        . "  disable-random-block-ticking: false";
-
-    return applyReplacePatch(
-        $sourceDir . '/resources/pocketmine.yml',
-        'disable-random-block-ticking:',
-        $anchor,
-        $insertion,
-        'better-pmmp anchor (neighbour-update-limit) not found in pocketmine.yml'
-    );
-}
-
 if (!isset($argv[1])) {
     fwrite(STDOUT, "BetterPMMP Patch Tool\nUsage: php patch_tool.php <source_directory_path>\n\n  <source_directory_path>  Path to the PMMP source directory to patch\n");
     exit(1);
@@ -4589,12 +2385,6 @@ $results = [];
 
 $patchFunctions = [
     'patchStartCmd' => $baseDir,
-    'patchPluginManager' => $sourceDir,
-    'createReloadPluginCommand' => $sourceDir,
-    'patchReloadPermission' => $sourceDir,
-    'patchSimpleCommandMap' => $sourceDir,
-    'createClassCacheInvalidator' => $sourceDir,
-    'createPluginDependencyMap' => $sourceDir,
     'patchComposerSyncCheck' => $sourceDir,
     'patchStartCmdBinPath' => $baseDir,
     'patchDataPath' => $sourceDir,
@@ -4613,7 +2403,6 @@ $patchFunctions = [
     'patchStartCmdRestartLoop' => $baseDir,
     'patchIronDoorNoInteract' => $sourceDir,
     'patchPocketmineYmlBetterPmmp' => $sourceDir,
-    'patchYmlServerPropertiesBetterPmmp' => $sourceDir,
     'patchWorldFixedLight' => $sourceDir,
     'patchWorldPerWorldChunkTicking' => $sourceDir,
     'patchWorldChunkOptimization' => $sourceDir,
@@ -4623,54 +2412,29 @@ $patchFunctions = [
     'patchEntityMoveInPlace' => $sourceDir,
     'patchEntitySmartBlocksAroundCache' => $sourceDir,
     'patchPocketmineYmlCriticalHit' => $sourceDir,
-    'patchYmlServerPropertiesCriticalHit' => $sourceDir,
     'patchPlayerCriticalHit' => $sourceDir,
-    'patchNetworkSessionSetHandlerGuard' => $sourceDir,
-    'patchPlayerRespawnLockReset' => $sourceDir,
-    'patchHandlerListMergePerformance' => $sourceDir,
-    'patchNetworkSessionDisconnectGuardTiming' => $sourceDir,
-    'patchClassMapAuthoritative' => $sourceDir,
-    'patchPocketmineYmlFpsOptimization' => $sourceDir,
-    'patchYmlServerPropertiesFpsOptimization' => $sourceDir,
-    'patchFpsEntityBroadcastOptimization' => $sourceDir,
-    'patchFpsActorAnimationDistanceFilter' => $sourceDir,
-    'patchFpsParticleSoundDistanceFilter' => $sourceDir,
-    'patchFpsChunkSendPacing' => $sourceDir,
-    'patchFpsItemEntitySuppression' => $sourceDir,
     'patchPocketmineYmlPvpOptimization' => $sourceDir,
-    'patchYmlServerPropertiesPvpOptimization' => $sourceDir,
     'patchWorldPvpSkipLightUpdates' => $sourceDir,
     'patchWorldPvpXpOrbToggle' => $sourceDir,
     'patchWorldPvpItemDespawnTicks' => $sourceDir,
     'patchExplosionPvpBlockDestructionToggle' => $sourceDir,
     'patchItemEntityPvpMergeToggle' => $sourceDir,
     'patchPocketmineYmlPvpTickToggles' => $sourceDir,
-    'patchYmlServerPropertiesPvpTickToggles' => $sourceDir,
     'patchEntityPvpMovementBroadcastPeriod' => $sourceDir,
     'patchPlayerPvpMovementBroadcastPeriod' => $sourceDir,
     'patchPlayerPvpPickupScanPeriod' => $sourceDir,
     'patchWorldPvpFreezeEmptyWorlds' => $sourceDir,
     'patchPocketmineYmlEventOptimization' => $sourceDir,
-    'patchYmlServerPropertiesEventOptimization' => $sourceDir,
     'patchEventCallFastPath' => $sourceDir,
     'patchRegisteredListenerFastPath' => $sourceDir,
-    'patchTaskHandlerFastPath' => $sourceDir,
     'patchPlayerMoveEventPeriod' => $sourceDir,
     'patchNetworkSessionAuthInputReceiveEvent' => $sourceDir,
     'patchNetworkSessionMovementSendEvent' => $sourceDir,
     'patchStandardBroadcasterMovementSendEvent' => $sourceDir,
-    'createTradeInventory' => $sourceDir,
-    'createTradingTransaction' => $sourceDir,
-    'patchInventoryManagerTrade' => $sourceDir,
-    'patchItemStackRequestExecutorTrade' => $sourceDir,
     'patchAttributeMapNeedSend' => $sourceDir,
     'patchStandardBroadcasterVarintLength' => $sourceDir,
-    'patchExperienceOrbPvpTargetScanInterval' => $sourceDir,
-    'patchPocketmineYmlPvpXpOrbScanInterval' => $sourceDir,
     'patchServerSkipVanillaRecipes' => $sourceDir,
     'patchPocketmineYmlSkipVanillaRecipes' => $sourceDir,
-    'patchWorldDisableRandomBlockTicking' => $sourceDir,
-    'patchPocketmineYmlDisableRandomBlockTicking' => $sourceDir,
 ];
 
 foreach ($patchFunctions as $func => $dir) {

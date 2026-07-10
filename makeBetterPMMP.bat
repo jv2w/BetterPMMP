@@ -87,8 +87,7 @@ echo ============================================
 echo.
 echo Next steps:
 echo   1. Start the server with start.cmd.
-echo   2. Use the /reload command to reload plugins.
-echo   3. Use the /restart command to restart the server.
+echo   2. Use the /restart command to restart the server.
 echo.
 
 pause
