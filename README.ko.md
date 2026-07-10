@@ -1,20 +1,18 @@
 # BetterPMMP
 
-**PocketMine-MP 5.0.0** 소스에 성능·게임플레이·편의 기능 수정을 직접 적용하는 패치 도구.
+Minecraft: Bedrock Edition 서버 소프트웨어 **PocketMine-MP**의 유지보수 후속작. 성능·게임플레이·편의 기능 개선이 소스에 직접 반영되어 있습니다.
 
 > 🌏 [English README](README.md)
 
-## 사용법
+## 소개
 
-```bash
-php patch_tool.php <소스_디렉터리>
-```
+[PocketMine-MP](https://github.com/pmmp/PocketMine-MP)는 2026-07-09 메인테이너에 의해 아카이브되었고, 업스트림 팀은 더 이상 업데이트를 제공하지 않습니다. BetterPMMP는 그 코드베이스를 이어받는 파생 프로젝트입니다. **PocketMine-MP 5.44.3 기반**이며 전체 서버 소스를 [source/](source/)에 포함하므로, 별도의 패치 단계 없이 클론해서 바로 실행합니다.
 
-`patch_tool.php`는 PMMP 소스에 약 50개의 패치를 적용합니다. 각 패치는 수정한 부분에 `[BetterPMMP-PATCH]` 마커를 남기므로, 이미 적용된 패치는 건너뛰고 다시 실행해도 안전합니다. 끝나면 `APPLIED` / `SKIPPED` / `FAILED` 요약이 출력됩니다.
-
-모든 패치는 기본값에서 바닐라와 동일하게 동작합니다. `pocketmine.yml`의 튜닝 옵션은 전부 opt-in입니다.
+BetterPMMP는 Mojang 및 원 PocketMine Team과 무관합니다. 저작자 표시와 수정 내역은 [NOTICE](NOTICE)를 참고하세요.
 
 ## 기능
+
+모든 개선은 기본값에서 바닐라와 동일하게 동작합니다. `pocketmine.yml`의 튜닝 옵션은 전부 opt-in입니다.
 
 ### 개발 편의
 
@@ -38,19 +36,16 @@ php patch_tool.php <소스_디렉터리>
 
 ## 요구 사항
 
-- PocketMine-MP 5.0.0 소스
-- [pmmp/PHP-Binaries](https://github.com/pmmp/PHP-Binaries/releases)의 PMMP용 PHP 8 바이너리
 - Windows (시작 스크립트가 `start.cmd` 기준)
+- PHP 8 바이너리. `source/bin/php/php.exe`에 하나가 포함되어 있으며, 없을 경우 [pmmp/PHP-Binaries](https://github.com/pmmp/PHP-Binaries/releases)의 PM5 빌드를 받거나 `PATH`에 등록된 `php.exe`를 사용합니다.
 
 ## 설치
 
-1. PocketMine-MP 5.0.0 소스를 `source/`에 넣습니다.
-2. PHP 바이너리를 준비합니다 — 서버 내부 `bin/php/php.exe`(우선) 또는 `PATH`에 등록된 `php.exe`.
-3. `php patch_tool.php source`를 실행합니다(또는 `makeBetterPMMP.bat`).
-4. `start.cmd`로 서버를 시작합니다.
+1. 이 저장소를 클론하거나 내려받습니다.
+2. `start.cmd`로 서버를 시작합니다.
 
-패치는 멱등하므로 소스를 업데이트할 때마다 다시 실행하면 됩니다.
+끝입니다 — `source/` 안의 소스에 모든 BetterPMMP 변경이 이미 반영되어 있습니다.
 
 ## 라이선스
 
-MIT
+BetterPMMP는 PocketMine-MP와 동일하게 **GNU Lesser General Public License v3.0 or later** (LGPL-3.0-or-later)로 배포됩니다. 전문은 [LICENSE](LICENSE), 저작자 표시는 [NOTICE](NOTICE)를 참고하세요.
