@@ -91,7 +91,7 @@ NEW=$(printf '%s\n' "$NEW_RAW" | grep -vE "^$" | sort -u | comm -23 - <(sort -u 
 echo "=== Regressions beyond baseline (must be empty) ==="
 if [ -z "$NEW" ]; then
 	echo "(none) - no new phpstan errors vs vanilla + baseline"
-	echo "Injected hot-reload code is phpstan-clean (it contributes 0 to the baseline)."
+	echo "Injected patch code is phpstan-clean (it contributes 0 to the baseline)."
 	exit 0
 fi
 echo "$NEW"

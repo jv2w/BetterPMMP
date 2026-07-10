@@ -10,30 +10,30 @@ A patch tool for **PocketMine-MP 5.0.0** that applies performance, gameplay, and
 php patch_tool.php <source_directory>
 ```
 
-`patch_tool.php` runs about 60 patches over the PMMP source. Each patch tags its edits with `[BetterPMMP-PATCH]`, so already-applied patches are skipped and re-running is safe. You get an `APPLIED` / `SKIPPED` / `FAILED` summary at the end.
+`patch_tool.php` runs about 50 patches over the PMMP source. Each patch tags its edits with `[BetterPMMP-PATCH]`, so already-applied patches are skipped and re-running is safe. You get an `APPLIED` / `SKIPPED` / `FAILED` summary at the end.
+
+Every patch defaults to vanilla-observable behaviour. The optional tuning knobs in `pocketmine.yml` are opt-in.
 
 ## Features
 
 ### Developer Experience
 
-- **Plugin Hot Reload** — `/reload <plugin>` reloads a plugin at runtime without restarting the server. Its listeners, commands, and permissions are unloaded and re-registered, and any plugins depending on it are cycled in dependency order so they re-bind to the new instance. A failed reload rolls back to the last working version.
-  - Only directory/source plugins can be reloaded; `.phar` and single-file plugins are rejected and need a full restart.
-  - PHP can't unload classes, so each reload of a changed plugin leaves the old version in memory. Restart to reclaim it.
-- **Restart Command** — `/restart`, backed by a restart loop in `start.cmd`.
+- **Restart Command** — `/restart`, backed by a restart loop in `start.cmd`. Source edits are picked up across a clean process boundary.
 - **Run From Source** — `start.cmd` runs `source/src/PocketMine.php` directly instead of a `.phar`, so edits take effect on the next start.
 - **Cleaner Logs & Paths** — tidier startup output and consolidated data / log / crashdump directories.
 
 ### Performance
 
 - **Block Input Lag Fix** — captures surrounding blocks before an interaction and sends back only the ones that changed, killing rubber-banding on place/break.
-- **Fixed Light** — skips `LightPopulationTask` and fills light arrays with a constant, dropping the async/serialization/flood-fill cost. Toggle in `pocketmine.yml`.
+- **Fixed Light** — skips `LightPopulationTask` and fills light arrays with a constant, dropping the async/serialization/flood-fill cost. Opt in via `pocketmine.yml`.
 - **Per-World View Distance** — override `view-distance` per world (handy for lobbies).
 - **Per-World Chunk Ticking** — set `tick-radius` and `blocks-per-subchunk-per-tick` per world; set both to `0` to disable random ticking entirely.
-- **Network & Entity Tuning** — broadcast batching, distance filtering for animations/particles/sounds, chunk-send pacing, block/neighbour caching, and assorted engine fixes.
+- **Event & Network Tuning** — event-bus fast paths, dirty-tracked attribute syncs, cheaper packet framing, block and neighbour-update caching, and assorted engine fixes.
+- **PvP Toggles** — opt-in switches for vanilla systems an arena server rarely needs: runtime light updates, XP orbs, explosion block destruction, item merging, and empty-world ticking.
 
 ### Gameplay
 
-- **Critical Hits** — configurable via `pocketmine.yml` / `server.properties`.
+- **Critical Hits** — configurable via `pocketmine.yml`; defaults match vanilla.
 - **Iron Door No-Interact** — hand interaction no longer toggles iron doors.
 
 ## Requirements

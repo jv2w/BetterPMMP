@@ -1,12 +1,9 @@
 patch_tool.php|Function patchRead() should return string|false but return statement is missing.
 patch_tool.php|Function patchWrite() should return int|false but return statement is missing.
 src/GarbageCollectorManager.php|Property pocketmine/GarbageCollectorManager::$logger is never read, only written.
-src/entity/Entity.php|Cannot cast mixed to float.
 src/entity/Entity.php|Cannot cast mixed to int.
-src/entity/object/ItemEntity.php|Cannot cast mixed to int.
 src/player/Player.php|Cannot cast mixed to float.
 src/player/Player.php|Cannot cast mixed to int.
 src/world/World.php|Call to static method fill() on an unknown class pocketmine/world/format/LightArray.
-src/world/World.php|Cannot cast mixed to float.
 src/world/World.php|Cannot cast mixed to int.
 src/world/World.php|Constant pocketmine/world/World::BLOCK_CACHE_SIZE_CAP is unused.
