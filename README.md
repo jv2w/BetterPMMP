@@ -12,7 +12,7 @@ BetterPMMP is not affiliated with Mojang or with the original PocketMine Team. S
 
 ## Features
 
-The performance improvements are on from the start and leave gameplay untouched. Only the features that change how the game plays (fixed light, per-world settings, PvP savers, and the like) start off turned off — turn them on yourself in `pocketmine.yml` when you want them.
+The performance improvements are on from the start and leave gameplay untouched. Only the features that change how the game plays (fixed light, per-world settings, PvP savers, and the like) start off turned off: turn them on yourself in `pocketmine.yml` when you want them.
 
 ### Developer Experience
 
