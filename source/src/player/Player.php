@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\player;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\block\BaseSign;
 use pocketmine\block\Bed;
 use pocketmine\block\BlockTypeTags;
@@ -643,7 +644,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		$newViewDistance = $this->server->getAllowedViewDistance($distance);
 
 		/** [BetterPMMP-PATCH] Per-world view distance override */
-		$perWorldViewDistance = $this->server->getConfigGroup()->getProperty('better-pmmp.per-world-view-distance', []);
+		$perWorldViewDistance = $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::PER_WORLD_VIEW_DISTANCE, []);
 		if(is_array($perWorldViewDistance)){
 			$worldFolder = $this->getWorld()->getFolderName();
 			if(isset($perWorldViewDistance[$worldFolder])){
@@ -1457,7 +1458,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			 * accumulated from, so listeners still see a gapless movement chain. Cancelling reverts
 			 * the whole accumulated span. */
 			if(PlayerMoveEvent::hasHandlers()){
-				$pvpMoveEvPeriod = (int) $this->server->getConfigGroup()->getProperty('better-pmmp.event-optimization.move-event-period', 1);
+				$pvpMoveEvPeriod = (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::EVENT_OPTIMIZATION_MOVE_EVENT_PERIOD, 1);
 				$this->pvpMoveEventFrom ??= $from;
 				if($pvpMoveEvPeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMoveEvPeriod) === 0){
 					$evFrom = $pvpMoveEvPeriod <= 1 ? $from : $this->pvpMoveEventFrom;
@@ -1487,7 +1488,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			$this->lastLocation = $to;
 			/** [BetterPMMP-PATCH] PvP optimization: player movement broadcast period - PlayerMoveEvent and
 			 * exhaustion above stay per-tick, only the packet send is decimated. */
-			$pvpMovePeriod = $this->pvpMoveBroadcastPeriod ??= (int) $this->server->getConfigGroup()->getProperty('better-pmmp.pvp-optimization.movement-broadcast-period', 1);
+			$pvpMovePeriod = $this->pvpMoveBroadcastPeriod ??= (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::PVP_OPTIMIZATION_MOVEMENT_BROADCAST_PERIOD, 1);
 			if($pvpMovePeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMovePeriod) === 0){
 				$this->pvpMoveBroadcastPending = false;
 				$this->broadcastMovement();
@@ -1599,7 +1600,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 			/** [BetterPMMP-PATCH] PvP optimization: pickup scan period - the nearby-entity sweep is
 			 * O(entities around each player) every tick; vanilla pickup delay is 10 ticks anyway */
-			$pvpScanPeriod = $this->pvpPickupScanPeriod ??= (int) $this->server->getConfigGroup()->getProperty('better-pmmp.pvp-optimization.pickup-scan-period', 1);
+			$pvpScanPeriod = $this->pvpPickupScanPeriod ??= (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::PVP_OPTIMIZATION_PICKUP_SCAN_PERIOD, 1);
 			if(!$this->isSpectator() && $this->isAlive() && ($pvpScanPeriod <= 1 || (($currentTick + $this->id) % $pvpScanPeriod) === 0)){
 				Timings::$playerCheckNearEntities->startTiming();
 				$this->checkNearEntities();
@@ -2062,8 +2063,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 		/** [BetterPMMP-PATCH] Configurable critical hit logic */
 		$config = $this->server->getConfigGroup();
-		$critMinFall = (float) $config->getProperty('better-pmmp.critical-hit.min-fall-distance', 0.0);
-		$critIgnoreSprint = (bool) $config->getProperty('better-pmmp.critical-hit.ignore-sprint', false);
+		$critMinFall = (float) $config->getProperty(BetterPMMPProperties::CRITICAL_HIT_MIN_FALL_DISTANCE, 0.0);
+		$critIgnoreSprint = (bool) $config->getProperty(BetterPMMPProperties::CRITICAL_HIT_IGNORE_SPRINT, false);
 		if(($critIgnoreSprint || !$this->isSprinting()) && !$this->isFlying() && $this->fallDistance > $critMinFall && !$this->effectManager->has(VanillaEffects::BLINDNESS()) && !$this->isUnderwater()){
 			$ev->setModifier($ev->getFinalDamage() / 2, EntityDamageEvent::MODIFIER_CRITICAL);
 		}
