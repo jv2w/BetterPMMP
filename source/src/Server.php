@@ -1011,7 +1011,7 @@ class Server{
 
 			$this->commandMap = new SimpleCommandMap($this);
 
-			/* [BetterPMMP-PATCH] vanilla-recipe-skip: gate the one-time recipe JSON deserialization behind a
+			/** [BetterPMMP-PATCH] vanilla-recipe-skip: gate the one-time recipe JSON deserialization behind a
 			 * config toggle. Default true reproduces vanilla byte-for-byte (a missing key returns true). When
 			 * false, skip the JsonMapper pass plus per-recipe base64+NBT decode and construct an empty
 			 * CraftingManager - it still seeds empty per-type furnace managers, so getCraftingManager() and

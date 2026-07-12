@@ -73,8 +73,8 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 			$writer->clear(); //memory reuse let's gooooo
 			$buffer = NetworkSession::encodePacketTimed($writer, $packet);
 			//varint length prefix + packet buffer
-			//[BetterPMMP-PATCH: inline varint length] replace libm log() with a branch-predicted
-			//bit-range lookup (byte-perfect parity with vanilla log-truncation across all reachable lengths)
+			/** [BetterPMMP-PATCH] inline varint length: replace libm log() with a branch-predicted
+			 * bit-range lookup (byte-perfect parity with vanilla log-truncation across all reachable lengths) */
 			$len = strlen($buffer);
 			$totalLength += ($len <= 0x7F ? 1 : ($len <= 0x3FFF ? 2 : ($len <= 0x1FFFFF ? 3 : ($len <= 0xFFFFFFF ? 4 : 5)))) + $len;
 			$packetBuffers[] = $buffer;
