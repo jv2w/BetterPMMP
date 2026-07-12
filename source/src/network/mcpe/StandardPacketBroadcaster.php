@@ -24,6 +24,7 @@ declare(strict_types=1);
 namespace pocketmine\network\mcpe;
 
 use pmmp\encoding\ByteBufferWriter;
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\network\mcpe\protocol\serializer\PacketBatch;
 use pocketmine\Server;
@@ -45,7 +46,7 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 		if(DataPacketSendEvent::hasHandlers()
 			&& !(count($packets) === 1
 				&& (($packets[0] ?? null) instanceof \pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket || ($packets[0] ?? null) instanceof \pocketmine\network\mcpe\protocol\SetActorMotionPacket)
-				&& (bool) $this->server->getConfigGroup()->getProperty('better-pmmp.event-optimization.skip-movement-send-event', false))){
+				&& (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::EVENT_OPTIMIZATION_SKIP_MOVEMENT_SEND_EVENT, false))){
 			$ev = new DataPacketSendEvent($recipients, $packets);
 			$ev->call();
 			if($ev->isCancelled()){
