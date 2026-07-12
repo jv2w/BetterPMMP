@@ -125,7 +125,7 @@ class ItemEntity extends Entity{
 
 			/** [BetterPMMP-PATCH] PvP optimization: item merging toggle */
 			if($this->hasMovementUpdate() && $this->isMergeCandidate() && $this->despawnDelay % self::MERGE_CHECK_PERIOD === 0
-				&& (bool) \pocketmine\Server::getInstance()->getConfigGroup()->getProperty('better-pmmp.pvp-optimization.item-merging', true)){
+				&& (bool) \pocketmine\Server::getInstance()->getConfigGroup()->getProperty(\pocketmine\betterpmmp\BetterPMMPProperties::PVP_OPTIMIZATION_ITEM_MERGING, true)){
 				$mergeable = [$this]; //in case the merge target ends up not being this
 				$mergeTarget = $this;
 				foreach($this->getWorld()->getNearbyEntities($this->boundingBox->expandedCopy(0.5, 0.5, 0.5), $this) as $entity){
