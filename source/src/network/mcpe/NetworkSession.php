@@ -26,6 +26,7 @@ namespace pocketmine\network\mcpe;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\DataDecodeException;
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\entity\effect\EffectInstance;
 use pocketmine\event\player\PlayerDuplicateLoginEvent;
 use pocketmine\event\player\PlayerResourcePackOfferEvent;
@@ -548,7 +549,7 @@ class NetworkSession{
 			 * PlayerAuthInputPacket - it arrives 20/s per player and dominates inbound event dispatches */
 			if(DataPacketReceiveEvent::hasHandlers()
 				&& !($packet instanceof \pocketmine\network\mcpe\protocol\PlayerAuthInputPacket
-					&& (bool) $this->server->getConfigGroup()->getProperty('better-pmmp.event-optimization.skip-auth-input-receive-event', false))){
+					&& (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::EVENT_OPTIMIZATION_SKIP_AUTH_INPUT_RECEIVE_EVENT, false))){
 				$ev = new DataPacketReceiveEvent($this, $packet);
 				$ev->call();
 				if($ev->isCancelled()){
@@ -601,7 +602,7 @@ class NetworkSession{
 			 * the largest outbound packet stream (moving entities x viewers x 20/s) */
 			if(DataPacketSendEvent::hasHandlers()
 				&& !(($packet instanceof \pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket || $packet instanceof \pocketmine\network\mcpe\protocol\SetActorMotionPacket)
-					&& (bool) $this->server->getConfigGroup()->getProperty('better-pmmp.event-optimization.skip-movement-send-event', false))){
+					&& (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::EVENT_OPTIMIZATION_SKIP_MOVEMENT_SEND_EVENT, false))){
 				$ev = new DataPacketSendEvent([$this], [$packet]);
 				$ev->call();
 				if($ev->isCancelled()){
