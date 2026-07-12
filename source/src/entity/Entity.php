@@ -26,6 +26,7 @@ declare(strict_types=1);
  */
 namespace pocketmine\entity;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\block\Block;
 use pocketmine\block\Water;
 use pocketmine\entity\animation\Animation;
@@ -795,7 +796,7 @@ abstract class Entity{
 			/** [BetterPMMP-PATCH] PvP optimization: movement broadcast period - skip off-cycle sends.
 			 * lastLocation is left untouched on skip, so the accumulated diff re-enters this branch
 			 * and the final position is still broadcast after the entity stops moving. */
-			$pvpMovePeriod = $this->pvpMovementBroadcastPeriod ??= (int) $this->server->getConfigGroup()->getProperty('better-pmmp.pvp-optimization.movement-broadcast-period', 1);
+			$pvpMovePeriod = $this->pvpMovementBroadcastPeriod ??= (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::PVP_OPTIMIZATION_MOVEMENT_BROADCAST_PERIOD, 1);
 			if($teleport || $pvpMovePeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMovePeriod) === 0){
 				$this->lastLocation = $this->location->asLocation();
 

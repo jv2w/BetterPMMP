@@ -27,6 +27,7 @@ declare(strict_types=1);
  */
 namespace pocketmine;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
 use pocketmine\command\SimpleCommandMap;
@@ -1010,12 +1011,12 @@ class Server{
 
 			$this->commandMap = new SimpleCommandMap($this);
 
-			/* [BetterPMMP-PATCH] vanilla-recipe-skip: gate the one-time recipe JSON deserialization behind a
+			/** [BetterPMMP-PATCH] vanilla-recipe-skip: gate the one-time recipe JSON deserialization behind a
 			 * config toggle. Default true reproduces vanilla byte-for-byte (a missing key returns true). When
 			 * false, skip the JsonMapper pass plus per-recipe base64+NBT decode and construct an empty
 			 * CraftingManager - it still seeds empty per-type furnace managers, so getCraftingManager() and
 			 * CraftingDataCache stay valid and every recipe lookup simply matches nothing. */
-			if($this->configGroup->getPropertyBool('better-pmmp.load-vanilla-recipes', true)){
+			if($this->configGroup->getPropertyBool(BetterPMMPProperties::LOAD_VANILLA_RECIPES, true)){
 				$this->craftingManager = CraftingManagerFromDataHelper::make(BedrockDataFiles::RECIPES);
 			}else{
 				$this->craftingManager = new CraftingManager();

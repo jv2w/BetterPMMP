@@ -46,7 +46,7 @@ class AttributeMap{
 	 * @return Attribute[]
 	 */
 	public function needSend() : array{
-		/* [BetterPMMP-PATCH] Manual needSend collect: drop the array_filter closure (per-element zend_call)
+		/** [BetterPMMP-PATCH] Manual needSend collect: drop the array_filter closure (per-element zend_call)
 		 * and share the empty array on the common zero-dirty case. Both consumers ignore keys, so the
 		 * re-indexed list is observably identical to the key-preserved filtered map. */
 		$dirty = [];
