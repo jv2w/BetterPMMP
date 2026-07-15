@@ -811,7 +811,7 @@ class Server{
 			$this->dataPath = realpath($dataPath) . DIRECTORY_SEPARATOR;
 			$this->pluginPath = realpath($pluginPath) . DIRECTORY_SEPARATOR;
 
-			$this->logger->info("Loading server configuration");
+			/** [BetterPMMP-PATCH] "Loading server configuration" startup log removed */
 			$pocketmineYmlPath = Path::join($this->dataPath, "pocketmine.yml");
 			/** [BetterPMMP-PATCH] Resolve the selected language, then localize pocketmine.yml comments to it */
 			$serverPropertiesPath = Path::join($this->dataPath, "server.properties");
@@ -887,7 +887,7 @@ class Server{
 				}
 			}
 
-			$this->logger->info($this->language->translate(KnownTranslationFactory::language_selected($this->language->getName(), $this->language->getLang())));
+			/** [BetterPMMP-PATCH] language.selected startup log removed */
 
 			if(VersionInfo::IS_DEVELOPMENT_BUILD){
 				if(!$this->configGroup->getPropertyBool(Yml::SETTINGS_ENABLE_DEV_BUILDS, false)){
@@ -1024,10 +1024,7 @@ class Server{
 			$this->network = new Network($this->logger);
 			$this->network->setName($this->getMotd());
 
-			$this->logger->info($this->language->translate(KnownTranslationFactory::pocketmine_server_info(
-				$this->getName(),
-				(VersionInfo::IS_DEVELOPMENT_BUILD ? TextFormat::YELLOW : "") . $this->getPocketMineVersion() . TextFormat::RESET
-			)));
+			/** [BetterPMMP-PATCH] pocketmine.server.info startup log removed */
 			$this->logger->info($this->language->translate(KnownTranslationFactory::pocketmine_server_license($this->getName())));
 
 			DefaultPermissions::registerCorePermissions();
@@ -1278,9 +1275,7 @@ class Server{
 			)));
 			return false;
 		}
-		if($rakLibRegistered){
-			$this->logger->info($this->language->translate(KnownTranslationFactory::pocketmine_server_networkStart($prettyIp, (string) $port)));
-		}
+		/** [BetterPMMP-PATCH] pocketmine.server.networkStart log removed */
 		if($useQuery){
 			if(!$rakLibRegistered){
 				//RakLib would normally handle the transport for Query packets

@@ -31,7 +31,8 @@ use function str_repeat;
 
 final class VersionInfo{
 	public const NAME = "PocketMine-MP";
-	public const BASE_VERSION = "5.44.3";
+	/** [BetterPMMP-PATCH] BetterPMMP version identity; upstream base remains PocketMine-MP 5.44.3 (see NOTICE) */
+	public const BASE_VERSION = "1.0.0";
 	public const IS_DEVELOPMENT_BUILD = false;
 	public const BUILD_CHANNEL = "stable";
 	public const GITHUB_URL = "https://github.com/pmmp/PocketMine-MP";
