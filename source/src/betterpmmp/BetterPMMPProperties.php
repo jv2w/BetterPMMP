@@ -74,4 +74,7 @@ final class BetterPMMPProperties{
 	/* Critical hit tuning. */
 	public const CRITICAL_HIT_IGNORE_SPRINT = 'better-pmmp.critical-hit.ignore-sprint';
 	public const CRITICAL_HIT_MIN_FALL_DISTANCE = 'better-pmmp.critical-hit.min-fall-distance';
+
+	/* Network: prefer Snappy packet compression over zlib (cheaper CPU, higher bandwidth). Requires ext-snappy. */
+	public const NETWORK_SNAPPY_COMPRESSION = 'better-pmmp.network.snappy-compression';
 }

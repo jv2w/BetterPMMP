@@ -24,8 +24,11 @@ declare(strict_types=1);
 namespace pocketmine\network\mcpe\raklib;
 
 use pmmp\thread\ThreadSafeArray;
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\lang\KnownTranslationFactory;
 use pocketmine\network\AdvancedNetworkInterface;
+use pocketmine\network\mcpe\compression\Compressor;
+use pocketmine\network\mcpe\compression\SnappyCompressor;
 use pocketmine\network\mcpe\compression\ZlibCompressor;
 use pocketmine\network\mcpe\convert\TypeConverter;
 use pocketmine\network\mcpe\EntityEventBroadcaster;
@@ -84,6 +87,8 @@ class RakLibInterface implements ServerEventListener, AdvancedNetworkInterface{
 	private PacketBroadcaster $packetBroadcaster;
 	private EntityEventBroadcaster $entityEventBroadcaster;
 	private TypeConverter $typeConverter;
+	/** [BetterPMMP-PATCH] Compressor shared by every session on this interface, resolved once at startup. */
+	private Compressor $compressor;
 
 	public function __construct(
 		Server $server,
@@ -98,6 +103,10 @@ class RakLibInterface implements ServerEventListener, AdvancedNetworkInterface{
 		$this->packetBroadcaster = $packetBroadcaster;
 		$this->entityEventBroadcaster = $entityEventBroadcaster;
 		$this->typeConverter = $typeConverter;
+		/** [BetterPMMP-PATCH] Prefer Snappy (cheaper CPU, lower MSPT on the sync compress path) when enabled and ext-snappy is present; otherwise zlib. */
+		$this->compressor = (bool) $server->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_SNAPPY_COMPRESSION, false) && SnappyCompressor::isAvailable() ?
+			SnappyCompressor::getInstance() :
+			ZlibCompressor::getInstance();
 
 		$this->rakServerId = mt_rand(0, PHP_INT_MAX);
 
@@ -191,7 +200,7 @@ class RakLibInterface implements ServerEventListener, AdvancedNetworkInterface{
 			new RakLibPacketSender($sessionId, $this),
 			$this->packetBroadcaster,
 			$this->entityEventBroadcaster,
-			ZlibCompressor::getInstance(), //TODO: this shouldn't be hardcoded, but we might need the RakNet protocol version to select it
+			$this->compressor, /** [BetterPMMP-PATCH] config-selected compressor (snappy/zlib) instead of hardcoded zlib */
 			$this->typeConverter,
 			$address,
 			$port

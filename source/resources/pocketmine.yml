@@ -243,6 +243,14 @@ better-pmmp:
   neighbour-update-limit: 512
   # Block state and collision cache size per world. Higher values reduce getBlockAt() cost.
   block-cache-size: 8192
+  # [BetterPMMP-PATCH] Network packet compression algorithm.
+  # false (default) = zlib: vanilla behaviour, best compression ratio, higher CPU cost.
+  # true = Snappy: much cheaper CPU compression (lower MSPT on the synchronous compress path) in exchange
+  # for a lower compression ratio (more bandwidth). Both are understood by the Bedrock client, which is told
+  # during the handshake which algorithm the server uses, so no client-side change is needed.
+  # Requires the `snappy` PHP extension. When true but the extension is missing, the server falls back to zlib.
+  network:
+    snappy-compression: false
   # [BetterPMMP-PATCH] Vanilla crafting recipe registration toggle.
   # true (default) = vanilla: load all recipe JSON (crafting, furnace, brewing, campfire) at startup.
   # false = skip vanilla recipe JSON deserialization at startup and boot with an empty CraftingManager.
