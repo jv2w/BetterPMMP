@@ -1264,7 +1264,6 @@ class Server{
 		EntityEventBroadcaster $entityEventBroadcaster,
 		TypeConverter $typeConverter
 	) : bool{
-		$prettyIp = $ipV6 ? "[$ip]" : $ip;
 		try{
 			$rakLibRegistered = $this->network->registerInterface(new RakLibInterface($this, $ip, $port, $ipV6, $packetBroadcaster, $entityEventBroadcaster, $typeConverter));
 		}catch(NetworkInterfaceStartException $e){
@@ -1282,7 +1281,7 @@ class Server{
 				//if it's not registered we need to make sure Query still works
 				$this->network->registerInterface(new DedicatedQueryNetworkInterface($ip, $port, $ipV6, new \PrefixedLogger($this->logger, "Dedicated Query Interface")));
 			}
-			$this->logger->info($this->language->translate(KnownTranslationFactory::pocketmine_server_query_running($prettyIp, (string) $port)));
+			/** [BetterPMMP-PATCH] pocketmine.server.query.running log removed */
 		}
 		return true;
 	}

@@ -97,7 +97,7 @@ class ResourcePackManager{
 
 		$this->serverForceResources = (bool) $resourcePacksConfig->get("force_resources", false);
 
-		$logger->info("Loading resource packs...");
+		/** [BetterPMMP-PATCH] "Loading resource packs..." log removed */
 
 		$resourceStack = $resourcePacksConfig->get("resource_stack", []);
 		if(!is_array($resourceStack)){
