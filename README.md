@@ -19,6 +19,7 @@ The performance improvements are on from the start and leave gameplay untouched.
 - **Restart Command**: `/restart`, backed by a restart loop in `start.cmd`. Source edits are picked up across a clean process boundary.
 - **Run From Source**: `start.cmd` runs `source/src/PocketMine.php` directly instead of a `.phar`, so edits take effect on the next start.
 - **Cleaner Logs & Paths**: tidier startup output and consolidated data / log / crashdump directories.
+- **Localized Config Comments**: the documentation comments in `pocketmine.yml` and `resource_packs.yml` render in the language you pick in the setup wizard, and re-translate when you change it in `server.properties`.
 
 ### Performance
 
@@ -27,6 +28,7 @@ The performance improvements are on from the start and leave gameplay untouched.
 - **Per-World View Distance**: override `view-distance` per world (handy for lobbies).
 - **Per-World Chunk Ticking**: set `tick-radius` and `blocks-per-subchunk-per-tick` per world; set both to `0` to disable random ticking entirely.
 - **Event & Network Tuning**: event-bus fast paths, dirty-tracked attribute syncs, cheaper packet framing, block and neighbour-update caching, and assorted engine fixes.
+- **Snappy Compression**: opt-in Snappy packet compression as a lighter-CPU alternative to zlib; enable in `pocketmine.yml` (needs the `snappy` PHP extension).
 - **PvP Toggles**: opt-in switches for vanilla systems an arena server rarely needs: runtime light updates, XP orbs, explosion block destruction, item merging, and empty-world ticking.
 
 ### Gameplay

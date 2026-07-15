@@ -18,34 +18,25 @@ settings:
 memory:
   #!pocketmine.yml.memory.global-limit
   global-limit: 0
-
   #!pocketmine.yml.memory.main-limit
   main-limit: 0
-
   #!pocketmine.yml.memory.main-hard-limit
   main-hard-limit: 1024
-
   #!pocketmine.yml.memory.async-worker-hard-limit
   async-worker-hard-limit: 256
-
   #!pocketmine.yml.memory.check-rate
   check-rate: 20
-
   #!pocketmine.yml.memory.continuous-trigger
   continuous-trigger: true
-
   #!pocketmine.yml.memory.continuous-trigger-rate
   continuous-trigger-rate: 30
-
   garbage-collection:
     #!pocketmine.yml.memory.garbage-collection.period
     period: 36000
-
   #!pocketmine.yml.memory.memory-dump
   memory-dump:
     #!pocketmine.yml.memory.memory-dump.dump-async-worker
     dump-async-worker: true
-
   max-chunks:
     #!pocketmine.yml.memory.max-chunks.chunk-radius
     chunk-radius: 4
@@ -194,6 +185,7 @@ better-pmmp:
       batch-recheck-limit: 64
       #! pocketmine.betterpmmp.yml.world.chunk-ticking.per-world
       per-world: {}
+
   #! pocketmine.betterpmmp.yml.lighting
   lighting:
     #! pocketmine.betterpmmp.yml.lighting.fixed-light
@@ -202,6 +194,7 @@ better-pmmp:
     fixed-light-level: 15
     #! pocketmine.betterpmmp.yml.lighting.skip-runtime-updates
     skip-runtime-updates: false
+
   #! pocketmine.betterpmmp.yml.entities
   entities:
     #! pocketmine.betterpmmp.yml.entities.item-merging
@@ -212,6 +205,7 @@ better-pmmp:
     xp-orbs: true
     #! pocketmine.betterpmmp.yml.entities.pickup-scan-period
     pickup-scan-period: 1
+
   #! pocketmine.betterpmmp.yml.combat
   combat:
     #! pocketmine.betterpmmp.yml.combat.critical-hit-ignore-sprint
@@ -220,6 +214,7 @@ better-pmmp:
     critical-hit-min-fall-distance: 0.0
     #! pocketmine.betterpmmp.yml.combat.explosion-block-destruction
     explosion-block-destruction: true
+
   #! pocketmine.betterpmmp.yml.network
   network:
     #! pocketmine.betterpmmp.yml.network.snappy-compression
@@ -230,10 +225,12 @@ better-pmmp:
     skip-movement-send-event: false
     #! pocketmine.betterpmmp.yml.network.skip-auth-input-receive-event
     skip-auth-input-receive-event: false
+
   #! pocketmine.betterpmmp.yml.events
   events:
     #! pocketmine.betterpmmp.yml.events.move-event-period
     move-event-period: 1
+    
   #! pocketmine.betterpmmp.yml.recipes
   recipes:
     #! pocketmine.betterpmmp.yml.recipes.load-vanilla

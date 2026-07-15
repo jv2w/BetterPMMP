@@ -1,5 +1,5 @@
 @echo off
-TITLE §aBetterPMMP By UserX0001
+TITLE BetterPMMP By UserX0001
 cd /d %~dp0
 
 set PHP_BINARY=

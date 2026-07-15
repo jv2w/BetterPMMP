@@ -1013,7 +1013,8 @@ class Server{
 				$this->configGroup->setConfigInt(ServerProperties::DIFFICULTY, World::DIFFICULTY_HARD);
 			}
 
-			@cli_set_process_title($this->getName() . " " . $this->getPocketMineVersion());
+			/** [BetterPMMP-PATCH] Console title brand */
+			@cli_set_process_title("BetterPMMP {$this->getPocketMineVersion()}");
 
 			$this->serverID = Utils::getMachineUniqueId($this->getIp() . $this->getPort());
 
@@ -1871,7 +1872,8 @@ class Server{
 		$connecting = $this->network->getConnectionCount() - $online;
 		$bandwidthStats = $this->network->getBandwidthTracker();
 
-		echo "\x1b]0;" . $this->getName() . " " .
+		/** [BetterPMMP-PATCH] Console title brand */
+		echo "\x1b]0;BetterPMMP " .
 			$this->getPocketMineVersion() .
 			" | Online $online/" . $this->maxPlayers .
 			($connecting > 0 ? " (+$connecting connecting)" : "") .

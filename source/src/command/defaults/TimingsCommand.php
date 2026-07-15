@@ -104,7 +104,8 @@ class TimingsCommand extends VanillaCommand{
 					fn() => throw new AssumptionFailedError("This promise is not expected to be rejected")
 				);
 			}else{
-				TimingsHandler::createReportFile(Path::join($sender->getServer()->getDataPath(), "timings"))->onCompletion(
+				//[BetterPMMP-PATCH] timings reports now live under system/ alongside other server files
+				TimingsHandler::createReportFile(Path::join($sender->getServer()->getDataPath(), "system", "timings"))->onCompletion(
 					function(string $timingsFile) use ($sender) : void{
 						Command::broadcastCommandMessage($sender, KnownTranslationFactory::pocketmine_command_timings_timingsWrite($timingsFile));
 					},

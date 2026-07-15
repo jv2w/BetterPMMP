@@ -43,7 +43,8 @@ $commandTokenSeed = (int) $argv[1];
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
-@cli_set_process_title('PocketMine-MP Console Reader');
+/** [BetterPMMP-PATCH] Console title brand */
+@cli_set_process_title('BetterPMMP Console Reader');
 
 /** @phpstan-var ThreadSafeArray<int, string> $channel */
 $channel = new ThreadSafeArray();
