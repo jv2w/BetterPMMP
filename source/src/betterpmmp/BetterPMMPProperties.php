@@ -40,41 +40,32 @@ final class BetterPMMPProperties{
 		//NOOP
 	}
 
-	/* Fixed light: skip async LightPopulationTask and fill light arrays with a constant. */
-	public const FIXED_LIGHT_ENABLED = 'better-pmmp.fixed-light.enabled';
-	public const FIXED_LIGHT_LEVEL = 'better-pmmp.fixed-light.level';
+	public const WORLD_BLOCK_CACHE_SIZE = 'better-pmmp.world.block-cache-size';
+	public const WORLD_NEIGHBOUR_UPDATE_LIMIT = 'better-pmmp.world.neighbour-update-limit';
+	public const WORLD_FREEZE_EMPTY_WORLDS = 'better-pmmp.world.freeze-empty-worlds';
+	public const WORLD_VIEW_DISTANCE_PER_WORLD = 'better-pmmp.world.view-distance-per-world';
+	public const WORLD_CHUNK_TICKING_BATCH_RECHECK_LIMIT = 'better-pmmp.world.chunk-ticking.batch-recheck-limit';
+	public const WORLD_CHUNK_TICKING_PER_WORLD = 'better-pmmp.world.chunk-ticking.per-world';
 
-	/* Per-world overrides, keyed by world folder name. */
-	public const PER_WORLD_VIEW_DISTANCE = 'better-pmmp.per-world-view-distance';
-	public const PER_WORLD_CHUNK_TICKING = 'better-pmmp.per-world-chunk-ticking';
+	public const LIGHTING_FIXED_LIGHT = 'better-pmmp.lighting.fixed-light';
+	public const LIGHTING_FIXED_LIGHT_LEVEL = 'better-pmmp.lighting.fixed-light-level';
+	public const LIGHTING_SKIP_RUNTIME_UPDATES = 'better-pmmp.lighting.skip-runtime-updates';
 
-	/* Engine throttles shared across worlds. */
-	public const CHUNK_OPTIMIZATION_BATCH_RECHECK_LIMIT = 'better-pmmp.chunk-optimization.batch-recheck-limit';
-	public const NEIGHBOUR_UPDATE_LIMIT = 'better-pmmp.neighbour-update-limit';
-	public const BLOCK_CACHE_SIZE = 'better-pmmp.block-cache-size';
+	public const ENTITIES_ITEM_MERGING = 'better-pmmp.entities.item-merging';
+	public const ENTITIES_ITEM_DESPAWN_TICKS = 'better-pmmp.entities.item-despawn-ticks';
+	public const ENTITIES_XP_ORBS = 'better-pmmp.entities.xp-orbs';
+	public const ENTITIES_PICKUP_SCAN_PERIOD = 'better-pmmp.entities.pickup-scan-period';
 
-	/* One-time startup toggle for vanilla recipe registration. */
-	public const LOAD_VANILLA_RECIPES = 'better-pmmp.load-vanilla-recipes';
+	public const COMBAT_CRITICAL_HIT_IGNORE_SPRINT = 'better-pmmp.combat.critical-hit-ignore-sprint';
+	public const COMBAT_CRITICAL_HIT_MIN_FALL_DISTANCE = 'better-pmmp.combat.critical-hit-min-fall-distance';
+	public const COMBAT_EXPLOSION_BLOCK_DESTRUCTION = 'better-pmmp.combat.explosion-block-destruction';
 
-	/* PvP server optimization: opt-in toggles for vanilla systems arena servers rarely need. */
-	public const PVP_OPTIMIZATION_SKIP_LIGHT_UPDATES = 'better-pmmp.pvp-optimization.skip-light-updates';
-	public const PVP_OPTIMIZATION_XP_ORBS = 'better-pmmp.pvp-optimization.xp-orbs';
-	public const PVP_OPTIMIZATION_EXPLOSION_BLOCK_DESTRUCTION = 'better-pmmp.pvp-optimization.explosion-block-destruction';
-	public const PVP_OPTIMIZATION_ITEM_MERGING = 'better-pmmp.pvp-optimization.item-merging';
-	public const PVP_OPTIMIZATION_ITEM_DESPAWN_TICKS = 'better-pmmp.pvp-optimization.item-despawn-ticks';
-	public const PVP_OPTIMIZATION_MOVEMENT_BROADCAST_PERIOD = 'better-pmmp.pvp-optimization.movement-broadcast-period';
-	public const PVP_OPTIMIZATION_PICKUP_SCAN_PERIOD = 'better-pmmp.pvp-optimization.pickup-scan-period';
-	public const PVP_OPTIMIZATION_FREEZE_EMPTY_WORLDS = 'better-pmmp.pvp-optimization.freeze-empty-worlds';
-
-	/* Event engine optimization: decimate the hottest event call sites. */
-	public const EVENT_OPTIMIZATION_MOVE_EVENT_PERIOD = 'better-pmmp.event-optimization.move-event-period';
-	public const EVENT_OPTIMIZATION_SKIP_AUTH_INPUT_RECEIVE_EVENT = 'better-pmmp.event-optimization.skip-auth-input-receive-event';
-	public const EVENT_OPTIMIZATION_SKIP_MOVEMENT_SEND_EVENT = 'better-pmmp.event-optimization.skip-movement-send-event';
-
-	/* Critical hit tuning. */
-	public const CRITICAL_HIT_IGNORE_SPRINT = 'better-pmmp.critical-hit.ignore-sprint';
-	public const CRITICAL_HIT_MIN_FALL_DISTANCE = 'better-pmmp.critical-hit.min-fall-distance';
-
-	/* Network: prefer Snappy packet compression over zlib (cheaper CPU, higher bandwidth). Requires ext-snappy. */
 	public const NETWORK_SNAPPY_COMPRESSION = 'better-pmmp.network.snappy-compression';
+	public const NETWORK_MOVEMENT_BROADCAST_PERIOD = 'better-pmmp.network.movement-broadcast-period';
+	public const NETWORK_SKIP_MOVEMENT_SEND_EVENT = 'better-pmmp.network.skip-movement-send-event';
+	public const NETWORK_SKIP_AUTH_INPUT_RECEIVE_EVENT = 'better-pmmp.network.skip-auth-input-receive-event';
+
+	public const EVENTS_MOVE_EVENT_PERIOD = 'better-pmmp.events.move-event-period';
+
+	public const RECIPES_LOAD_VANILLA = 'better-pmmp.recipes.load-vanilla';
 }

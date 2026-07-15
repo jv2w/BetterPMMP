@@ -46,7 +46,7 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 		if(DataPacketSendEvent::hasHandlers()
 			&& !(count($packets) === 1
 				&& (($packets[0] ?? null) instanceof \pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket || ($packets[0] ?? null) instanceof \pocketmine\network\mcpe\protocol\SetActorMotionPacket)
-				&& (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::EVENT_OPTIMIZATION_SKIP_MOVEMENT_SEND_EVENT, false))){
+				&& (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_SKIP_MOVEMENT_SEND_EVENT, false))){
 			$ev = new DataPacketSendEvent($recipients, $packets);
 			$ev->call();
 			if($ev->isCancelled()){

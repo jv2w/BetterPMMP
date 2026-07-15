@@ -23,13 +23,14 @@ declare(strict_types=1);
 
 namespace pocketmine\resourcepacks;
 
+use pocketmine\betterpmmp\BetterPMMPConfigComments;
+use pocketmine\lang\Language;
 use pocketmine\utils\Config;
 use pocketmine\utils\Filesystem;
 use pocketmine\utils\Utils;
 use Ramsey\Uuid\Uuid;
 use Symfony\Component\Filesystem\Path;
 use function array_keys;
-use function copy;
 use function count;
 use function file_exists;
 use function gettype;
@@ -69,7 +70,7 @@ class ResourcePackManager{
 	/**
 	 * @param string $path Path to resource-packs directory.
 	 */
-	public function __construct(string $path, \Logger $logger){
+	public function __construct(string $path, \Logger $logger, Language $lang){
 		$this->path = $path;
 
 		if(!file_exists($this->path)){
@@ -80,8 +81,16 @@ class ResourcePackManager{
 		}
 
 		$resourcePacksYml = Path::join($this->path, "resource_packs.yml");
+		/** [BetterPMMP-PATCH] Localize resource_packs.yml comments to the wizard-selected language, and re-localize on language change */
+		$template = Filesystem::fileGetContents(Path::join(\pocketmine\RESOURCE_PATH, "resource_packs.yml"));
 		if(!file_exists($resourcePacksYml)){
-			copy(Path::join(\pocketmine\RESOURCE_PATH, "resource_packs.yml"), $resourcePacksYml);
+			Filesystem::safeFilePutContents($resourcePacksYml, BetterPMMPConfigComments::render($template, $lang));
+		}else{
+			$existing = Filesystem::fileGetContents($resourcePacksYml);
+			$relocalized = BetterPMMPConfigComments::retranslate($existing, $template, $lang);
+			if($relocalized !== $existing){
+				Filesystem::safeFilePutContents($resourcePacksYml, $relocalized);
+			}
 		}
 
 		$resourcePacksConfig = new Config($resourcePacksYml, Config::YAML, []);

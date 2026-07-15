@@ -25,6 +25,7 @@ namespace pocketmine\command\defaults;
 
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
+use pocketmine\lang\Translatable;
 use pocketmine\permission\DefaultPermissionNames;
 
 /** [BetterPMMP-PATCH] */
@@ -33,7 +34,7 @@ class RestartCommand extends VanillaCommand{
 	public function __construct(){
 		parent::__construct(
 			"restart",
-			"Restart the server"
+			new Translatable("pocketmine.command.restart.description")
 		);
 		$this->setPermission(DefaultPermissionNames::COMMAND_STOP);
 	}
@@ -42,7 +43,7 @@ class RestartCommand extends VanillaCommand{
 		$restartFlag = dirname(__FILE__, 5) . DIRECTORY_SEPARATOR . 'system' . DIRECTORY_SEPARATOR . 'restart.flag';
 		file_put_contents($restartFlag, '1');
 
-		Command::broadcastCommandMessage($sender, "§eServer is restarting...");
+		Command::broadcastCommandMessage($sender, new Translatable("pocketmine.command.restart.start"));
 
 		$sender->getServer()->shutdown();
 		return true;

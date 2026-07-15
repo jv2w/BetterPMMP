@@ -27,6 +27,7 @@ declare(strict_types=1);
  */
 namespace pocketmine;
 
+use pocketmine\betterpmmp\BetterPMMPConfigComments;
 use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
@@ -812,12 +813,33 @@ class Server{
 
 			$this->logger->info("Loading server configuration");
 			$pocketmineYmlPath = Path::join($this->dataPath, "pocketmine.yml");
+			/** [BetterPMMP-PATCH] Resolve the selected language, then localize pocketmine.yml comments to it */
+			$serverPropertiesPath = Path::join($this->dataPath, "server.properties");
+			$commentLangCode = Language::FALLBACK_LANGUAGE;
+			if(file_exists($serverPropertiesPath)){
+				$configuredLang = (new Config($serverPropertiesPath, Config::PROPERTIES))->get(ServerProperties::LANGUAGE, Language::FALLBACK_LANGUAGE);
+				if(is_string($configuredLang)){
+					$commentLangCode = $configuredLang;
+				}
+			}
+			try{
+				$commentLang = new Language($commentLangCode);
+			}catch(LanguageNotFoundException){
+				$commentLang = new Language(Language::FALLBACK_LANGUAGE);
+			}
+			$pocketmineYmlTemplate = Filesystem::fileGetContents(Path::join(\pocketmine\RESOURCE_PATH, "pocketmine.yml"));
 			if(!file_exists($pocketmineYmlPath)){
-				$content = Filesystem::fileGetContents(Path::join(\pocketmine\RESOURCE_PATH, "pocketmine.yml"));
+				$content = $pocketmineYmlTemplate;
 				if(VersionInfo::IS_DEVELOPMENT_BUILD){
 					$content = str_replace("preferred-channel: stable", "preferred-channel: beta", $content);
 				}
-				@file_put_contents($pocketmineYmlPath, $content);
+				@file_put_contents($pocketmineYmlPath, BetterPMMPConfigComments::render($content, $commentLang));
+			}else{
+				$existingYml = Filesystem::fileGetContents($pocketmineYmlPath);
+				$relocalizedYml = BetterPMMPConfigComments::retranslate($existingYml, $pocketmineYmlTemplate, $commentLang);
+				if($relocalizedYml !== $existingYml){
+					@file_put_contents($pocketmineYmlPath, $relocalizedYml);
+				}
 			}
 
 			$this->configGroup = new ServerConfigGroup(
@@ -1016,13 +1038,13 @@ class Server{
 			 * false, skip the JsonMapper pass plus per-recipe base64+NBT decode and construct an empty
 			 * CraftingManager - it still seeds empty per-type furnace managers, so getCraftingManager() and
 			 * CraftingDataCache stay valid and every recipe lookup simply matches nothing. */
-			if($this->configGroup->getPropertyBool(BetterPMMPProperties::LOAD_VANILLA_RECIPES, true)){
+			if($this->configGroup->getPropertyBool(BetterPMMPProperties::RECIPES_LOAD_VANILLA, true)){
 				$this->craftingManager = CraftingManagerFromDataHelper::make(BedrockDataFiles::RECIPES);
 			}else{
 				$this->craftingManager = new CraftingManager();
 			}
 
-			$this->resourceManager = new ResourcePackManager(Path::join($this->dataPath, "resource_packs"), $this->logger);
+			$this->resourceManager = new ResourcePackManager(Path::join($this->dataPath, "resource_packs"), $this->logger, $this->language);
 
 			$pluginGraylist = null;
 			$graylistFile = Path::join($this->dataPath, "system", "plugin_list.yml");

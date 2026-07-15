@@ -1,131 +1,111 @@
-# Main configuration file for PocketMine-MP
-# These settings are the ones that cannot be included in server.properties
-# Some of these settings are safe, others can break your server if modified incorrectly
-# New settings/defaults won't appear automatically in this file when upgrading.
+#!pocketmine.yml.header
 
 settings:
-  #Whether to send all strings translated to server locale or let the device handle them
+  #!pocketmine.yml.settings.force-language
   force-language: false
   shutdown-message: "Server closed"
-  #Allow listing plugins via Query
+  #!pocketmine.yml.settings.query-plugins
   query-plugins: true
-  #Enable plugin and core profiling by default
+  #!pocketmine.yml.settings.enable-profiling
   enable-profiling: false
-  #Will only add results when tick measurement is below or equal to given value (default 20)
+  #!pocketmine.yml.settings.profile-report-trigger
   profile-report-trigger: 20
-  #Number of AsyncTask workers.
-  #Used for plugin asynchronous tasks, world generation, compression and web communication.
-  #Set this approximately to your number of cores.
-  #If set to auto, it'll try to detect the number of cores (or use 2)
+  #!pocketmine.yml.settings.async-workers
   async-workers: auto
-  #Whether to allow running development builds. Dev builds might crash, break your plugins, corrupt your world and more.
-  #It is recommended to avoid using development builds where possible.
+  #!pocketmine.yml.settings.enable-dev-builds
   enable-dev-builds: false
 
 memory:
-  #Global soft memory limit in megabytes. Set to 0 to disable
-  #This will trigger low-memory-triggers and fire an event to free memory when the usage goes over this
+  #!pocketmine.yml.memory.global-limit
   global-limit: 0
 
-  #Main thread soft memory limit in megabytes. Set to 0 to disable
-  #This will trigger low-memory-triggers and fire an event to free memory when the usage goes over this
+  #!pocketmine.yml.memory.main-limit
   main-limit: 0
 
-  #Main thread hard memory limit in megabytes. Set to 0 to disable
-  #This will stop the server when the limit is surpassed
+  #!pocketmine.yml.memory.main-hard-limit
   main-hard-limit: 1024
 
-  #AsyncWorker threads' hard memory limit in megabytes. Set to 0 to disable
-  #This will crash the task currently executing on the worker if the task exceeds the limit
-  #NOTE: THIS LIMIT APPLIES PER WORKER, NOT TO THE WHOLE PROCESS.
+  #!pocketmine.yml.memory.async-worker-hard-limit
   async-worker-hard-limit: 256
 
-  #Period in ticks to check memory (default 1 second)
+  #!pocketmine.yml.memory.check-rate
   check-rate: 20
 
-  #Continue firing low-memory-triggers and event while on low memory
+  #!pocketmine.yml.memory.continuous-trigger
   continuous-trigger: true
 
-  #Only if memory.continuous-trigger is enabled. Specifies the rate in memory.check-rate steps (default 30 seconds)
+  #!pocketmine.yml.memory.continuous-trigger-rate
   continuous-trigger-rate: 30
 
   garbage-collection:
-    #Period in ticks to fire the garbage collector manually (default 30 minutes), set to 0 to disable
-    #This only affects the main thread. Other threads should fire their own collections
+    #!pocketmine.yml.memory.garbage-collection.period
     period: 36000
 
-  #Settings controlling memory dump handling.
+  #!pocketmine.yml.memory.memory-dump
   memory-dump:
-    #Dump memory from async workers as well as the main thread. If you have issues with segfaults when dumping memory, disable this setting.
+    #!pocketmine.yml.memory.memory-dump.dump-async-worker
     dump-async-worker: true
 
   max-chunks:
-    #Cap maximum render distance per player when low memory is triggered. Set to 0 to disable cap.
+    #!pocketmine.yml.memory.max-chunks.chunk-radius
     chunk-radius: 4
 
 network:
-  #Threshold for batching packets, in bytes. Only these packets will be compressed
-  #Set to 0 to compress everything, -1 to disable.
+  #!pocketmine.yml.network.batch-threshold
   batch-threshold: 256
-  #Compression level used when sending batched packets. Higher = more CPU, less bandwidth usage
+  #!pocketmine.yml.network.compression-level
   compression-level: 6
-  #Use AsyncTasks for compression during the main game session. Increases latency, but may reduce main thread load
+  #!pocketmine.yml.network.async-compression
   async-compression: false
-  #Threshold for async compression, in bytes. Only packets larger than this will be compressed asynchronously
-  #Due to large overhead of AsyncTask, async compression isn't worth it except for large packets
+  #!pocketmine.yml.network.async-compression-threshold
   async-compression-threshold: 10000
-  #Experimental. Use UPnP to automatically port forward
+  #!pocketmine.yml.network.upnp-forwarding
   upnp-forwarding: false
-  #Maximum size in bytes of packets sent over the network (default 1492 bytes). Packets larger than this will be
-  #fragmented or split into smaller parts. Clients can request MTU sizes up to but not more than this number.
+  #!pocketmine.yml.network.max-mtu-size
   max-mtu-size: 1492
-  #Enable encryption of Minecraft network traffic. This has an impact on performance, but prevents hackers from stealing sessions and pretending to be other players.
-  #DO NOT DISABLE THIS unless you understand the risks involved.
+  #!pocketmine.yml.network.enable-encryption
   enable-encryption: true
 
 debug:
-  #If > 1, it will show debug messages in the console
+  #!pocketmine.yml.debug.level
   level: 1
 
 player:
-  #Choose whether to enable player data saving.
+  #!pocketmine.yml.player.save-player-data
   save-player-data: true
-  #If true, checks that joining players' Xbox user ID (XUID) match what was previously recorded.
-  #This also prevents non-XBL players using XBL players' usernames to steal their data on servers with xbox-auth=off.
+  #!pocketmine.yml.player.verify-xuid
   verify-xuid: true
 
 level-settings:
-  #The default format that worlds will use when created
+  #!pocketmine.yml.level-settings.default-format
   default-format: leveldb
 
 chunk-sending:
-  #To change server normal render distance, change view-distance in server.properties.
-  #Amount of chunks sent to players per tick
+  #!pocketmine.yml.chunk-sending.per-tick
   per-tick: 4
-  #Radius of chunks that need to be sent before spawning the player
+  #!pocketmine.yml.chunk-sending.spawn-radius
   spawn-radius: 4
 
 chunk-ticking:
-  #Radius of chunks around a player to tick
+  #!pocketmine.yml.chunk-ticking.tick-radius
   tick-radius: 3
-  #Number of blocks inside ticking areas' subchunks that get ticked every tick. Higher values will accelerate events
-  #like tree and plant growth, but at a higher performance cost.
+  #!pocketmine.yml.chunk-ticking.blocks-per-subchunk-per-tick
   blocks-per-subchunk-per-tick: 3
-  #IDs of blocks not to perform random ticking on.
+  #!pocketmine.yml.chunk-ticking.disable-block-ticking
   disable-block-ticking:
     #- grass
     #- ice
     #- fire
 
 chunk-generation:
-  #Max. amount of chunks in the waiting queue to be populated
+  #!pocketmine.yml.chunk-generation.population-queue-size
   population-queue-size: 32
 
 ticks-per:
   autosave: 6000
 
 auto-report:
-  #Send crash reports for processing
+  #!pocketmine.yml.auto-report.enabled
   enabled: true
   send-code: true
   send-settings: true
@@ -134,7 +114,7 @@ auto-report:
   host: crash.pmmp.io
 
 anonymous-statistics:
-  #Sends anonymous statistics for data aggregation, plugin usage tracking
+  #!pocketmine.yml.anonymous-statistics.enabled
   enabled: false #TODO: re-enable this when we have a new stats host
   host: stats.pocketmine.net
 
@@ -142,179 +122,119 @@ auto-updater:
   enabled: true
   on-update:
     warn-console: true
-  #Can be development, alpha, beta or stable.
+  #!pocketmine.yml.auto-updater.preferred-channel
   preferred-channel: stable
-  #If using a development version, it will suggest changing the channel
+  #!pocketmine.yml.auto-updater.suggest-channels
   suggest-channels: true
   host: update.pmmp.io
 
 timings:
-  #Choose the host to use for viewing your timings results.
+  #!pocketmine.yml.timings.host
   host: timings.pmmp.io
 
 console:
-  #Whether to accept commands via the console. If disabled, anything typed on the console will be ignored.
-  #Useful to save resources on headless servers where the console is never used (e.g. hosted server, Docker, etc.)
+  #!pocketmine.yml.console.enable-input
   enable-input: true
-  #Choose whether to enable server stats reporting on the console title.
-  #NOTE: The title ticker will be disabled regardless if console colours are not enabled.
+  #!pocketmine.yml.console.title-tick
   title-tick: true
 
 aliases:
-  ##This section allows you to add, remove or remap command aliases.
-  ##A single alias can call one or more other commands (or aliases).
-  ##Aliases defined here will override any command aliases declared by plugins or PocketMine-MP itself.
+  #!pocketmine.yml.aliases.1
 
-  ##To remove an alias, set it to [], like so (note that prefixed aliases like "pocketmine:stop" will remain and can't
-  ##be removed):
+  #!pocketmine.yml.aliases.2
   #stop: []
 
-  ##Commands are not removed, only their aliases. You can still refer to a command using its full (prefixed)
-  ##name, even if all its aliases are overwritten. The full name is usually something like "pocketmine:commandname" or
-  ##"pluginname:commandname".
+  #!pocketmine.yml.aliases.3
   #abort: [pocketmine:stop]
 
-  ##To add an alias, list the command(s) that it calls:
+  #!pocketmine.yml.aliases.4
   #showtheversion: [version]
   #savestop: [save-all, stop]
 
-  ##To invoke another command with arguments, use $1 to pass the first argument, $2 for the second etc:
+  #!pocketmine.yml.aliases.5
   #giveadmin: [op $1] ## `giveadmin alex` -> `op alex`
   #kill: [suicide, say "I tried to kill $1"] ## `kill alex` -> `suicide` + `say "I tried to kill alex"`
   #giverandom: [give $1 $2, say "Someone has just received a $2!"] ## `giverandom alex diamond` -> `give alex diamond` + `say "Someone has just received a diamond!"`
 
-  ##To make arguments mandatory (so that the command fails if they are not provided), use $$, e.g. $$1, $$2:
+  #!pocketmine.yml.aliases.6
   #makeadmin: [op $$1] ## `makeadmin alex` -> `op alex`, `makeadmin` with no arguments = error
 
-  ##To pass through a range of arguments, put a - (hyphen) after the index:
+  #!pocketmine.yml.aliases.7
   #tpalias: [tp $1-] ## `tpalias 256 70 256` -> `tp 256 70 256` - this passes arguments 1 and everything after it to the `tp` command
 
-  ##To change an existing command alias and make it do something else:
+  #!pocketmine.yml.aliases.8
   #tp: [suicide]
 
 worlds:
-  #These settings will override the generator set in server.properties and allows loading multiple worlds
-  #Example:
+  #!pocketmine.yml.worlds
   #world:
   # seed: 404
   # generator: FLAT
   # preset: 2;bedrock,59xstone,3xdirt,grass;1
 
 plugins:
-  #Setting this to true will cause the legacy structure to be used where plugin data is placed inside the --plugins dir.
-  #False will place plugin data under plugin_data under --data.
-  #This option exists for backwards compatibility with existing installations.
+  #!pocketmine.yml.plugins.legacy-data-dir
   legacy-data-dir: false
 
 # [BetterPMMP-PATCH] Extreme optimization settings
 better-pmmp:
-  # Fixed light: skip async LightPopulationTask entirely.
-  # Fills server-side light arrays with a fixed value instead of running BFS flood-fill on worker threads.
-  # Performance gain: eliminates AsyncTask submission, igbinary serialization, and BFS light calculation.
-  # NOTE: This does NOT affect client-side rendering. Bedrock clients calculate their own lighting.
-  # Server-side light values are used only for mob spawning conditions and similar server logic.
-  fixed-light:
-    enabled: false
-    level: 15
-  # Per-world view distance override. Key MUST be the world FOLDER NAME (the directory name under worlds/),
-  # not the world display name. Overrides server.properties view-distance for that world.
-  # Worlds without an entry use server.properties view-distance.
-  # When a player teleports between worlds, the override is re-evaluated from the player's
-  # originally requested view-distance, so a previous world's override does not leak.
-  # Example:
-  #   lobby: 4
-  #   game: 12
-  per-world-view-distance: {}
-  # Advanced chunk optimization settings.
-  chunk-optimization:
-    # Max chunks to recheck tick eligibility per tick. Prevents tick spikes on mass teleport. 0 = unlimited.
-    batch-recheck-limit: 64
-  # Per-world chunk ticking override. Key MUST be the world FOLDER NAME (same as above).
-  # tick-radius is clamped to this world's per-world-view-distance (or server.properties if not set).
-  # Worlds without an entry inherit the global chunk-ticking settings.
-  # Example:
-  #   lobby:
-  #     tick-radius: 0
-  #     blocks-per-subchunk-per-tick: 0
-  #   game:
-  #     tick-radius: 6
-  per-world-chunk-ticking: {}
-  # Max neighbour block updates processed per tick. Prevents chain-reaction TPS spikes. 0 = unlimited.
-  neighbour-update-limit: 512
-  # Block state and collision cache size per world. Higher values reduce getBlockAt() cost.
-  block-cache-size: 8192
-  # [BetterPMMP-PATCH] Network packet compression algorithm.
-  # false (default) = zlib: vanilla behaviour, best compression ratio, higher CPU cost.
-  # true = Snappy: much cheaper CPU compression (lower MSPT on the synchronous compress path) in exchange
-  # for a lower compression ratio (more bandwidth). Both are understood by the Bedrock client, which is told
-  # during the handshake which algorithm the server uses, so no client-side change is needed.
-  # Requires the `snappy` PHP extension. When true but the extension is missing, the server falls back to zlib.
-  network:
-    snappy-compression: false
-  # [BetterPMMP-PATCH] Vanilla crafting recipe registration toggle.
-  # true (default) = vanilla: load all recipe JSON (crafting, furnace, brewing, campfire) at startup.
-  # false = skip vanilla recipe JSON deserialization at startup and boot with an empty CraftingManager.
-  # Plugins can still register their own recipes. Set false ONLY for a fully plugin-driven crafting/kit
-  # server: this disables ALL vanilla recipes (crafting table, furnace smelting, brewing, campfire).
-  # Benefit is one-time startup CPU saved on every restart (JsonMapper + per-recipe base64/NBT decode).
-  load-vanilla-recipes: true
-  # [BetterPMMP-PATCH] PvP server optimization
-  # Toggles for vanilla systems that PvP-focused servers (lifesteal, KitPvP, arena) rarely need
-  # but that cost real CPU time. Every option defaults to vanilla behaviour - opt in per server.
-  pvp-optimization:
-    # If true, skip ALL runtime light recalculation when blocks change (a main-thread BFS flood
-    # fill per block update). Bedrock clients compute their own lighting for rendering; server-side
-    # light only feeds server logic such as mob spawning, which PvP servers rarely use.
-    # Combine with better-pmmp.fixed-light to also skip light population on chunk load.
-    skip-light-updates: false
-    # If false, XP orb entities are never spawned (player/mob kills, mining, smelting).
-    # Every orb re-scans for the nearest player and re-checks block obstruction each tick.
-    xp-orbs: true
-    # If false, explosions (TNT, end crystals, respawn anchors) still damage and knock back
-    # entities but never destroy blocks - the entire ray-tracing block destruction pass and the
-    # following block/light updates and item drops are skipped. Also protects arenas from grief.
-    explosion-block-destruction: true
-    # If false, dropped items never merge into stacks, skipping the periodic nearby-entity scan
-    # every ground item performs. Useful when kills drop whole inventories at once.
-    item-merging: true
-    # Despawn time in ticks for dropped items (vanilla: 6000 = 5 minutes). Lower values keep
-    # fewer item entities ticking after fights. <= 0 means vanilla default.
-    item-despawn-ticks: 6000
-    # --- recurring per-tick cost toggles ---
-    # Send entity/player movement packets to viewers every N ticks instead of every tick (1 = vanilla).
-    # Movement broadcasts are the largest outbound packet stream of a PvP server (every moving
-    # player x every viewer x 20/s); 2 halves that encode+compress cost. Knockback motion,
-    # teleports and the final stop position are always delivered, so combat feel is preserved.
-    movement-broadcast-period: 1
-    # Scan for pickups (items/arrows/xp orbs) around each player every N ticks instead of every
-    # tick (1 = vanilla). The scan iterates every entity near every player - effectively O(n^2)
-    # in clustered fights. Vanilla pickup delay is 10 ticks anyway, so 4 stays imperceptible.
-    pickup-scan-period: 1
-    # If true, worlds with zero players run only 1 tick in 100 (chunk unloading and provider GC
-    # still happen on the slow ticks). Time, scheduled updates and leftover entities freeze until
-    # a player enters. Big win for multi-world setups (lobby / duel arenas / mines).
+  #! pocketmine.betterpmmp.yml.world
+  world:
+    #! pocketmine.betterpmmp.yml.world.block-cache-size
+    block-cache-size: 8192
+    #! pocketmine.betterpmmp.yml.world.neighbour-update-limit
+    neighbour-update-limit: 512
+    #! pocketmine.betterpmmp.yml.world.freeze-empty-worlds
     freeze-empty-worlds: false
-  # [BetterPMMP-PATCH] Event engine optimization
-  # The dispatch fast-path (skipping all timing wrappers while timings are disabled) is always on.
-  # The toggles below decimate the hottest event call sites themselves - defaults are vanilla.
-  event-optimization:
-    # Fire PlayerMoveEvent every N ticks instead of every tick (1 = vanilla). Events carry the
-    # accumulated from->to span so listeners still see a gapless movement chain; cancelling
-    # reverts the whole span. With move listeners registered this is the hottest event of a
-    # PvP server (every moving player x 20/s x every listener).
-    move-event-period: 1
-    # If true, DataPacketReceiveEvent is not fired for PlayerAuthInputPacket - it arrives 20/s
-    # per player and is the overwhelming majority of inbound packets. All other packets still
-    # fire the event normally. Only enable if no plugin inspects auth input via this event.
-    skip-auth-input-receive-event: false
-    # If true, DataPacketSendEvent is not fired for MoveActorAbsolutePacket / SetActorMotionPacket
-    # broadcasts - the largest outbound packet stream (moving entities x viewers x 20/s).
-    # All other packets still fire the event normally.
+    #! pocketmine.betterpmmp.yml.world.view-distance-per-world
+    view-distance-per-world: {}
+    #! pocketmine.betterpmmp.yml.world.chunk-ticking
+    chunk-ticking:
+      #! pocketmine.betterpmmp.yml.world.chunk-ticking.batch-recheck-limit
+      batch-recheck-limit: 64
+      #! pocketmine.betterpmmp.yml.world.chunk-ticking.per-world
+      per-world: {}
+  #! pocketmine.betterpmmp.yml.lighting
+  lighting:
+    #! pocketmine.betterpmmp.yml.lighting.fixed-light
+    fixed-light: false
+    #! pocketmine.betterpmmp.yml.lighting.fixed-light-level
+    fixed-light-level: 15
+    #! pocketmine.betterpmmp.yml.lighting.skip-runtime-updates
+    skip-runtime-updates: false
+  #! pocketmine.betterpmmp.yml.entities
+  entities:
+    #! pocketmine.betterpmmp.yml.entities.item-merging
+    item-merging: true
+    #! pocketmine.betterpmmp.yml.entities.item-despawn-ticks
+    item-despawn-ticks: 6000
+    #! pocketmine.betterpmmp.yml.entities.xp-orbs
+    xp-orbs: true
+    #! pocketmine.betterpmmp.yml.entities.pickup-scan-period
+    pickup-scan-period: 1
+  #! pocketmine.betterpmmp.yml.combat
+  combat:
+    #! pocketmine.betterpmmp.yml.combat.critical-hit-ignore-sprint
+    critical-hit-ignore-sprint: false
+    #! pocketmine.betterpmmp.yml.combat.critical-hit-min-fall-distance
+    critical-hit-min-fall-distance: 0.0
+    #! pocketmine.betterpmmp.yml.combat.explosion-block-destruction
+    explosion-block-destruction: true
+  #! pocketmine.betterpmmp.yml.network
+  network:
+    #! pocketmine.betterpmmp.yml.network.snappy-compression
+    snappy-compression: false
+    #! pocketmine.betterpmmp.yml.network.movement-broadcast-period
+    movement-broadcast-period: 1
+    #! pocketmine.betterpmmp.yml.network.skip-movement-send-event
     skip-movement-send-event: false
-  # Critical hit settings
-  critical-hit:
-    # If true, critical hits can land even while sprinting. Vanilla requires not sprinting.
-    ignore-sprint: false
-    # Minimum fall distance required for a critical hit. Vanilla is 0.0, which lets a critical land
-    # from the moment the player starts falling. Raise it to demand a longer fall before a hit crits.
-    min-fall-distance: 0.0
+    #! pocketmine.betterpmmp.yml.network.skip-auth-input-receive-event
+    skip-auth-input-receive-event: false
+  #! pocketmine.betterpmmp.yml.events
+  events:
+    #! pocketmine.betterpmmp.yml.events.move-event-period
+    move-event-period: 1
+  #! pocketmine.betterpmmp.yml.recipes
+  recipes:
+    #! pocketmine.betterpmmp.yml.recipes.load-vanilla
+    load-vanilla: true
