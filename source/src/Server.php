@@ -326,8 +326,9 @@ class Server{
 		return ProtocolInfo::MINECRAFT_VERSION;
 	}
 
+	/** [BetterPMMP-PATCH] Report the upstream PMMP API version instead of the BetterPMMP display version */
 	public function getApiVersion() : string{
-		return VersionInfo::BASE_VERSION;
+		return VersionInfo::API_VERSION;
 	}
 
 	public function getFilePath() : string{

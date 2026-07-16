@@ -33,6 +33,8 @@ final class VersionInfo{
 	public const NAME = "PocketMine-MP";
 	/** [BetterPMMP-PATCH] BetterPMMP version identity; upstream base remains PocketMine-MP 5.44.3 (see NOTICE) */
 	public const BASE_VERSION = "1.0.0";
+	/** [BetterPMMP-PATCH] Plugin API version reported to plugins; kept at the upstream PocketMine-MP base so existing API 5.x plugins stay loadable */
+	public const API_VERSION = "5.44.3";
 	public const IS_DEVELOPMENT_BUILD = false;
 	public const BUILD_CHANNEL = "stable";
 	public const GITHUB_URL = "https://github.com/jv2w/BetterPMMP";
