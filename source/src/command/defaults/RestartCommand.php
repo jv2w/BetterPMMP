@@ -41,6 +41,7 @@ class RestartCommand extends VanillaCommand{
 
 	public function execute(CommandSender $sender, string $commandLabel, array $args) : bool{
 		$restartFlag = dirname(__FILE__, 5) . DIRECTORY_SEPARATOR . 'system' . DIRECTORY_SEPARATOR . 'restart.flag';
+		@mkdir(dirname($restartFlag), 0777, true);
 		file_put_contents($restartFlag, '1');
 
 		Command::broadcastCommandMessage($sender, new Translatable("pocketmine.command.restart.start"));

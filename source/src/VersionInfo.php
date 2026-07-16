@@ -35,7 +35,7 @@ final class VersionInfo{
 	public const BASE_VERSION = "1.0.0";
 	public const IS_DEVELOPMENT_BUILD = false;
 	public const BUILD_CHANNEL = "stable";
-	public const GITHUB_URL = "https://github.com/pmmp/PocketMine-MP";
+	public const GITHUB_URL = "https://github.com/jv2w/BetterPMMP";
 
 	/**
 	 * PocketMine-MP-specific version ID for world data. Used to determine what fixes need to be applied to old world

@@ -34,7 +34,7 @@ The performance improvements are on from the start and leave gameplay untouched.
 ### Gameplay
 
 - **Critical Hits**: configurable via `pocketmine.yml`; defaults match vanilla.
-- **Iron Door No-Interact**: hand interaction no longer toggles iron doors.
+- **Iron Door/Trapdoor No-Interact**: hand interaction no longer toggles iron doors and iron trapdoors.
 
 ## Requirements
 

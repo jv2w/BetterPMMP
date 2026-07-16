@@ -83,7 +83,11 @@ class Trapdoor extends Transparent implements HorizontalFacing{
 		return parent::place($tx, $item, $blockReplace, $blockClicked, $face, $clickVector, $player);
 	}
 
+	/** [BetterPMMP-PATCH] Iron trapdoor: block onInteract completely */
 	public function onInteract(Item $item, int $face, Vector3 $clickVector, ?Player $player = null, array &$returnedItems = []) : bool{
+		if($this->getTypeId() === BlockTypeIds::IRON_TRAPDOOR){
+			return true;
+		}
 		$this->open = !$this->open;
 		$world = $this->position->getWorld();
 		$world->setBlock($this->position, $this);
