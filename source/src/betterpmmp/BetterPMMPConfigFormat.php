@@ -67,7 +67,8 @@ use const YAML_UTF8_ENCODING;
  * template does not know keep their values but are re-emitted without comments at the end of their
  * section. When the flag is off (default), only the language retranslation pass runs, plus one repair:
  * a parseable file with no `better-pmmp` root section at all gets the rendered template section
- * appended, so servers migrating from vanilla configs always gain the BetterPMMP settings surface.
+ * appended (a file with no values at all is regenerated from the template), so servers migrating
+ * from vanilla configs always gain the BetterPMMP settings surface.
  */
 final class BetterPMMPConfigFormat{
 
@@ -83,6 +84,9 @@ final class BetterPMMPConfigFormat{
 		$data = self::parse($content);
 		if($data === null){
 			return BetterPMMPConfigComments::retranslate($content, $template, $lang);
+		}
+		if($data === []){
+			return BetterPMMPConfigComments::render($template, $lang);
 		}
 		if(self::enforceEnabled($data)){
 			return BetterPMMPConfigComments::render(self::rebuild($template, $data), $lang);
@@ -110,7 +114,8 @@ final class BetterPMMPConfigFormat{
 		$section = BetterPMMPConfigComments::render(implode("\n", array_slice($lines, $start)), $lang);
 		$body = rtrim($content, "\n");
 		$section = rtrim($section, "\n");
-		return "{$body}\n\n{$section}\n";
+		$result = "{$body}\n\n{$section}\n";
+		return self::parse($result) === null ? $content : $result;
 	}
 
 	/**

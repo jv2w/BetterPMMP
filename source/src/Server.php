@@ -1516,7 +1516,8 @@ class Server{
 			$this->signalHandler->unregister();
 
 			if(TimingsHandler::isEnabled()){
-				TimingsHandler::createReportFile(Path::join($this->getDataPath(), "timings"))->onCompletion(
+				//[BetterPMMP-PATCH] timings reports now live under system/ alongside other server files
+				TimingsHandler::createReportFile(Path::join($this->getDataPath(), "system", "timings"))->onCompletion(
 					function(string $timingsFile) : void{
 						$this->logger->info($this->language->translate(KnownTranslationFactory::pocketmine_command_timings_timingsWrite($timingsFile)));
 						TimingsHandler::setEnabled(false);
