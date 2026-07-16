@@ -1452,7 +1452,11 @@ class World implements ChunkManager{
 		}
 
 		$blockFactory = $this->blockStateRegistry;
-		foreach($chunk->getSubChunks() as $Y => $subChunk){
+		/** [BetterPMMP-PATCH] random tick fast-path: iterate subchunks directly instead of
+		 * Chunk::getSubChunks(), which allocates a fresh re-keyed 24-element array for every
+		 * ticking chunk every tick. $Y is the same real subchunk Y coordinate as before. */
+		for($Y = Chunk::MIN_SUBCHUNK_INDEX; $Y <= Chunk::MAX_SUBCHUNK_INDEX; ++$Y){
+			$subChunk = $chunk->getSubChunk($Y);
 			if(!$subChunk->isEmptyFast()){
 				$k = 0;
 				for($i = 0; $i < $this->tickedBlocksPerSubchunkPerTick; ++$i){
@@ -2130,8 +2134,12 @@ class World implements ChunkManager{
 		$chunkHash = World::chunkHash($chunkX, $chunkZ);
 		$relativeBlockHash = World::chunkBlockHash($x, $y, $z);
 
-		unset($this->blockCache[$chunkHash][$relativeBlockHash]);
-		$this->blockCacheSize--;
+		/** [BetterPMMP-PATCH] only decrement the block cache counter when an entry actually existed,
+		 * otherwise it drifts below the real size and the block-cache-size cap is under-enforced */
+		if(isset($this->blockCache[$chunkHash][$relativeBlockHash])){
+			unset($this->blockCache[$chunkHash][$relativeBlockHash]);
+			$this->blockCacheSize--;
+		}
 		unset($this->blockCollisionBoxCache[$chunkHash][$relativeBlockHash]);
 		//blocks like fences have collision boxes that reach into neighbouring blocks, so we need to invalidate the
 		//caches for those blocks as well

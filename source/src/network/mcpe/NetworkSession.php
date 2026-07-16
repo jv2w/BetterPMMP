@@ -115,6 +115,7 @@ use pocketmine\promise\Promise;
 use pocketmine\promise\PromiseResolver;
 use pocketmine\Server;
 use pocketmine\timings\Timings;
+use pocketmine\timings\TimingsHandler;
 use pocketmine\utils\AssumptionFailedError;
 use pocketmine\utils\ObjectSet;
 use pocketmine\utils\TextFormat;
@@ -495,8 +496,12 @@ class NetworkSession{
 			throw new PacketHandlingException("Unexpected non-serverbound packet");
 		}
 
-		$timings = Timings::getReceiveDataPacketTimings($packet);
-		$timings->startTiming();
+		/** [BetterPMMP-PATCH] packet timings fast-path: skip the per-packet timings map lookups and
+		 * no-op start/stop calls while timings are disabled (the normal production state). With timings
+		 * enabled the vanilla timed path runs unchanged, so /timings reports stay complete. */
+		$timingsEnabled = TimingsHandler::isEnabled();
+		$timings = $timingsEnabled ? Timings::getReceiveDataPacketTimings($packet) : null;
+		$timings?->startTiming();
 
 		try{
 			$handlerAction = PacketHandlerAction::DISCARD_WITH_DEBUG;
@@ -528,8 +533,9 @@ class NetworkSession{
 				return;
 			}
 
-			$decodeTimings = Timings::getDecodeDataPacketTimings($packet);
-			$decodeTimings->startTiming();
+			/** [BetterPMMP-PATCH] packet timings fast-path */
+			$decodeTimings = $timingsEnabled ? Timings::getDecodeDataPacketTimings($packet) : null;
+			$decodeTimings?->startTiming();
 			try{
 				$stream = new ByteBufferReader($buffer);
 				try{
@@ -542,7 +548,7 @@ class NetworkSession{
 					$this->logger->debug("Still " . strlen($remains) . " bytes unread in " . $packet->getName() . ": " . bin2hex($remains));
 				}
 			}finally{
-				$decodeTimings->stopTiming();
+				$decodeTimings?->stopTiming();
 			}
 
 			/** [BetterPMMP-PATCH] event engine: optionally skip DataPacketReceiveEvent for
@@ -556,17 +562,18 @@ class NetworkSession{
 					return;
 				}
 			}
-			$handlerTimings = Timings::getHandleDataPacketTimings($packet);
-			$handlerTimings->startTiming();
+			/** [BetterPMMP-PATCH] packet timings fast-path */
+			$handlerTimings = $timingsEnabled ? Timings::getHandleDataPacketTimings($packet) : null;
+			$handlerTimings?->startTiming();
 			try{
 				if($this->handler === null || !$packet->handle($this->handler)){
 					$this->unhandledPacketDebug($packet, $buffer, "Handler rejected");
 				}
 			}finally{
-				$handlerTimings->stopTiming();
+				$handlerTimings?->stopTiming();
 			}
 		}finally{
-			$timings->stopTiming();
+			$timings?->stopTiming();
 		}
 	}
 
@@ -595,8 +602,9 @@ class NetworkSession{
 			throw new \InvalidArgumentException("Attempted to send " . get_class($packet) . " to " . $this->getDisplayName() . " too early");
 		}
 
-		$timings = Timings::getSendDataPacketTimings($packet);
-		$timings->startTiming();
+		/** [BetterPMMP-PATCH] packet timings fast-path (see handleDataPacket) */
+		$timings = TimingsHandler::isEnabled() ? Timings::getSendDataPacketTimings($packet) : null;
+		$timings?->startTiming();
 		try{
 			/** [BetterPMMP-PATCH] event engine: optionally skip DataPacketSendEvent for movement packets -
 			 * the largest outbound packet stream (moving entities x viewers x 20/s) */
@@ -627,7 +635,7 @@ class NetworkSession{
 
 			return true;
 		}finally{
-			$timings->stopTiming();
+			$timings?->stopTiming();
 		}
 	}
 
@@ -653,6 +661,14 @@ class NetworkSession{
 	 * @internal
 	 */
 	public static function encodePacketTimed(ByteBufferWriter $serializer, ClientboundPacket $packet) : string{
+		/** [BetterPMMP-PATCH] packet timings fast-path: hottest encode path (also used by
+		 * StandardPacketBroadcaster) - skip the map lookup, no-op timer calls and try/finally
+		 * while timings are disabled; the timed path below is verbatim vanilla when enabled */
+		if(!TimingsHandler::isEnabled()){
+			$packet->encode($serializer);
+			return $serializer->getData();
+		}
+
 		$timings = Timings::getEncodeDataPacketTimings($packet);
 		$timings->startTiming();
 		try{

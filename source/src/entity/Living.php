@@ -136,6 +136,17 @@ abstract class Living extends Entity{
 
 	private ?int $frostWalkerLevel = null;
 
+	/** [BetterPMMP-PATCH] armor tick fast-path: null = unknown (recompute lazily), false = no worn item
+	 * overrides Item::onTickWorn(), true = run the vanilla armor tick loop */
+	private ?bool $hasTickingArmor = null;
+
+	/**
+	 * [BetterPMMP-PATCH] armor tick fast-path: per-class cache of whether onTickWorn() is overridden
+	 * @var bool[]
+	 * @phpstan-var array<class-string<Item>, bool>
+	 */
+	private static array $onTickWornOverrideCache = [];
+
 	protected function getInitialDragMultiplier() : float{ return 0.02; }
 
 	protected function getInitialGravity() : float{ return 0.08; }
@@ -164,8 +175,14 @@ abstract class Living extends Entity{
 				if($slot === ArmorInventory::SLOT_FEET){
 					$this->frostWalkerLevel = null;
 				}
+				/** [BetterPMMP-PATCH] armor tick fast-path invalidation */
+				$this->hasTickingArmor = null;
 			},
-			onContentChange: function() : void{ $this->frostWalkerLevel = null; }
+			onContentChange: function() : void{
+				$this->frostWalkerLevel = null;
+				/** [BetterPMMP-PATCH] armor tick fast-path invalidation */
+				$this->hasTickingArmor = null;
+			}
 		));
 
 		$health = $this->getMaxHealth();
@@ -688,12 +705,20 @@ abstract class Living extends Entity{
 				$hasUpdate = true;
 			}
 
-			foreach($this->armorInventory->getContents() as $index => $item){
-				$oldItem = clone $item;
-				if($item->onTickWorn($this)){
-					$hasUpdate = true;
-					if(!$item->equalsExact($oldItem)){
-						$this->armorInventory->setItem($index, $item);
+			/** [BetterPMMP-PATCH] armor tick fast-path: almost all armor uses the no-op Item::onTickWorn().
+			 * Skip the per-tick getContents() (which clones every occupied slot) plus the extra clone per item
+			 * unless a worn item's class actually overrides onTickWorn(). The flag is invalidated by the armor
+			 * inventory listener in initEntity() and recomputed lazily, which also covers NBT restore (listeners
+			 * are suppressed during Human::populateInventoryFromListTag()). When true, the vanilla loop runs
+			 * verbatim so plugin onTickWorn() overrides keep exact semantics. */
+			if($this->hasTickingArmor ??= $this->computeHasTickingArmor()){
+				foreach($this->armorInventory->getContents() as $index => $item){
+					$oldItem = clone $item;
+					if($item->onTickWorn($this)){
+						$hasUpdate = true;
+						if(!$item->equalsExact($oldItem)){
+							$this->armorInventory->setItem($index, $item);
+						}
 					}
 				}
 			}
@@ -758,6 +783,22 @@ abstract class Living extends Entity{
 
 	public function getFrostWalkerLevel() : int{
 		return $this->frostWalkerLevel ??= $this->armorInventory->getBoots()->getEnchantmentLevel(VanillaEnchantments::FROST_WALKER());
+	}
+
+	/** [BetterPMMP-PATCH] armor tick fast-path: whether the item's class overrides the no-op Item::onTickWorn() */
+	private static function itemOverridesOnTickWorn(Item $item) : bool{
+		return self::$onTickWornOverrideCache[$item::class] ??=
+			(new \ReflectionMethod($item, "onTickWorn"))->getDeclaringClass()->getName() !== Item::class;
+	}
+
+	/** [BetterPMMP-PATCH] armor tick fast-path */
+	private function computeHasTickingArmor() : bool{
+		foreach($this->armorInventory->getContents() as $item){
+			if(self::itemOverridesOnTickWorn($item)){
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

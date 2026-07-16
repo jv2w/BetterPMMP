@@ -28,6 +28,7 @@ The performance improvements are on from the start and leave gameplay untouched.
 - **Per-World View Distance**: override `view-distance` per world (handy for lobbies).
 - **Per-World Chunk Ticking**: set `tick-radius` and `blocks-per-subchunk-per-tick` per world; set both to `0` to disable random ticking entirely.
 - **Event & Network Tuning**: event-bus fast paths, dirty-tracked attribute syncs, cheaper packet framing, block and neighbour-update caching, and assorted engine fixes.
+- **Hot-Path Micro-Optimizations**: the armor tick loop only runs for items that actually do something when worn (no more per-tick item clones on every living entity), per-packet profiler bookkeeping is skipped entirely while `/timings` is off, and random block ticking iterates subchunks without rebuilding an array per chunk per tick. Behaviour is identical; only the overhead is gone.
 - **Snappy Compression**: opt-in Snappy packet compression as a lighter-CPU alternative to zlib; enable in `pocketmine.yml` (needs the `snappy` PHP extension).
 - **PvP Toggles**: opt-in switches for vanilla systems an arena server rarely needs: runtime light updates, XP orbs, explosion block destruction, item merging, and empty-world ticking.
 
