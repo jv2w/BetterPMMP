@@ -62,7 +62,8 @@ class Dirt extends Opaque{
 
 			$item->applyDamage(1);
 
-			$newBlock = $this->dirtType === DirtType::NORMAL ? VanillaBlocks::FARMLAND() : VanillaBlocks::DIRT();
+			/** [BetterPMMP-PATCH] farmland instant hydration: tilled farmland may start fully wet */
+			$newBlock = $this->dirtType === DirtType::NORMAL ? Farmland::tilled() : VanillaBlocks::DIRT();
 			$center = $this->position->add(0.5, 0.5, 0.5);
 			$world->addSound($center, new ItemUseOnBlockSound($newBlock));
 			$world->setBlock($this->position, $newBlock);

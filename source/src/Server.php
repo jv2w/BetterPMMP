@@ -28,6 +28,7 @@ declare(strict_types=1);
 namespace pocketmine;
 
 use pocketmine\betterpmmp\BetterPMMPConfigComments;
+use pocketmine\betterpmmp\BetterPMMPConfigFormat;
 use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
@@ -837,9 +838,10 @@ class Server{
 				@file_put_contents($pocketmineYmlPath, BetterPMMPConfigComments::render($content, $commentLang));
 			}else{
 				$existingYml = Filesystem::fileGetContents($pocketmineYmlPath);
-				$relocalizedYml = BetterPMMPConfigComments::retranslate($existingYml, $pocketmineYmlTemplate, $commentLang);
-				if($relocalizedYml !== $existingYml){
-					@file_put_contents($pocketmineYmlPath, $relocalizedYml);
+				/** [BetterPMMP-PATCH] Re-localize the comments, or regenerate the whole layout when better-pmmp.config.enforce-format is on */
+				$normalizedYml = BetterPMMPConfigFormat::apply($existingYml, $pocketmineYmlTemplate, $commentLang);
+				if($normalizedYml !== $existingYml){
+					@file_put_contents($pocketmineYmlPath, $normalizedYml);
 				}
 			}
 

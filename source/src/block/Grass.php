@@ -95,7 +95,8 @@ class Grass extends Opaque{
 		if($face !== Facing::DOWN){
 			if($item instanceof Hoe){
 				$item->applyDamage(1);
-				$newBlock = VanillaBlocks::FARMLAND();
+				/** [BetterPMMP-PATCH] farmland instant hydration: tilled farmland may start fully wet */
+				$newBlock = Farmland::tilled();
 				$world->addSound($this->position->add(0.5, 0.5, 0.5), new ItemUseOnBlockSound($newBlock));
 				$world->setBlock($this->position, $newBlock);
 

@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\plugin;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\event\Cancellable;
 use pocketmine\event\Event;
 use pocketmine\event\EventPriority;
@@ -452,7 +453,10 @@ class PluginManager{
 
 	public function enablePlugin(Plugin $plugin) : bool{
 		if(!$plugin->isEnabled()){
-			$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_enable($plugin->getDescription()->getFullName())));
+			/** [BetterPMMP-PATCH] Plugin enable log gated behind better-pmmp.plugins.enable-log; default true reproduces vanilla */
+			if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_ENABLE_LOG, true)){
+				$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_enable($plugin->getDescription()->getFullName())));
+			}
 
 			$plugin->getScheduler()->setEnabled(true);
 			try{
@@ -510,7 +514,10 @@ class PluginManager{
 
 	public function disablePlugin(Plugin $plugin) : void{
 		if($plugin->isEnabled()){
-			$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_disable($plugin->getDescription()->getFullName())));
+			/** [BetterPMMP-PATCH] Plugin disable log gated behind better-pmmp.plugins.disable-log; default true reproduces vanilla */
+			if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_DISABLE_LOG, true)){
+				$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_disable($plugin->getDescription()->getFullName())));
+			}
 			(new PluginDisableEvent($plugin))->call();
 
 			unset($this->enabledPlugins[$plugin->getDescription()->getName()]);

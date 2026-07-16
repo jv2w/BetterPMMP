@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\entity;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\data\bedrock\item\SavedItemStackData;
 use pocketmine\data\SavedDataLoadingException;
 use pocketmine\entity\animation\TotemUseAnimation;
@@ -170,8 +171,15 @@ class Human extends Living implements ProjectileSource, InventoryHolder{
 		]);
 	}
 
+	/** [BetterPMMP-PATCH] gameplay toggle: cached movement-exhaustion flag, shared with Player movement */
+	protected ?bool $pvpMovementExhaustion = null;
+
 	public function jump() : void{
 		parent::jump();
+		/** [BetterPMMP-PATCH] gameplay toggle: skip jump exhaustion when movement-exhaustion is off */
+		if(!($this->pvpMovementExhaustion ??= (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_MOVEMENT_EXHAUSTION, true))){
+			return;
+		}
 		if($this->isSprinting()){
 			$this->hungerManager->exhaust(0.2, PlayerExhaustEvent::CAUSE_SPRINT_JUMPING);
 		}else{

@@ -169,6 +169,11 @@ plugins:
 
 # [BetterPMMP-PATCH] Extreme optimization settings
 better-pmmp:
+  #! pocketmine.betterpmmp.yml.config
+  config:
+    #! pocketmine.betterpmmp.yml.config.enforce-format
+    enforce-format: false
+
   #! pocketmine.betterpmmp.yml.world
   world:
     #! pocketmine.betterpmmp.yml.world.block-cache-size
@@ -230,8 +235,26 @@ better-pmmp:
   events:
     #! pocketmine.betterpmmp.yml.events.move-event-period
     move-event-period: 1
-    
+
   #! pocketmine.betterpmmp.yml.recipes
   recipes:
     #! pocketmine.betterpmmp.yml.recipes.load-vanilla
     load-vanilla: true
+
+  #! pocketmine.betterpmmp.yml.plugins
+  plugins:
+    #! pocketmine.betterpmmp.yml.plugins.enable-log
+    enable-log: true
+    #! pocketmine.betterpmmp.yml.plugins.disable-log
+    disable-log: true
+
+  #! pocketmine.betterpmmp.yml.gameplay
+  gameplay:
+    #! pocketmine.betterpmmp.yml.gameplay.movement-exhaustion
+    movement-exhaustion: true
+    #! pocketmine.betterpmmp.yml.gameplay.fall-damage
+    fall-damage: true
+    #! pocketmine.betterpmmp.yml.gameplay.farmland-persistent
+    farmland-persistent: false
+    #! pocketmine.betterpmmp.yml.gameplay.farmland-instant-hydration
+    farmland-instant-hydration: false

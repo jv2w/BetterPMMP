@@ -40,6 +40,8 @@ final class BetterPMMPProperties{
 		//NOOP
 	}
 
+	public const CONFIG_ENFORCE_FORMAT = 'better-pmmp.config.enforce-format';
+
 	public const WORLD_BLOCK_CACHE_SIZE = 'better-pmmp.world.block-cache-size';
 	public const WORLD_NEIGHBOUR_UPDATE_LIMIT = 'better-pmmp.world.neighbour-update-limit';
 	public const WORLD_FREEZE_EMPTY_WORLDS = 'better-pmmp.world.freeze-empty-worlds';
@@ -68,4 +70,12 @@ final class BetterPMMPProperties{
 	public const EVENTS_MOVE_EVENT_PERIOD = 'better-pmmp.events.move-event-period';
 
 	public const RECIPES_LOAD_VANILLA = 'better-pmmp.recipes.load-vanilla';
+
+	public const PLUGINS_ENABLE_LOG = 'better-pmmp.plugins.enable-log';
+	public const PLUGINS_DISABLE_LOG = 'better-pmmp.plugins.disable-log';
+
+	public const GAMEPLAY_MOVEMENT_EXHAUSTION = 'better-pmmp.gameplay.movement-exhaustion';
+	public const GAMEPLAY_FALL_DAMAGE = 'better-pmmp.gameplay.fall-damage';
+	public const GAMEPLAY_FARMLAND_PERSISTENT = 'better-pmmp.gameplay.farmland-persistent';
+	public const GAMEPLAY_FARMLAND_INSTANT_HYDRATION = 'better-pmmp.gameplay.farmland-instant-hydration';
 }

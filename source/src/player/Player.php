@@ -1496,13 +1496,18 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 				$this->pvpMoveBroadcastPending = true;
 			}
 
-			$horizontalDistanceTravelled = sqrt((($from->x - $to->x) ** 2) + (($from->z - $to->z) ** 2));
-			if($horizontalDistanceTravelled > 0){
-				//TODO: check for swimming
-				if($this->isSprinting()){
-					$this->hungerManager->exhaust(0.01 * $horizontalDistanceTravelled, PlayerExhaustEvent::CAUSE_SPRINTING);
-				}else{
-					$this->hungerManager->exhaust(0.0, PlayerExhaustEvent::CAUSE_WALKING);
+			/** [BetterPMMP-PATCH] gameplay toggle: movement exhaustion - the chunk order clamp below must
+			 * survive the skip, so only the exhaust calls are gated; sqrt moved into the sprint branch
+			 * since the walking branch never uses the distance */
+			$horizontalDistanceSquared = (($from->x - $to->x) ** 2) + (($from->z - $to->z) ** 2);
+			if($horizontalDistanceSquared > 0){
+				if($this->pvpMovementExhaustion ??= (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_MOVEMENT_EXHAUSTION, true)){
+					//TODO: check for swimming
+					if($this->isSprinting()){
+						$this->hungerManager->exhaust(0.01 * sqrt($horizontalDistanceSquared), PlayerExhaustEvent::CAUSE_SPRINTING);
+					}else{
+						$this->hungerManager->exhaust(0.0, PlayerExhaustEvent::CAUSE_WALKING);
+					}
 				}
 
 				if($this->nextChunkOrderRun > 20){

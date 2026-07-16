@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\block;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\data\runtime\RuntimeDataDescriber;
 use pocketmine\entity\Entity;
 use pocketmine\entity\Living;
@@ -31,7 +32,10 @@ use pocketmine\event\entity\EntityTrampleFarmlandEvent;
 use pocketmine\item\Item;
 use pocketmine\math\AxisAlignedBB;
 use pocketmine\math\Facing;
+use pocketmine\math\Vector3;
+use pocketmine\player\Player;
 use pocketmine\utils\Utils;
+use pocketmine\world\BlockTransaction;
 use function intdiv;
 
 class Farmland extends Transparent{
@@ -61,6 +65,28 @@ class Farmland extends Transparent{
 	 * This property is not exposed to the API or saved on disk. It is only used by PocketMine-MP at runtime as a cache.
 	 */
 	private int $waterPositionIndex = self::WATER_POSITION_INDEX_UNKNOWN;
+
+	/** [BetterPMMP-PATCH] farmland hydration lock: static config caches - block instances are transient
+	 * registry value objects, so per-instance memoization would re-read the config on every tick */
+	private static ?bool $persistentCache = null;
+	private static ?bool $instantHydrationCache = null;
+
+	private static function isPersistent() : bool{
+		return self::$persistentCache ??= (bool) \pocketmine\Server::getInstance()->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_FARMLAND_PERSISTENT, false);
+	}
+
+	private static function hasInstantHydration() : bool{
+		return self::$instantHydrationCache ??= (bool) \pocketmine\Server::getInstance()->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_FARMLAND_INSTANT_HYDRATION, false);
+	}
+
+	/** [BetterPMMP-PATCH] farmland instant hydration: shared factory for hoe-tilled farmland */
+	public static function tilled() : Farmland{
+		$block = VanillaBlocks::FARMLAND();
+		if(self::hasInstantHydration()){
+			$block->wetness = self::MAX_WETNESS;
+		}
+		return $block;
+	}
 
 	protected function describeBlockOnlyState(RuntimeDataDescriber $w) : void{
 		$w->boundedIntAuto(0, self::MAX_WETNESS, $this->wetness);
@@ -98,7 +124,19 @@ class Farmland extends Transparent{
 		return [AxisAlignedBB::one()->trim(Facing::UP, 1 / 16)];
 	}
 
+	public function place(BlockTransaction $tx, Item $item, Block $blockReplace, Block $blockClicked, int $face, Vector3 $clickVector, ?Player $player = null) : bool{
+		/** [BetterPMMP-PATCH] farmland instant hydration: placed farmland starts fully wet */
+		if(self::hasInstantHydration()){
+			$this->wetness = self::MAX_WETNESS;
+		}
+		return parent::place($tx, $item, $blockReplace, $blockClicked, $face, $clickVector, $player);
+	}
+
 	public function onNearbyBlockChange() : void{
+		/** [BetterPMMP-PATCH] farmland hydration lock: persistent farmland never reverts to dirt */
+		if(self::isPersistent()){
+			return;
+		}
 		if($this->getSide(Facing::UP)->isSolid()){
 			$this->position->getWorld()->setBlock($this->position, VanillaBlocks::DIRT());
 		}
@@ -109,24 +147,35 @@ class Farmland extends Transparent{
 	}
 
 	public function onRandomTick() : void{
+		/** [BetterPMMP-PATCH] farmland hydration lock: fully wet persistent farmland can never change -
+		 * early return skips the 9x9x2 canHydrate() water scan entirely */
+		$persistent = self::isPersistent();
+		if($persistent && $this->wetness === self::MAX_WETNESS){
+			return;
+		}
+
 		$world = $this->position->getWorld();
 
 		//this property may be updated by canHydrate() - track this so we know if we need to set the block again
 		$oldWaterPositionIndex = $this->waterPositionIndex;
 		$changed = false;
 
-		if(!$this->canHydrate()){
-			if($this->wetness > 0){
-				$event = new FarmlandHydrationChangeEvent($this, $this->wetness, $this->wetness - 1);
-				$event->call();
-				if(!$event->isCancelled()){
-					$this->wetness = $event->getNewHydration();
-					$world->setBlock($this->position, $this, false);
+		/** [BetterPMMP-PATCH] farmland instant hydration: persistent farmland gains wetness without water */
+		if(!($persistent && self::hasInstantHydration()) && !$this->canHydrate()){
+			/** [BetterPMMP-PATCH] farmland hydration lock: wetness never decreases, no dirt conversion */
+			if(!$persistent){
+				if($this->wetness > 0){
+					$event = new FarmlandHydrationChangeEvent($this, $this->wetness, $this->wetness - 1);
+					$event->call();
+					if(!$event->isCancelled()){
+						$this->wetness = $event->getNewHydration();
+						$world->setBlock($this->position, $this, false);
+						$changed = true;
+					}
+				}else{
+					$world->setBlock($this->position, VanillaBlocks::DIRT());
 					$changed = true;
 				}
-			}else{
-				$world->setBlock($this->position, VanillaBlocks::DIRT());
-				$changed = true;
 			}
 		}elseif($this->wetness < self::MAX_WETNESS){
 			$event = new FarmlandHydrationChangeEvent($this, $this->wetness, self::MAX_WETNESS);
@@ -145,6 +194,10 @@ class Farmland extends Transparent{
 	}
 
 	public function onEntityLand(Entity $entity) : ?float{
+		/** [BetterPMMP-PATCH] farmland hydration lock: persistent farmland cannot be trampled */
+		if(self::isPersistent()){
+			return null;
+		}
 		if($entity instanceof Living && Utils::getRandomFloat() < $entity->getFallDistance() - 0.5){
 			$ev = new EntityTrampleFarmlandEvent($entity, $this);
 			$ev->call();
