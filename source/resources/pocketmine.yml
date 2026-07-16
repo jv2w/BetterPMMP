@@ -243,6 +243,8 @@ better-pmmp:
 
   #! pocketmine.betterpmmp.yml.plugins
   plugins:
+    #! pocketmine.betterpmmp.yml.plugins.load-log
+    load-log: true
     #! pocketmine.betterpmmp.yml.plugins.enable-log
     enable-log: true
     #! pocketmine.betterpmmp.yml.plugins.disable-log

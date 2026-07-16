@@ -136,7 +136,10 @@ class PluginManager{
 
 	private function internalLoadPlugin(string $path, PluginLoader $loader, PluginDescription $description) : ?Plugin{
 		$language = $this->server->getLanguage();
-		$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_load($description->getFullName())));
+		/** [BetterPMMP-PATCH] Plugin load log gated behind better-pmmp.plugins.load-log; default true reproduces vanilla */
+		if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_LOAD_LOG, true)){
+			$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_load($description->getFullName())));
+		}
 
 		$dataFolder = $this->getDataDirectory($path, $description->getName());
 		if(file_exists($dataFolder) && !is_dir($dataFolder)){

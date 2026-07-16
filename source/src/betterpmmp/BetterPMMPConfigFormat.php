@@ -30,6 +30,7 @@ use function array_is_list;
 use function array_key_exists;
 use function array_pop;
 use function array_reverse;
+use function array_slice;
 use function count;
 use function explode;
 use function implode;
@@ -64,7 +65,9 @@ use const YAML_UTF8_ENCODING;
  * resource template on every startup: comments and key order come from the template (localized through
  * {@link BetterPMMPConfigComments}), every value present in the old file is carried over, and keys the
  * template does not know keep their values but are re-emitted without comments at the end of their
- * section. When the flag is off (default), only the language retranslation pass runs, as before.
+ * section. When the flag is off (default), only the language retranslation pass runs, plus one repair:
+ * a parseable file with no `better-pmmp` root section at all gets the rendered template section
+ * appended, so servers migrating from vanilla configs always gain the BetterPMMP settings surface.
  */
 final class BetterPMMPConfigFormat{
 
@@ -75,11 +78,39 @@ final class BetterPMMPConfigFormat{
 	}
 
 	public static function apply(string $content, string $template, Language $lang) : string{
+		$content = str_replace("\r\n", "\n", $content);
+		$template = str_replace("\r\n", "\n", $template);
 		$data = self::parse($content);
-		if($data === null || !self::enforceEnabled($data)){
+		if($data === null){
 			return BetterPMMPConfigComments::retranslate($content, $template, $lang);
 		}
-		return BetterPMMPConfigComments::render(self::rebuild($template, $data), $lang);
+		if(self::enforceEnabled($data)){
+			return BetterPMMPConfigComments::render(self::rebuild($template, $data), $lang);
+		}
+		$result = BetterPMMPConfigComments::retranslate($content, $template, $lang);
+		$root = explode('.', BetterPMMPProperties::CONFIG_ENFORCE_FORMAT)[0];
+		return array_key_exists($root, $data) ? $result : self::appendMissingRoot($result, $template, $root, $lang);
+	}
+
+	private static function appendMissingRoot(string $content, string $template, string $root, Language $lang) : string{
+		$lines = explode("\n", $template);
+		$start = null;
+		foreach($lines as $i => $line){
+			if($line === "{$root}:"){
+				$start = $i;
+				break;
+			}
+		}
+		if($start === null){
+			return $content;
+		}
+		while($start > 0 && ($lines[$start - 1][0] ?? '') === '#'){
+			$start--;
+		}
+		$section = BetterPMMPConfigComments::render(implode("\n", array_slice($lines, $start)), $lang);
+		$body = rtrim($content, "\n");
+		$section = rtrim($section, "\n");
+		return "{$body}\n\n{$section}\n";
 	}
 
 	/**

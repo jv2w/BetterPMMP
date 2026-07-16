@@ -71,6 +71,7 @@ final class BetterPMMPProperties{
 
 	public const RECIPES_LOAD_VANILLA = 'better-pmmp.recipes.load-vanilla';
 
+	public const PLUGINS_LOAD_LOG = 'better-pmmp.plugins.load-log';
 	public const PLUGINS_ENABLE_LOG = 'better-pmmp.plugins.enable-log';
 	public const PLUGINS_DISABLE_LOG = 'better-pmmp.plugins.disable-log';
 

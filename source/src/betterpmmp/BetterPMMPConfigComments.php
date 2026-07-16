@@ -30,6 +30,7 @@ use function explode;
 use function implode;
 use function preg_match_all;
 use function preg_replace_callback;
+use function str_replace;
 use function strpos;
 use function strtr;
 use const PREG_SET_ORDER;
@@ -44,6 +45,8 @@ use const PREG_SET_ORDER;
  * one `<indent># <text>` line. {@link render()} expands the markers on first launch. {@link retranslate()}
  * converts an already-rendered file from whatever language its comments are in to the current one by a
  * single non-overlapping string replacement, so it never touches value lines - user edits are preserved.
+ * Both entry points normalize CRLF line endings and expand any marker lines still present, so files
+ * written raw by a CRLF-damaged template self-heal on the next startup.
  */
 final class BetterPMMPConfigComments{
 
@@ -54,6 +57,7 @@ final class BetterPMMPConfigComments{
 	}
 
 	public static function render(string $template, Language $lang) : string{
+		$template = str_replace("\r\n", "\n", $template);
 		$result = preg_replace_callback(
 			self::MARKER_PATTERN,
 			static fn(array $m) : string => self::block($m[2], $m[1], $lang),
@@ -63,14 +67,15 @@ final class BetterPMMPConfigComments{
 	}
 
 	public static function retranslate(string $content, string $template, Language $current) : string{
+		$content = str_replace("\r\n", "\n", $content);
 		$map = self::markers($template);
 		foreach($map as [$key, $indent]){
 			$block = self::block($key, $indent, $current);
 			if($block !== "" && strpos($content, $block) === false){
-				return self::convert($content, $map, $current);
+				return self::render(self::convert($content, $map, $current), $current);
 			}
 		}
-		return $content;
+		return self::render($content, $current);
 	}
 
 	/**
@@ -104,7 +109,7 @@ final class BetterPMMPConfigComments{
 	 */
 	private static function markers(string $template) : array{
 		$map = [];
-		if(preg_match_all(self::MARKER_PATTERN, $template, $matches, PREG_SET_ORDER) !== false){
+		if(preg_match_all(self::MARKER_PATTERN, str_replace("\r\n", "\n", $template), $matches, PREG_SET_ORDER) !== false){
 			foreach($matches as $m){
 				$map[] = [$m[2], $m[1]];
 			}
