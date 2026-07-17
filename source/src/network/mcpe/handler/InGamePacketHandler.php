@@ -113,6 +113,7 @@ use function is_nan;
 use function json_decode;
 use function max;
 use function mb_strlen;
+use function microtime;
 use function sprintf;
 use function str_starts_with;
 use function strlen;
@@ -138,7 +139,7 @@ class InGamePacketHandler extends PacketHandler{
 	//prevent rejected edits while still mitigating book-bomb attacks
 	private const PAGE_LENGTH_SOFT_LIMIT_CHARS = 512;
 
-	protected int $lastRightClickTick = -1;
+	protected float $lastRightClickTime = 0.0;
 	protected ?UseItemTransactionData $lastRightClickData = null;
 
 	protected ?Vector3 $lastPlayerAuthInputPosition = null;
@@ -461,28 +462,22 @@ class InGamePacketHandler extends PacketHandler{
 
 		switch($data->getActionType()){
 			case UseItemTransactionData::ACTION_CLICK_BLOCK:
-				/** [BetterPMMP-PATCH] Interaction delay removal - upstream gated every block right-click behind a
-				 * wall-clock window, which capped interaction at 10 CPS while failing at its actual job: the client's
-				 * duplicate UseItem packets arrive sub-ms apart, so no window small enough to spare real clicks is ever
-				 * large enough to catch them - lowering the ms changes nothing either way.
-				 * Keying on the server tick removes the delay entirely: the duplicates are always redelivered inside the
-				 * tick that processes their batch, so an identical signature in the same tick is the spam and dies,
-				 * while every click in a later tick is genuine and runs unthrottled - interaction and placement alike.
-				 * Distinct clicks in one tick target different blocks, so their signatures differ and both survive. */
+				//TODO: start hack for client spam bug
 				$clickPos = $data->getClickPosition();
-				$tick = $this->player->getServer()->getTick();
 				$spamBug = ($this->lastRightClickData !== null &&
-					$this->lastRightClickTick === $tick &&
+					microtime(true) - $this->lastRightClickTime < 0.1 && //100ms
 					$this->lastRightClickData->getFace() === $data->getFace() &&
 					$this->lastRightClickData->getPlayerPosition()->distanceSquared($data->getPlayerPosition()) < 0.00001 &&
 					$this->lastRightClickData->getBlockPosition()->equals($data->getBlockPosition()) &&
 					$this->lastRightClickData->getClickPosition()->distanceSquared($clickPos) < 0.00001 //signature spam bug has 0 distance, but allow some error
 				);
+				//get rid of continued spam if the player clicks and holds right-click
 				$this->lastRightClickData = $data;
-				$this->lastRightClickTick = $tick;
+				$this->lastRightClickTime = microtime(true);
 				if($spamBug){
 					throw new FilterNoisyPacketException();
 				}
+				//TODO: end hack for client spam bug
 
 				self::validateFacing($data->getFace());
 
@@ -493,7 +488,10 @@ class InGamePacketHandler extends PacketHandler{
 				$oldBlockSnapshot = $this->captureBlockSnapshot($vBlockPos, $data->getFace());
 				$interactResult = $this->player->interactBlock($vBlockPos, $data->getFace(), $clickPos);
 
-				$syncAdjacentFace = $data->getItemInHand()->getItemStack()->getBlockRuntimeId() === ItemTranslator::NO_BLOCK_RUNTIME_ID ? $data->getFace() : null;
+				$syncAdjacentFace = null;
+				if ($data->getItemInHand()->getItemStack()->getBlockRuntimeId() === ItemTranslator::NO_BLOCK_RUNTIME_ID) {
+					$syncAdjacentFace = $data->getFace();
+				}
 
 				$this->syncBlocksNearby($vBlockPos, $syncAdjacentFace, $interactResult ? $oldBlockSnapshot : []);
 				return true;
