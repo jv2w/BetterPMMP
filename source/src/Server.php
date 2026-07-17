@@ -57,6 +57,7 @@ use pocketmine\network\mcpe\auth\AuthKeyProvider;
 use pocketmine\network\mcpe\compression\CompressBatchPromise;
 use pocketmine\network\mcpe\compression\CompressBatchTask;
 use pocketmine\network\mcpe\compression\Compressor;
+use pocketmine\network\mcpe\compression\SnappyCompressor;
 use pocketmine\network\mcpe\compression\ZlibCompressor;
 use pocketmine\network\mcpe\convert\TypeConverter;
 use pocketmine\network\mcpe\encryption\EncryptionContext;
@@ -972,6 +973,11 @@ class Server{
 				$netCompressionLevel = 6;
 			}
 			ZlibCompressor::setInstance(new ZlibCompressor($netCompressionLevel, $netCompressionThreshold, ZlibCompressor::DEFAULT_MAX_DECOMPRESSION_SIZE));
+			/** [BetterPMMP-PATCH] Honour network.batch-threshold for Snappy too - without this the Snappy
+			 * singleton keeps its hardcoded default and the configured threshold is silently ignored
+			 * whenever better-pmmp.network.snappy-compression selects it. Snappy has no level parameter,
+			 * so network.compression-level remains zlib-only. */
+			SnappyCompressor::setInstance(new SnappyCompressor($netCompressionThreshold));
 
 			$this->networkCompressionAsync = $this->configGroup->getPropertyBool(Yml::NETWORK_ASYNC_COMPRESSION, true);
 			$this->networkCompressionAsyncThreshold = max(
