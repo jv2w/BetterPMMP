@@ -23,9 +23,11 @@ declare(strict_types=1);
 
 namespace pocketmine\entity;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\event\entity\EntityDamageEvent;
 use pocketmine\event\entity\EntityRegainHealthEvent;
 use pocketmine\event\player\PlayerExhaustEvent;
+use pocketmine\Server;
 use pocketmine\world\World;
 use function max;
 use function min;
@@ -40,12 +42,16 @@ class HungerManager{
 
 	private bool $enabled = true;
 
+	/** [BetterPMMP-PATCH] gameplay toggle: hunger exhaustion, resolved once per entity */
+	private readonly bool $exhaustionEnabled;
+
 	public function __construct(
 		private Human $entity
 	){
 		$this->hungerAttr = self::fetchAttribute($entity, Attribute::HUNGER);
 		$this->saturationAttr = self::fetchAttribute($entity, Attribute::SATURATION);
 		$this->exhaustionAttr = self::fetchAttribute($entity, Attribute::EXHAUSTION);
+		$this->exhaustionEnabled = (bool) Server::getInstance()->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_HUNGER_EXHAUSTION, true);
 	}
 
 	private static function fetchAttribute(Entity $entity, string $attributeId) : Attribute{
@@ -131,7 +137,9 @@ class HungerManager{
 	 * @return float the amount of exhaustion level increased
 	 */
 	public function exhaust(float $amount, int $cause = PlayerExhaustEvent::CAUSE_CUSTOM) : float{
-		if(!$this->enabled){
+		/** [BetterPMMP-PATCH] gameplay toggle: hunger exhaustion - gated here so every cause
+		 * (movement, jumping, attack, mining, damage, regen, potion, plugin) is covered */
+		if(!$this->enabled || !$this->exhaustionEnabled){
 			return 0;
 		}
 		$evAmount = $amount;

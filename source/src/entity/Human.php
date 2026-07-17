@@ -171,13 +171,13 @@ class Human extends Living implements ProjectileSource, InventoryHolder{
 		]);
 	}
 
-	/** [BetterPMMP-PATCH] gameplay toggle: cached movement-exhaustion flag, shared with Player movement */
-	protected ?bool $pvpMovementExhaustion = null;
+	/** [BetterPMMP-PATCH] gameplay toggle: cached hunger-exhaustion flag, shared with Player movement */
+	protected ?bool $hungerExhaustion = null;
 
 	public function jump() : void{
 		parent::jump();
-		/** [BetterPMMP-PATCH] gameplay toggle: skip jump exhaustion when movement-exhaustion is off */
-		if(!($this->pvpMovementExhaustion ??= (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_MOVEMENT_EXHAUSTION, true))){
+		/** [BetterPMMP-PATCH] gameplay toggle: skip jump exhaustion when hunger-exhaustion is off */
+		if(!($this->hungerExhaustion ??= (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_HUNGER_EXHAUSTION, true))){
 			return;
 		}
 		if($this->isSprinting()){

@@ -252,8 +252,8 @@ better-pmmp:
 
   #! pocketmine.betterpmmp.yml.gameplay
   gameplay:
-    #! pocketmine.betterpmmp.yml.gameplay.movement-exhaustion
-    movement-exhaustion: true
+    #! pocketmine.betterpmmp.yml.gameplay.hunger-exhaustion
+    hunger-exhaustion: true
     #! pocketmine.betterpmmp.yml.gameplay.fall-damage
     fall-damage: true
     #! pocketmine.betterpmmp.yml.gameplay.farmland-persistent

@@ -75,7 +75,7 @@ final class BetterPMMPProperties{
 	public const PLUGINS_ENABLE_LOG = 'better-pmmp.plugins.enable-log';
 	public const PLUGINS_DISABLE_LOG = 'better-pmmp.plugins.disable-log';
 
-	public const GAMEPLAY_MOVEMENT_EXHAUSTION = 'better-pmmp.gameplay.movement-exhaustion';
+	public const GAMEPLAY_HUNGER_EXHAUSTION = 'better-pmmp.gameplay.hunger-exhaustion';
 	public const GAMEPLAY_FALL_DAMAGE = 'better-pmmp.gameplay.fall-damage';
 	public const GAMEPLAY_FARMLAND_PERSISTENT = 'better-pmmp.gameplay.farmland-persistent';
 	public const GAMEPLAY_FARMLAND_INSTANT_HYDRATION = 'better-pmmp.gameplay.farmland-instant-hydration';
