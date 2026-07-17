@@ -463,9 +463,17 @@ class InGamePacketHandler extends PacketHandler{
 		switch($data->getActionType()){
 			case UseItemTransactionData::ACTION_CLICK_BLOCK:
 				//TODO: start hack for client spam bug
+				/** [BetterPMMP-PATCH] Interaction delay fix - the client's duplicate UseItem packets arrive within the
+				 * same batch (sub-ms apart), so a 20ms window still swallows them, while the upstream 100ms window also
+				 * ate legitimate fast/held clicks and capped interaction at 10 CPS.
+				 * Block placement is exempted entirely: the spam bug only affects non-block items, and placement is
+				 * naturally idempotent (the target stops being replaceable once filled), so any time-based window here
+				 * only throttles legitimate placements. */
 				$clickPos = $data->getClickPosition();
-				$spamBug = ($this->lastRightClickData !== null &&
-					microtime(true) - $this->lastRightClickTime < 0.1 && //100ms
+				$placingBlock = $data->getItemInHand()->getItemStack()->getBlockRuntimeId() !== ItemTranslator::NO_BLOCK_RUNTIME_ID;
+				$spamBug = (!$placingBlock &&
+					$this->lastRightClickData !== null &&
+					microtime(true) - $this->lastRightClickTime < 0.02 && //20ms
 					$this->lastRightClickData->getFace() === $data->getFace() &&
 					$this->lastRightClickData->getPlayerPosition()->distanceSquared($data->getPlayerPosition()) < 0.00001 &&
 					$this->lastRightClickData->getBlockPosition()->equals($data->getBlockPosition()) &&
@@ -488,10 +496,7 @@ class InGamePacketHandler extends PacketHandler{
 				$oldBlockSnapshot = $this->captureBlockSnapshot($vBlockPos, $data->getFace());
 				$interactResult = $this->player->interactBlock($vBlockPos, $data->getFace(), $clickPos);
 
-				$syncAdjacentFace = null;
-				if ($data->getItemInHand()->getItemStack()->getBlockRuntimeId() === ItemTranslator::NO_BLOCK_RUNTIME_ID) {
-					$syncAdjacentFace = $data->getFace();
-				}
+				$syncAdjacentFace = $placingBlock ? null : $data->getFace();
 
 				$this->syncBlocksNearby($vBlockPos, $syncAdjacentFace, $interactResult ? $oldBlockSnapshot : []);
 				return true;
