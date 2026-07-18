@@ -35,6 +35,7 @@ use function bin2hex;
 use function count;
 use function get_class;
 use function microtime;
+use function min;
 use function ord;
 use function preg_match;
 use function strlen;
@@ -47,6 +48,9 @@ class Server implements ServerInterface{
 
 	private const RAKLIB_TPS = 100;
 	private const RAKLIB_TIME_PER_TICK = 1 / self::RAKLIB_TPS;
+	/* [BetterPMMP-PATCH] hit-latency: inter-tick sleep is sliced at this granularity so outbound batches queued
+	 * by the main thread are picked up within ~1ms instead of up to a full RAKLIB_TIME_PER_TICK (10ms). */
+	private const RAKLIB_SLEEP_SLICE = 0.001;
 	private const BLOCK_MESSAGE_SUPPRESSION_THRESHOLD = 2;
 	private const PACKET_ERROR_SUPPRESSION_THRESHOLD = 2;
 
@@ -126,10 +130,28 @@ class Server implements ServerInterface{
 	public function tickProcessor() : void{
 		$start = microtime(true);
 
+		$this->processEventsAndSocket();
+		$this->tick();
+
 		/*
-		 * The below code is designed to allow co-op between sending and receiving to avoid slowing down either one
-		 * when high traffic is coming either way. Yielding will occur after 100 messages.
+		 * [BetterPMMP-PATCH] hit-latency: slice the inter-tick sleep and re-poll the main-thread event source
+		 * and socket between ~1ms slices, so outbound batches (and inbound datagrams) are picked up in ~1ms
+		 * instead of up to 10ms. The session update cadence (ACK/resend timers in tick()) is unchanged -
+		 * tick() still runs exactly once per RAKLIB_TIME_PER_TICK window, and an overlong tick still skips
+		 * the sleep entirely (loop condition false), matching the original guard.
 		 */
+		$end = $start + self::RAKLIB_TIME_PER_TICK;
+		while(($now = microtime(true)) < $end){
+			@time_sleep_until(min($end, $now + self::RAKLIB_SLEEP_SLICE));
+			$this->processEventsAndSocket();
+		}
+	}
+
+	/**
+	 * The below code is designed to allow co-op between sending and receiving to avoid slowing down either one
+	 * when high traffic is coming either way. Yielding will occur after 100 messages.
+	 */
+	private function processEventsAndSocket() : void{
 		do{
 			$stream = !$this->shutdown;
 			for($i = 0; $i < 100 && $stream && !$this->shutdown; ++$i){ //if we received a shutdown event, we don't care about any more messages from the event source
@@ -141,13 +163,6 @@ class Server implements ServerInterface{
 				$socket = $this->receivePacket();
 			}
 		}while($stream || $socket);
-
-		$this->tick();
-
-		$time = microtime(true) - $start;
-		if($time < self::RAKLIB_TIME_PER_TICK){
-			@time_sleep_until(microtime(true) + self::RAKLIB_TIME_PER_TICK - $time);
-		}
 	}
 
 	/**

@@ -42,6 +42,8 @@ use pocketmine\math\VoxelRayTrace;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\nbt\tag\IntTag;
 use pocketmine\nbt\tag\ListTag;
+use pocketmine\network\mcpe\NetworkSession;
+use pocketmine\player\Player;
 use pocketmine\timings\Timings;
 use function atan2;
 use function ceil;
@@ -229,6 +231,16 @@ abstract class Projectile extends Entity{
 			$ev->call();
 			$this->onHit($ev);
 			$specificHitFunc();
+
+			/*
+			 * [BetterPMMP-PATCH] hit-latency: projectile hits happen mid world-tick - flush the buffered hit
+			 * feedback now instead of at end-of-tick. Placed after $specificHitFunc so the full onHitEntity
+			 * override chain (e.g. Arrow punch knockback, applied after parent::onHitEntity) is already buffered.
+			 */
+			if($objectHit instanceof Entity){
+				$owner = $this->getOwningEntity();
+				NetworkSession::flushHitFeedbackAll($objectHit, $owner instanceof Player ? $owner : null);
+			}
 
 			$this->isCollided = $this->onGround = true;
 			if($motionBeforeOnHit->equals($this->motion)){

@@ -590,6 +590,12 @@ class InGamePacketHandler extends PacketHandler{
 				return true;
 			case UseItemOnEntityTransactionData::ACTION_ATTACK:
 				$this->player->attackEntity($target);
+				/*
+				 * [BetterPMMP-PATCH] hit-latency: all melee feedback is buffered by the time attackEntity
+				 * returns (event dispatch incl. plugin packets, arm swing, sounds, hurt animation, knockback
+				 * motion) - flush it now instead of waiting for the end-of-tick NetworkSession::tick() flush.
+				 */
+				NetworkSession::flushHitFeedbackAll($target, $this->player);
 				return true;
 		}
 

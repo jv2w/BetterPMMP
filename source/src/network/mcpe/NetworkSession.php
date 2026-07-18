@@ -27,6 +27,7 @@ use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\DataDecodeException;
 use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\entity\Entity;
 use pocketmine\entity\effect\EffectInstance;
 use pocketmine\event\player\PlayerDuplicateLoginEvent;
 use pocketmine\event\player\PlayerResourcePackOfferEvent;
@@ -136,6 +137,7 @@ use function is_string;
 use function json_encode;
 use function ord;
 use function random_bytes;
+use function spl_object_id;
 use function str_split;
 use function strcasecmp;
 use function strlen;
@@ -711,6 +713,54 @@ class NetworkSession{
 				$this->queueCompressedNoGamePacketFlush($batch, networkFlush: true, ackPromises: $ackPromises);
 			}finally{
 				Timings::$playerNetworkSend->stopTiming();
+			}
+		}
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] hit-latency: eager flush of buffered hit feedback (hurt animation, knockback
+	 * motion, sounds, plugin packets) instead of waiting for the end-of-tick NetworkSession::tick() flush.
+	 * $syncOwnAttributes replicates the tick() dirty-attribute sync so the victim's client-side red flash
+	 * (driven by the HEALTH attribute decrease) ships in the same batch as the rest of the feedback.
+	 */
+	public function flushHitFeedback(bool $syncOwnAttributes) : void{
+		if(!$this->isConnected()){
+			return;
+		}
+		if($syncOwnAttributes && $this->player !== null){
+			$dirtyAttributes = $this->player->getAttributeMap()->needSend();
+			$this->entityEventBroadcaster->syncAttributes([$this], $this->player, $dirtyAttributes);
+			foreach($dirtyAttributes as $attribute){
+				$attribute->markSynchronized();
+			}
+		}
+		$this->flushGamePacketQueue();
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] hit-latency: flushes buffered hit feedback for everyone who observes a hit -
+	 * the victim (with its own attribute sync so its red flash lands now), the attacker, and every viewer
+	 * of the victim - deduped so each session flushes at most once.
+	 */
+	public static function flushHitFeedbackAll(Entity $victim, ?Player $attacker) : void{
+		$flushed = [];
+		if($victim instanceof Player){
+			$session = $victim->getNetworkSession();
+			$session->flushHitFeedback(true);
+			$flushed[spl_object_id($session)] = true;
+		}
+		if($attacker !== null){
+			$session = $attacker->getNetworkSession();
+			if(!isset($flushed[spl_object_id($session)])){
+				$session->flushHitFeedback(false);
+				$flushed[spl_object_id($session)] = true;
+			}
+		}
+		foreach($victim->getViewers() as $viewer){
+			$session = $viewer->getNetworkSession();
+			if(!isset($flushed[spl_object_id($session)])){
+				$session->flushHitFeedback(false);
+				$flushed[spl_object_id($session)] = true;
 			}
 		}
 	}
