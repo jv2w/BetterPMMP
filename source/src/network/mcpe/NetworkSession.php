@@ -66,6 +66,7 @@ use pocketmine\network\mcpe\protocol\ChunkRadiusUpdatedPacket;
 use pocketmine\network\mcpe\protocol\ClientboundCloseFormPacket;
 use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\network\mcpe\protocol\DisconnectPacket;
+use pocketmine\network\mcpe\protocol\LevelChunkPacket;
 use pocketmine\network\mcpe\protocol\ModalFormRequestPacket;
 use pocketmine\network\mcpe\protocol\MovePlayerPacket;
 use pocketmine\network\mcpe\protocol\NetworkChunkPublisherUpdatePacket;
@@ -92,6 +93,7 @@ use pocketmine\network\mcpe\protocol\TransferPacket;
 use pocketmine\network\mcpe\protocol\types\AbilitiesData;
 use pocketmine\network\mcpe\protocol\types\AbilitiesLayer;
 use pocketmine\network\mcpe\protocol\types\BlockPosition;
+use pocketmine\network\mcpe\protocol\types\ChunkPosition;
 use pocketmine\network\mcpe\protocol\types\command\CommandData;
 use pocketmine\network\mcpe\protocol\types\command\CommandHardEnum;
 use pocketmine\network\mcpe\protocol\types\command\CommandOverload;
@@ -103,6 +105,7 @@ use pocketmine\network\mcpe\protocol\types\PlayerListEntry;
 use pocketmine\network\mcpe\protocol\types\PlayerPermissions;
 use pocketmine\network\mcpe\protocol\UpdateAbilitiesPacket;
 use pocketmine\network\mcpe\protocol\UpdateAdventureSettingsPacket;
+use pocketmine\network\mcpe\serializer\ChunkSerializer;
 use pocketmine\network\NetworkSessionManager;
 use pocketmine\network\PacketHandlingException;
 use pocketmine\permission\DefaultPermissionNames;
@@ -120,6 +123,7 @@ use pocketmine\timings\TimingsHandler;
 use pocketmine\utils\AssumptionFailedError;
 use pocketmine\utils\ObjectSet;
 use pocketmine\utils\TextFormat;
+use pocketmine\world\format\Chunk;
 use pocketmine\world\format\io\GlobalItemDataHandlers;
 use pocketmine\world\Position;
 use pocketmine\world\World;
@@ -135,6 +139,7 @@ use function implode;
 use function in_array;
 use function is_string;
 use function json_encode;
+use function max;
 use function ord;
 use function random_bytes;
 use function spl_object_id;
@@ -213,6 +218,22 @@ class NetworkSession{
 
 	private string $noisyPacketBuffer = "";
 	private int $noisyPacketsDropped = 0;
+
+	/**
+	 * [BetterPMMP-PATCH] Chunk positions sent since the last world switch. The client caches every received chunk by
+	 * coordinate for the whole session and keeps rendering it until overwritten, so these must be blanked on world change.
+	 * @var true[]
+	 * @phpstan-var array<int, true>
+	 */
+	private array $sentChunkHistory = [];
+	/**
+	 * [BetterPMMP-PATCH] Chunk positions pending an empty-chunk overwrite after a world switch.
+	 * @var true[]
+	 * @phpstan-var array<int, true>
+	 */
+	private array $chunkEraseQueue = [];
+	/** [BetterPMMP-PATCH] */
+	private static ?string $emptyChunkPayload = null;
 
 	public function __construct(
 		private Server $server,
@@ -1338,10 +1359,14 @@ class NetworkSession{
 	/**
 	 * @phpstan-param \Closure() : void $onCompletion
 	 */
-	private function sendChunkPacket(string $chunkPacket, \Closure $onCompletion, World $world) : void{
+	private function sendChunkPacket(string $chunkPacket, \Closure $onCompletion, World $world, int $chunkX, int $chunkZ) : void{
 		$world->timings->syncChunkSend->startTiming();
 		try{
 			$this->queueCompressed($chunkPacket);
+			/** [BetterPMMP-PATCH] Record the position for erasure on a later world switch; fresh data supersedes any pending erase. */
+			$hash = World::chunkHash($chunkX, $chunkZ);
+			$this->sentChunkHistory[$hash] = true;
+			unset($this->chunkEraseQueue[$hash]);
 			$onCompletion();
 		}finally{
 			$world->timings->syncChunkSend->stopTiming();
@@ -1357,7 +1382,7 @@ class NetworkSession{
 		$world = $this->player->getLocation()->getWorld();
 		$promiseOrPacket = ChunkCache::getInstance($world, $this->compressor)->request($chunkX, $chunkZ);
 		if(is_string($promiseOrPacket)){
-			$this->sendChunkPacket($promiseOrPacket, $onCompletion, $world);
+			$this->sendChunkPacket($promiseOrPacket, $onCompletion, $world, $chunkX, $chunkZ);
 			return;
 		}
 		$promiseOrPacket->onResolve(
@@ -1378,7 +1403,7 @@ class NetworkSession{
 					//to NEEDED if they want to be resent.
 					return;
 				}
-				$this->sendChunkPacket($promise->getResult(), $onCompletion, $world);
+				$this->sendChunkPacket($promise->getResult(), $onCompletion, $world, $chunkX, $chunkZ);
 			}
 		);
 	}
@@ -1394,6 +1419,11 @@ class NetworkSession{
 			$this->syncWorldDifficulty($world->getDifficulty());
 			$this->syncWorldSpawnPoint($world->getSpawnLocation());
 			//TODO: weather needs to be synced here (when implemented)
+			if(count($this->sentChunkHistory) > 0){
+				/** [BetterPMMP-PATCH] The client keeps rendering chunks cached from previously visited worlds at matching coordinates until overwritten; queue every previously sent position for blanking. */
+				$this->chunkEraseQueue += $this->sentChunkHistory;
+				$this->sentChunkHistory = [];
+			}
 		}
 	}
 
@@ -1482,10 +1512,28 @@ class NetworkSession{
 		}
 
 		if($this->player !== null){
-			$this->player->doChunkRequests();
+			$player = $this->player;
+			if(count($this->chunkEraseQueue) > 0){
+				/** [BetterPMMP-PATCH] Blank stale cached chunks in per-tick slices; the widened publisher radius makes the client accept and re-mesh positions beyond the server view distance. */
+				$this->syncViewAreaCenterPoint($player->getLocation(), max($player->getViewDistance(), 96));
+				$payload = self::$emptyChunkPayload ??= ChunkSerializer::serializeFullChunk(new Chunk([], false), DimensionIds::OVERWORLD, $this->typeConverter->getBlockTranslator());
+				$count = 0;
+				foreach($this->chunkEraseQueue as $hash => $_){
+					unset($this->chunkEraseQueue[$hash]);
+					World::getXZ($hash, $chunkX, $chunkZ);
+					$this->sendDataPacket(LevelChunkPacket::create(new ChunkPosition($chunkX, $chunkZ), DimensionIds::OVERWORLD, 0, false, null, $payload));
+					if(++$count >= 512){
+						break;
+					}
+				}
+				if(count($this->chunkEraseQueue) === 0){
+					$this->syncViewAreaCenterPoint($player->getLocation(), $player->getViewDistance());
+				}
+			}
+			$player->doChunkRequests();
 
-			$dirtyAttributes = $this->player->getAttributeMap()->needSend();
-			$this->entityEventBroadcaster->syncAttributes([$this], $this->player, $dirtyAttributes);
+			$dirtyAttributes = $player->getAttributeMap()->needSend();
+			$this->entityEventBroadcaster->syncAttributes([$this], $player, $dirtyAttributes);
 			foreach($dirtyAttributes as $attribute){
 				//TODO: we might need to send these to other players in the future
 				//if that happens, this will need to become more complex than a flag on the attribute itself
