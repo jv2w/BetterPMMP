@@ -167,7 +167,7 @@ plugins:
   #!pocketmine.yml.plugins.legacy-data-dir
   legacy-data-dir: false
 
-# [BetterPMMP-PATCH] Extreme optimization settings
+# [BetterPMMP-PATCH]
 better-pmmp:
   #! pocketmine.betterpmmp.yml.config
   config:
