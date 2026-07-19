@@ -1514,20 +1514,34 @@ class NetworkSession{
 		if($this->player !== null){
 			$player = $this->player;
 			if(count($this->chunkEraseQueue) > 0){
-				/** [BetterPMMP-PATCH] Blank stale cached chunks in per-tick slices; the widened publisher radius makes the client accept and re-mesh positions beyond the server view distance. */
-				$this->syncViewAreaCenterPoint($player->getLocation(), max($player->getViewDistance(), 96));
+				/**
+				 * [BetterPMMP-PATCH] Blank stale cached chunks in per-tick slices; the widened publisher radius makes the
+				 * client accept and re-mesh positions beyond the server view distance. Chunks within view distance are
+				 * skipped: the new world re-sends real terrain for them, and blanking a coordinate immediately before its
+				 * real chunk arrives leaves a near-player ghost the client only re-meshes on a later block update.
+				 */
+				$loc = $player->getLocation();
+				$viewDistance = $player->getViewDistance();
+				$centerChunkX = $loc->getFloorX() >> Chunk::COORD_BIT_SIZE;
+				$centerChunkZ = $loc->getFloorZ() >> Chunk::COORD_BIT_SIZE;
+				$keepRadius = max($viewDistance, 0) + 2;
+				$this->syncViewAreaCenterPoint($loc, max($viewDistance, 96));
 				$payload = self::$emptyChunkPayload ??= ChunkSerializer::serializeFullChunk(new Chunk([], false), DimensionIds::OVERWORLD, $this->typeConverter->getBlockTranslator());
 				$count = 0;
 				foreach($this->chunkEraseQueue as $hash => $_){
-					unset($this->chunkEraseQueue[$hash]);
 					World::getXZ($hash, $chunkX, $chunkZ);
+					if(($chunkX - $centerChunkX) >= -$keepRadius && ($chunkX - $centerChunkX) <= $keepRadius && ($chunkZ - $centerChunkZ) >= -$keepRadius && ($chunkZ - $centerChunkZ) <= $keepRadius){
+						unset($this->chunkEraseQueue[$hash]);
+						continue;
+					}
+					unset($this->chunkEraseQueue[$hash]);
 					$this->sendDataPacket(LevelChunkPacket::create(new ChunkPosition($chunkX, $chunkZ), DimensionIds::OVERWORLD, 0, false, null, $payload));
 					if(++$count >= 512){
 						break;
 					}
 				}
 				if(count($this->chunkEraseQueue) === 0){
-					$this->syncViewAreaCenterPoint($player->getLocation(), $player->getViewDistance());
+					$this->syncViewAreaCenterPoint($loc, $viewDistance);
 				}
 			}
 			$player->doChunkRequests();
