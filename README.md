@@ -36,6 +36,48 @@ The performance improvements are on from the start and leave gameplay untouched.
 
 - **Critical Hits**: configurable via `pocketmine.yml`; defaults match vanilla.
 - **Iron Door/Trapdoor No-Interact**: hand interaction no longer toggles iron doors and iron trapdoors.
+- **Mechanic Toggles**: hunger exhaustion, fall damage, and farmland drying/trampling can each be switched off for minigame and arena servers. All default to vanilla behaviour.
+
+## Configuration
+
+Every option lives under the `better-pmmp:` section of `pocketmine.yml`, and each one carries a comment in your server language explaining what it does. **All of them require a server restart** — values are read once at startup.
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `config.enforce-format` | `false` | Rewrite this file into the BetterPMMP layout every startup. Values are kept; your own comments are not. |
+| `world.block-cache-size` | `2048` | Per-world block/collision cache cap. |
+| `world.neighbour-update-limit` | `0` | Max neighbour block updates per tick; `0` is vanilla. |
+| `world.freeze-empty-worlds` | `false` | Run player-less worlds at 1 tick in 100. |
+| `world.view-distance-per-world` | `{}` | View distance per world folder name. |
+| `world.chunk-ticking.batch-recheck-limit` | `64` | Max chunks rechecked for tick eligibility per tick. |
+| `world.chunk-ticking.per-world` | `{}` | `tick-radius` / `blocks-per-subchunk-per-tick` per world; both `0` disables random ticking. |
+| `lighting.fixed-light` | `false` | Skip light population, fill with a constant. Implies `skip-runtime-updates`. |
+| `lighting.fixed-light-level` | `15` | Level used by `fixed-light`. |
+| `lighting.skip-runtime-updates` | `false` | Skip light recalculation on block changes. |
+| `entities.item-merging` | `true` | Merge nearby dropped items. |
+| `entities.item-despawn-ticks` | `6000` | Drop despawn time; `-1` never despawns. |
+| `entities.xp-orbs` | `true` | Spawn XP orbs. Disabling **destroys** XP rather than crediting it. |
+| `entities.pickup-scan-period` | `1` | Scan for pickups every N ticks. |
+| `combat.critical-hit-ignore-sprint` | `false` | Allow crits while sprinting. |
+| `combat.critical-hit-min-fall-distance` | `0.0` | Minimum fall distance for a crit. |
+| `combat.explosion-block-destruction` | `true` | Explosions break blocks. Disabling also stops TNT chaining. |
+| `combat.instant-hit-feedback` | `true` | Send hit feedback immediately instead of at end of tick. |
+| `network.snappy-compression` | `false` | Snappy instead of zlib (needs `ext-snappy`). |
+| `network.movement-broadcast-period` | `1` | Send movement packets every N ticks. |
+| `network.skip-movement-send-event` | `false` | Skip `DataPacketSendEvent` for movement/motion packets. |
+| `network.skip-auth-input-receive-event` | `false` | Skip `DataPacketReceiveEvent` for auth input. |
+| `network.interaction-spam-window` | `20` | Duplicate-interaction filter window, in ms (upstream 100). |
+| `network.block-sync-snapshot` | `true` | Skip re-sending the clicked block when unchanged. |
+| `network.chunk-history-limit` | `8192` | Chunk positions remembered per session for world-change cleanup. |
+| `events.move-event-period` | `1` | Fire `PlayerMoveEvent` every N ticks. Above 1 breaks anti-cheat and region plugins. |
+| `recipes.load-vanilla` | `true` | Register vanilla crafting, furnace and brewing recipes. |
+| `plugins.lifecycle-log` | `true` | Log plugin load/enable/disable. |
+| `gameplay.hunger-exhaustion` | `true` | Hunger drain from every cause. |
+| `gameplay.fall-damage` | `true` | Fall damage for living entities. |
+| `gameplay.farmland-persistent` | `false` | Farmland never dries, tramples, or reverts. |
+| `gameplay.farmland-instant-hydration` | `false` | Tilled/placed farmland starts wet. Needs `farmland-persistent` to stay wet. |
+
+Options that change how the game plays are off by default; performance options that alter vanilla behaviour (`neighbour-update-limit`, `move-event-period`, `movement-broadcast-period`, `pickup-scan-period`) ship at their vanilla-equivalent value.
 
 ## Requirements
 

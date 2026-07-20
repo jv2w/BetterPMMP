@@ -84,7 +84,15 @@
       },
       "sort-packages": true
    },
+   "extra": {
+      "betterpmmp-vendor-patches": {
+         "_comment": "BetterPMMP modifies these vendor files in place. Composer owns vendor/, so install/update reverts them. build/check-vendor-patches.php runs on post-install-cmd/post-update-cmd and warns when that happens; re-apply with 'git apply source/build/<patch>'.",
+         "vendor/pocketmine/raklib/src/server/Server.php": "build/betterpmmp-vendor-patches/raklib-tick-slice.patch"
+      }
+   },
    "scripts": {
+      "post-install-cmd": "@php build/check-vendor-patches.php",
+      "post-update-cmd": "@php build/check-vendor-patches.php",
       "make-devtools": "@php -dphar.readonly=0 tests/plugins/DevTools/src/ConsoleScript.php --make ./ --relative tests/plugins/DevTools --out plugins/DevTools.phar",
       "make-server": [
          "@composer install --no-dev --classmap-authoritative --ignore-platform-reqs",

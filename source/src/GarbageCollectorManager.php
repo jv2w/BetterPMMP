@@ -30,8 +30,6 @@ use function gc_status;
 use function hrtime;
 use function max;
 use function min;
-use function number_format;
-use function sprintf;
 
 /**
  * Allows threads to manually trigger the cyclic garbage collector using a threshold like PHP's own garbage collector,
@@ -49,17 +47,16 @@ final class GarbageCollectorManager{
 
 	private int $threshold = self::GC_THRESHOLD_DEFAULT;
 	private int $collectionTimeTotalNs = 0;
-	private int $runs = 0;
 
-	private \Logger $logger;
 	private TimingsHandler $timings;
 
+	/** [BetterPMMP-PATCH] $runs and $logger were orphaned when the per-GC debug log line was removed:
+	 * nothing read the counter (there is no getter) and nothing wrote to the logger. */
 	public function __construct(
 		\Logger $logger,
 		?TimingsHandler $parentTimings,
 	){
 		gc_disable();
-		$this->logger = new \PrefixedLogger($logger, "Cyclic Garbage Collector");
 		$this->timings = new TimingsHandler("Cyclic Garbage Collector", $parentTimings);
 	}
 
@@ -98,8 +95,7 @@ final class GarbageCollectorManager{
 
 		$time = $end - $start;
 		$this->collectionTimeTotalNs += $time;
-		$this->runs++;
-			/** [BetterPMMP-PATCH] GC log output removed */
+		/** [BetterPMMP-PATCH] GC log output removed */
 
 		return $cycles;
 	}

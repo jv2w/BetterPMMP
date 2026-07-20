@@ -97,6 +97,8 @@ use pocketmine\network\mcpe\protocol\UpdateBlockPacket;
 use pocketmine\network\PacketHandlingException;
 use pocketmine\player\Player;
 use pocketmine\utils\AssumptionFailedError;
+use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\Server;
 use pocketmine\utils\Limits;
 use pocketmine\utils\TextFormat;
 use pocketmine\utils\Utils;
@@ -141,6 +143,10 @@ class InGamePacketHandler extends PacketHandler{
 
 	protected float $lastRightClickTime = 0.0;
 	protected ?UseItemTransactionData $lastRightClickData = null;
+	/** [BetterPMMP-PATCH] Cached better-pmmp.network.interaction-spam-window, in seconds */
+	private ?float $spamWindowSeconds = null;
+	/** [BetterPMMP-PATCH] Cached better-pmmp.network.block-sync-snapshot */
+	private ?bool $blockSyncSnapshot = null;
 
 	protected ?Vector3 $lastPlayerAuthInputPosition = null;
 	protected ?float $lastPlayerAuthInputYaw = null;
@@ -181,13 +187,11 @@ class InGamePacketHandler extends PacketHandler{
 		$rawPos = $packet->getPosition();
 		$rawYaw = $packet->getYaw();
 		$rawPitch = $packet->getPitch();
-		/** [BetterPMMP-PATCH] PvP optimization: the vanilla check allocated a 6-element array 20x/s per
-		 * player purely to iterate it. NAN and INF both propagate through addition, so one is_nan/is_finite
-		 * pair over the sum covers every component with no allocation and no loop. */
-		$floatSum = $rawPos->x + $rawPos->y + $rawPos->z + $rawYaw + $packet->getHeadYaw() + $rawPitch;
-		if(is_nan($floatSum) || is_infinite($floatSum)){
-			$this->session->getLogger()->debug("Invalid movement received, contains NAN/INF components");
-			return false;
+		foreach([$rawPos->x, $rawPos->y, $rawPos->z, $rawYaw, $packet->getHeadYaw(), $rawPitch] as $float){
+			if(is_infinite($float) || is_nan($float)){
+				$this->session->getLogger()->debug("Invalid movement received, contains NAN/INF components");
+				return false;
+			}
 		}
 
 		if($rawYaw !== $this->lastPlayerAuthInputYaw || $rawPitch !== $this->lastPlayerAuthInputPitch){
@@ -204,10 +208,7 @@ class InGamePacketHandler extends PacketHandler{
 		}
 
 		$hasMoved = $this->lastPlayerAuthInputPosition === null || !$this->lastPlayerAuthInputPosition->equals($rawPos);
-		/** [BetterPMMP-PATCH] PvP optimization: $newPos is consumed only by the two $hasMoved branches
-		 * below, but vanilla built it unconditionally - 2 Vector3 allocations + 3 libm round() calls 20x/s
-		 * for every player standing still (spawn, queue, aiming). */
-		$newPos = $hasMoved ? $rawPos->subtract(0, 1.62, 0)->round(4) : null;
+		$newPos = $rawPos->subtract(0, 1.62, 0)->round(4);
 
 		if($this->forceMoveSync && $hasMoved){
 			$curPos = $this->player->getLocation();
@@ -470,10 +471,13 @@ class InGamePacketHandler extends PacketHandler{
 				//TODO: start hack for client spam bug
 				/** [BetterPMMP-PATCH] Interaction delay fix - the client's duplicate UseItem packets arrive within the
 				 * same batch (sub-ms apart), so a 20ms window still swallows them, while the upstream 100ms window also
-				 * ate legitimate fast/held clicks and capped interaction at 10 CPS. */
+				 * ate legitimate fast/held clicks and capped interaction at 10 CPS. Configurable via
+				 * better-pmmp.network.interaction-spam-window: raise it back towards 100 if a client build turns
+				 * out to send its duplicate in the following tick's batch rather than the same one. */
 				$clickPos = $data->getClickPosition();
+				$spamWindow = $this->spamWindowSeconds ??= max(0, (int) Server::getInstance()->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_INTERACTION_SPAM_WINDOW, 20)) / 1000;
 				$spamBug = ($this->lastRightClickData !== null &&
-					microtime(true) - $this->lastRightClickTime < 0.02 && //20ms
+					microtime(true) - $this->lastRightClickTime < $spamWindow &&
 					$this->lastRightClickData->getFace() === $data->getFace() &&
 					$this->lastRightClickData->getPlayerPosition()->distanceSquared($data->getPlayerPosition()) < 0.00001 &&
 					$this->lastRightClickData->getBlockPosition()->equals($data->getBlockPosition()) &&
@@ -492,8 +496,13 @@ class InGamePacketHandler extends PacketHandler{
 				$blockPos = $data->getBlockPosition();
 				$vBlockPos = new Vector3($blockPos->getX(), $blockPos->getY(), $blockPos->getZ());
 
-				/** [BetterPMMP-PATCH] Block lag fix - capture snapshot before interaction */
-				$oldBlockSnapshot = $this->captureBlockSnapshot($vBlockPos, $data->getFace());
+				/** [BetterPMMP-PATCH] Block lag fix - capture snapshot before interaction. Gated behind
+				 * better-pmmp.network.block-sync-snapshot, and skipped when syncBlocksNearby() would bail on
+				 * the distance check anyway - capturing 14 blocks for a click 100+ blocks away was pure waste. */
+				$oldBlockSnapshot = ($this->blockSyncSnapshot ??= (bool) Server::getInstance()->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_BLOCK_SYNC_SNAPSHOT, true))
+					&& $vBlockPos->distanceSquared($this->player->getLocation()) < 10000
+					? $this->captureBlockSnapshot($vBlockPos, $data->getFace())
+					: [];
 				$interactResult = $this->player->interactBlock($vBlockPos, $data->getFace(), $clickPos);
 
 				$syncAdjacentFace = null;
@@ -547,7 +556,12 @@ class InGamePacketHandler extends PacketHandler{
 			array_push($blocks, ...$sidePos->sidesArray());
 		}
 		$world = $this->player->getWorld();
-		$blockTranslator = TypeConverter::getInstance()->getBlockTranslator();
+		$blockTranslator = $this->session->getTypeConverter()->getBlockTranslator();
+		/** [BetterPMMP-PATCH] Suppression is limited to the clicked block. Vanilla sends the surrounding
+		 * neighbours precisely to overwrite the client's optimistic prediction, so dropping an unchanged
+		 * neighbour left a ghost wherever the client had predicted a change the server rejected. The
+		 * clicked block is the one position the server authoritatively just resolved, so it is safe. */
+		$clickedHash = World::blockHash((int) $blockPos->x, (int) $blockPos->y, (int) $blockPos->z);
 		foreach ($world->createBlockUpdatePackets($blocks) as $packet) {
 			if (count($oldBlockSnapshot) > 0 && $packet instanceof UpdateBlockPacket) {
 				$hash = World::blockHash(
@@ -555,7 +569,7 @@ class InGamePacketHandler extends PacketHandler{
 					$packet->blockPosition->getY(),
 					$packet->blockPosition->getZ()
 				);
-				if (isset($oldBlockSnapshot[$hash]) && $blockTranslator->internalIdToNetworkId($oldBlockSnapshot[$hash]) === $packet->blockRuntimeId) {
+				if ($hash === $clickedHash && isset($oldBlockSnapshot[$hash]) && $blockTranslator->internalIdToNetworkId($oldBlockSnapshot[$hash]) === $packet->blockRuntimeId) {
 					continue;
 				}
 			}

@@ -136,7 +136,7 @@ class AuthKeyProvider{
 					$this->logger->critical("No valid authentication keys returned by Mojang's API. Xbox players may not be able to authenticate!");
 					$resolver->reject();
 				}else{
-					/** [BetterPMMP-PATCH] "Successfully fetched N authentication keys" log removed */
+					$this->logger->debug("Successfully fetched " . count($keys) . " new authentication keys from issuer $issuer, key IDs: " . implode(", ", array_keys($pemKeys)));
 					$this->keyring = new AuthKeyring($issuer, $pemKeys);
 					$this->lastFetch = time();
 					$resolver->resolve($this->keyring);
@@ -156,7 +156,7 @@ class AuthKeyProvider{
 			return $this->resolver->getPromise();
 		}
 
-		/** [BetterPMMP-PATCH] "Fetching new authentication keys" log removed */
+		$this->logger->debug("Fetching new authentication keys");
 
 		/** @phpstan-var PromiseResolver<AuthKeyring> $resolver */
 		$resolver = new PromiseResolver();

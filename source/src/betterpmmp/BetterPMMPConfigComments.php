@@ -28,7 +28,9 @@ use pocketmine\lang\LanguageNotFoundException;
 use function array_map;
 use function explode;
 use function implode;
+use function preg_match;
 use function preg_match_all;
+use function preg_replace;
 use function preg_replace_callback;
 use function str_replace;
 use function strpos;
@@ -52,11 +54,22 @@ final class BetterPMMPConfigComments{
 
 	private const MARKER_PATTERN = '/^([ \t]*)#!\s*(\S+)[ \t]*$/m';
 
+	/**
+	 * [BetterPMMP-PATCH] Records which language the comments in a rendered file are written in, so
+	 * {@link retranslate()} can answer "is this already current?" without loading every shipped language.
+	 */
+	private const LANGUAGE_STAMP_PREFIX = "#@ betterpmmp-lang: ";
+	private const LANGUAGE_STAMP_PATTERN = '/^#@ betterpmmp-lang: (\S+)[ \t]*\n?/m';
+
 	private function __construct(){
 		//NOOP
 	}
 
-	public static function render(string $template, Language $lang) : string{
+	/**
+	 * Expands `#! <key>` markers without touching the language stamp. Used when rendering a fragment that
+	 * is spliced into an already-stamped file.
+	 */
+	public static function expand(string $template, Language $lang) : string{
 		$template = str_replace("\r\n", "\n", $template);
 		$result = preg_replace_callback(
 			self::MARKER_PATTERN,
@@ -66,8 +79,22 @@ final class BetterPMMPConfigComments{
 		return $result ?? $template;
 	}
 
+	public static function render(string $template, Language $lang) : string{
+		return self::stamp(self::expand($template, $lang), $lang);
+	}
+
 	public static function retranslate(string $content, string $template, Language $current) : string{
 		$content = str_replace("\r\n", "\n", $content);
+
+		/** [BetterPMMP-PATCH] Fast path: the stamp says the comments are already in the current language,
+		 * so skip the probe and the 13-language load in convert() entirely. Without this, deleting a single
+		 * comment line makes the probe below miss forever - render() only expands `#!` markers, which are
+		 * long gone from a rendered file, so the deleted line is never restored and the expensive path runs
+		 * on every startup, silently (the output equals the input, so nothing is even written). */
+		if(self::readStamp($content) === $current->getLang()){
+			return self::render($content, $current);
+		}
+
 		$map = self::markers($template);
 		foreach($map as [$key, $indent]){
 			$block = self::block($key, $indent, $current);
@@ -76,6 +103,15 @@ final class BetterPMMPConfigComments{
 			}
 		}
 		return self::render($content, $current);
+	}
+
+	private static function stamp(string $content, Language $lang) : string{
+		$stripped = preg_replace(self::LANGUAGE_STAMP_PATTERN, "", $content) ?? $content;
+		return self::LANGUAGE_STAMP_PREFIX . $lang->getLang() . "\n" . $stripped;
+	}
+
+	private static function readStamp(string $content) : ?string{
+		return preg_match(self::LANGUAGE_STAMP_PATTERN, $content, $matches) === 1 ? $matches[1] : null;
 	}
 
 	/**

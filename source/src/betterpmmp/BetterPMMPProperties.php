@@ -40,6 +40,11 @@ final class BetterPMMPProperties{
 		//NOOP
 	}
 
+	/**
+	 * Consumed by {@link BetterPMMPConfigFormat::enforceEnabled()} directly off the raw YAML, not through
+	 * ConfigGroup::getProperty() - it is read before the config group exists, so it is the one key with no
+	 * getProperty() call site.
+	 */
 	public const CONFIG_ENFORCE_FORMAT = 'better-pmmp.config.enforce-format';
 
 	public const WORLD_BLOCK_CACHE_SIZE = 'better-pmmp.world.block-cache-size';
@@ -61,19 +66,21 @@ final class BetterPMMPProperties{
 	public const COMBAT_CRITICAL_HIT_IGNORE_SPRINT = 'better-pmmp.combat.critical-hit-ignore-sprint';
 	public const COMBAT_CRITICAL_HIT_MIN_FALL_DISTANCE = 'better-pmmp.combat.critical-hit-min-fall-distance';
 	public const COMBAT_EXPLOSION_BLOCK_DESTRUCTION = 'better-pmmp.combat.explosion-block-destruction';
+	public const COMBAT_INSTANT_HIT_FEEDBACK = 'better-pmmp.combat.instant-hit-feedback';
 
 	public const NETWORK_SNAPPY_COMPRESSION = 'better-pmmp.network.snappy-compression';
 	public const NETWORK_MOVEMENT_BROADCAST_PERIOD = 'better-pmmp.network.movement-broadcast-period';
 	public const NETWORK_SKIP_MOVEMENT_SEND_EVENT = 'better-pmmp.network.skip-movement-send-event';
 	public const NETWORK_SKIP_AUTH_INPUT_RECEIVE_EVENT = 'better-pmmp.network.skip-auth-input-receive-event';
+	public const NETWORK_INTERACTION_SPAM_WINDOW = 'better-pmmp.network.interaction-spam-window';
+	public const NETWORK_BLOCK_SYNC_SNAPSHOT = 'better-pmmp.network.block-sync-snapshot';
+	public const NETWORK_CHUNK_HISTORY_LIMIT = 'better-pmmp.network.chunk-history-limit';
 
 	public const EVENTS_MOVE_EVENT_PERIOD = 'better-pmmp.events.move-event-period';
 
 	public const RECIPES_LOAD_VANILLA = 'better-pmmp.recipes.load-vanilla';
 
-	public const PLUGINS_LOAD_LOG = 'better-pmmp.plugins.load-log';
-	public const PLUGINS_ENABLE_LOG = 'better-pmmp.plugins.enable-log';
-	public const PLUGINS_DISABLE_LOG = 'better-pmmp.plugins.disable-log';
+	public const PLUGINS_LIFECYCLE_LOG = 'better-pmmp.plugins.lifecycle-log';
 
 	public const GAMEPLAY_HUNGER_EXHAUSTION = 'better-pmmp.gameplay.hunger-exhaustion';
 	public const GAMEPLAY_FALL_DAMAGE = 'better-pmmp.gameplay.fall-damage';

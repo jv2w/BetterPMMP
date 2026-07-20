@@ -981,7 +981,7 @@ class Server{
 			 * singleton keeps its hardcoded default and the configured threshold is silently ignored
 			 * whenever better-pmmp.network.snappy-compression selects it. Snappy has no level parameter,
 			 * so network.compression-level remains zlib-only. */
-			SnappyCompressor::setInstance(new SnappyCompressor($netCompressionThreshold));
+			SnappyCompressor::setInstance(new SnappyCompressor($netCompressionThreshold, SnappyCompressor::DEFAULT_MAX_DECOMPRESSION_SIZE));
 
 			$this->networkCompressionAsync = $this->configGroup->getPropertyBool(Yml::NETWORK_ASYNC_COMPRESSION, true);
 			$this->networkCompressionAsyncThreshold = max(
@@ -1710,7 +1710,10 @@ class Server{
 			if($this->configGroup->getPropertyBool(Yml::AUTO_REPORT_ENABLED, true)){
 				$report = true;
 
-				$stamp = Path::join($this->dataPath, "crashdumps", ".last_crash");
+				/** [BetterPMMP-PATCH] Keep the rate-limit stamp beside the dumps in system/crashdumps. The
+				 * dumps moved there but this path did not, so the directory never existed, touch()/filemtime()
+				 * always failed and the 2-minute auto-report interval was permanently disabled. */
+				$stamp = Path::join($this->dataPath, "system", "crashdumps", ".last_crash");
 				$crashInterval = 120; //2 minutes
 				if(($lastReportTime = @filemtime($stamp)) !== false && $lastReportTime + $crashInterval >= time()){
 					$report = false;

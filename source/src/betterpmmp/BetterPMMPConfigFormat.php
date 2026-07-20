@@ -81,6 +81,12 @@ final class BetterPMMPConfigFormat{
 	public static function apply(string $content, string $template, Language $lang) : string{
 		$content = str_replace("\r\n", "\n", $content);
 		$template = str_replace("\r\n", "\n", $template);
+		/** [BetterPMMP-PATCH] A truncated-to-empty file (crash mid-write, full disk) parses to null, which
+		 * used to take the retranslate path and emit "" - leaving the server permanently running on
+		 * defaults with a blank config. Regenerate from the template instead. */
+		if(trim($content) === ""){
+			return BetterPMMPConfigComments::render($template, $lang);
+		}
 		$data = self::parse($content);
 		if($data === null){
 			return BetterPMMPConfigComments::retranslate($content, $template, $lang);
@@ -111,7 +117,9 @@ final class BetterPMMPConfigFormat{
 		while($start > 0 && ($lines[$start - 1][0] ?? '') === '#'){
 			$start--;
 		}
-		$section = BetterPMMPConfigComments::render(implode("\n", array_slice($lines, $start)), $lang);
+		/** [BetterPMMP-PATCH] expand(), not render() - this fragment is spliced into a file that already
+		 * carries the language stamp at the top, and a second stamp mid-file would be misread. */
+		$section = BetterPMMPConfigComments::expand(implode("\n", array_slice($lines, $start)), $lang);
 		$body = rtrim($content, "\n");
 		$section = rtrim($section, "\n");
 		$result = "{$body}\n\n{$section}\n";

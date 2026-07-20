@@ -136,9 +136,10 @@ class PluginManager{
 
 	private function internalLoadPlugin(string $path, PluginLoader $loader, PluginDescription $description) : ?Plugin{
 		$language = $this->server->getLanguage();
-		/** [BetterPMMP-PATCH] Plugin load log gated behind better-pmmp.plugins.load-log; default true reproduces vanilla */
-		if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_LOAD_LOG, true)){
-			$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_load($description->getFullName())));
+		/** [BetterPMMP-PATCH] Plugin lifecycle logs (load/enable/disable) gated behind a single
+		 * better-pmmp.plugins.lifecycle-log; default true reproduces vanilla. */
+		if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_LIFECYCLE_LOG, true)){
+			$this->server->getLogger()->info($language->translate(KnownTranslationFactory::pocketmine_plugin_load($description->getFullName())));
 		}
 
 		$dataFolder = $this->getDataDirectory($path, $description->getName());
@@ -456,8 +457,8 @@ class PluginManager{
 
 	public function enablePlugin(Plugin $plugin) : bool{
 		if(!$plugin->isEnabled()){
-			/** [BetterPMMP-PATCH] Plugin enable log gated behind better-pmmp.plugins.enable-log; default true reproduces vanilla */
-			if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_ENABLE_LOG, true)){
+			/** [BetterPMMP-PATCH] see better-pmmp.plugins.lifecycle-log */
+			if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_LIFECYCLE_LOG, true)){
 				$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_enable($plugin->getDescription()->getFullName())));
 			}
 
@@ -517,8 +518,8 @@ class PluginManager{
 
 	public function disablePlugin(Plugin $plugin) : void{
 		if($plugin->isEnabled()){
-			/** [BetterPMMP-PATCH] Plugin disable log gated behind better-pmmp.plugins.disable-log; default true reproduces vanilla */
-			if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_DISABLE_LOG, true)){
+			/** [BetterPMMP-PATCH] see better-pmmp.plugins.lifecycle-log */
+			if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_LIFECYCLE_LOG, true)){
 				$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_disable($plugin->getDescription()->getFullName())));
 			}
 			(new PluginDisableEvent($plugin))->call();

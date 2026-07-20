@@ -23,7 +23,6 @@ declare(strict_types=1);
 
 namespace pocketmine\entity;
 
-use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\data\bedrock\item\SavedItemStackData;
 use pocketmine\data\SavedDataLoadingException;
 use pocketmine\entity\animation\TotemUseAnimation;
@@ -171,15 +170,14 @@ class Human extends Living implements ProjectileSource, InventoryHolder{
 		]);
 	}
 
-	/** [BetterPMMP-PATCH] gameplay toggle: cached hunger-exhaustion flag, shared with Player movement */
+	/** [BetterPMMP-PATCH] Cached hunger-exhaustion toggle, read by Player::handleMovement() to skip the sprint-distance sqrt. */
 	protected ?bool $hungerExhaustion = null;
 
 	public function jump() : void{
 		parent::jump();
-		/** [BetterPMMP-PATCH] gameplay toggle: skip jump exhaustion when hunger-exhaustion is off */
-		if(!($this->hungerExhaustion ??= (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_HUNGER_EXHAUSTION, true))){
-			return;
-		}
+		/** [BetterPMMP-PATCH] The hunger-exhaustion gate that used to sit here was removed as dead:
+		 * HungerManager::exhaust() already returns 0 for every cause when the toggle is off, so this only
+		 * duplicated the check and added a second source of truth for the same flag. */
 		if($this->isSprinting()){
 			$this->hungerManager->exhaust(0.2, PlayerExhaustEvent::CAUSE_SPRINT_JUMPING);
 		}else{

@@ -778,17 +778,14 @@ abstract class Entity{
 
 	/** [BetterPMMP-PATCH] PvP optimization: cached movement broadcast period */
 	private ?int $pvpMovementBroadcastPeriod = null;
+	/** [BetterPMMP-PATCH] Set when a movement broadcast was skipped by the period, so the resting position can be flushed. */
+	private bool $pvpMovementBroadcastPending = false;
 
 	protected function updateMovement(bool $teleport = false) : void{
 		$diffPosition = $this->location->distanceSquared($this->lastLocation);
 		$diffRotation = ($this->location->yaw - $this->lastLocation->yaw) ** 2 + ($this->location->pitch - $this->lastLocation->pitch) ** 2;
 
-		/** [BetterPMMP-PATCH] PvP optimization: subtractVector() allocated a throwaway Vector3 for every
-		 * entity every tick just to reach a scalar. Component math is bit-identical and allocation-free. */
-		$diffMotionX = $this->motion->x - $this->lastMotion->x;
-		$diffMotionY = $this->motion->y - $this->lastMotion->y;
-		$diffMotionZ = $this->motion->z - $this->lastMotion->z;
-		$diffMotion = $diffMotionX * $diffMotionX + $diffMotionY * $diffMotionY + $diffMotionZ * $diffMotionZ;
+		$diffMotion = $this->motion->subtractVector($this->lastMotion)->lengthSquared();
 
 		$still = $this->motion->lengthSquared() === 0.0;
 		$wasStill = $this->lastMotion->lengthSquared() === 0.0;
@@ -799,14 +796,28 @@ abstract class Entity{
 
 		if($teleport || $diffPosition > 0.0001 || $diffRotation > 1.0 || (!$wasStill && $still)){
 			/** [BetterPMMP-PATCH] PvP optimization: movement broadcast period - skip off-cycle sends.
-			 * lastLocation is left untouched on skip, so the accumulated diff re-enters this branch
-			 * and the final position is still broadcast after the entity stops moving. */
+			 * `!$wasStill && $still` (the entity just came to rest) always sends: that is the tick after
+			 * which World::tickEntities() may drop the entity from the update list, so a skip there would
+			 * leave viewers frozen at a position up to (period - 1) ticks stale, permanently. */
 			$pvpMovePeriod = $this->pvpMovementBroadcastPeriod ??= (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1);
-			if($teleport || $pvpMovePeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMovePeriod) === 0){
+			if($teleport || (!$wasStill && $still) || $pvpMovePeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMovePeriod) === 0){
+				$this->pvpMovementBroadcastPending = false;
 				$this->lastLocation = $this->location->asLocation();
 
 				$this->broadcastMovement($teleport);
+			}else{
+				$this->pvpMovementBroadcastPending = true;
 			}
+		}elseif($this->pvpMovementBroadcastPending){
+			/** [BetterPMMP-PATCH] Flush the last skipped broadcast, mirroring Player::handleMovement(). The
+			 * skip cannot rely on "the accumulated diff re-enters this branch next tick": an entity that
+			 * comes to rest on an off-cycle tick stops producing movement updates, World::tickEntities()
+			 * drops it from the update list, and updateMovement() is never called again - so viewers would
+			 * stay frozen at a position up to (period - 1) ticks stale. */
+			$this->pvpMovementBroadcastPending = false;
+			$this->lastLocation = $this->location->asLocation();
+
+			$this->broadcastMovement();
 		}
 
 		if($diffMotion > 0.0025 || $wasStill !== $still){ //0.05 ** 2

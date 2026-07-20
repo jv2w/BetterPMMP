@@ -128,6 +128,7 @@ use pocketmine\world\format\io\GlobalItemDataHandlers;
 use pocketmine\world\Position;
 use pocketmine\world\World;
 use pocketmine\YmlServerProperties;
+use function array_key_first;
 use function array_map;
 use function array_slice;
 use function array_values;
@@ -226,6 +227,8 @@ class NetworkSession{
 	 * @phpstan-var array<int, true>
 	 */
 	private array $sentChunkHistory = [];
+	/** [BetterPMMP-PATCH] Cached better-pmmp.network.chunk-history-limit */
+	private ?int $chunkHistoryLimit = null;
 	/**
 	 * [BetterPMMP-PATCH] Chunk positions pending an empty-chunk overwrite after a world switch.
 	 * @var true[]
@@ -764,6 +767,16 @@ class NetworkSession{
 	 * of the victim - deduped so each session flushes at most once.
 	 */
 	public static function flushHitFeedbackAll(Entity $victim, ?Player $attacker) : void{
+		/** [BetterPMMP-PATCH] Gated behind better-pmmp.combat.instant-hit-feedback - this changes packet
+		 * scheduling for every hit on the server, so it needs to be switchable like every other
+		 * behaviour-affecting option. */
+		if(!Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::COMBAT_INSTANT_HIT_FEEDBACK, true)){
+			return;
+		}
+		/** [BetterPMMP-PATCH] Only the victim and the attacker are flushed early. The viewer fan-out that
+		 * used to be here forced an extra batch (and an extra compression pass) per viewer per hit, which
+		 * in a crowded fight multiplied outbound batches for feedback - hurt animation and sound - that is
+		 * imperceptibly different one tick later. */
 		$flushed = [];
 		if($victim instanceof Player){
 			$session = $victim->getNetworkSession();
@@ -774,14 +787,6 @@ class NetworkSession{
 			$session = $attacker->getNetworkSession();
 			if(!isset($flushed[spl_object_id($session)])){
 				$session->flushHitFeedback(false);
-				$flushed[spl_object_id($session)] = true;
-			}
-		}
-		foreach($victim->getViewers() as $viewer){
-			$session = $viewer->getNetworkSession();
-			if(!isset($flushed[spl_object_id($session)])){
-				$session->flushHitFeedback(false);
-				$flushed[spl_object_id($session)] = true;
 			}
 		}
 	}
@@ -1363,10 +1368,21 @@ class NetworkSession{
 		$world->timings->syncChunkSend->startTiming();
 		try{
 			$this->queueCompressed($chunkPacket);
-			/** [BetterPMMP-PATCH] Record the position for erasure on a later world switch; fresh data supersedes any pending erase. */
+			/** [BetterPMMP-PATCH] Record the position for erasure on a later world switch; fresh data supersedes any pending erase.
+			 * Bounded: this used to grow without limit for the whole session, so a player roaming a single
+			 * world accumulated tens of thousands of entries. Oldest-first eviction is correct here - the
+			 * client also drops its own oldest cached chunks, and a stale entry only costs one empty-chunk
+			 * packet on the next world switch. */
 			$hash = World::chunkHash($chunkX, $chunkZ);
+			unset($this->sentChunkHistory[$hash]);
 			$this->sentChunkHistory[$hash] = true;
 			unset($this->chunkEraseQueue[$hash]);
+			$historyLimit = $this->chunkHistoryLimit ??= max(0, (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_CHUNK_HISTORY_LIMIT, 8192));
+			if($historyLimit > 0){
+				while(count($this->sentChunkHistory) > $historyLimit){
+					unset($this->sentChunkHistory[array_key_first($this->sentChunkHistory)]);
+				}
+			}
 			$onCompletion();
 		}finally{
 			$world->timings->syncChunkSend->stopTiming();

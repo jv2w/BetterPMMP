@@ -111,6 +111,7 @@ use pocketmine\world\sound\Sound;
 use pocketmine\world\utils\SubChunkExplorer;
 use pocketmine\YmlServerProperties;
 use function abs;
+use function array_fill;
 use function array_filter;
 use function array_key_exists;
 use function array_keys;
@@ -171,9 +172,6 @@ class World implements ChunkManager{
 	public const DIFFICULTY_HARD = 3;
 
 	public const DEFAULT_TICKED_BLOCKS_PER_SUBCHUNK_PER_TICK = 3;
-
-	//TODO: this could probably do with being a lot bigger
-	private const BLOCK_CACHE_SIZE_CAP = 2048;
 
 	/**
 	 * @var Player[] entity runtime ID => Player
@@ -573,7 +571,9 @@ class World implements ChunkManager{
 		$this->maxConcurrentChunkPopulationTasks = $cfg->getPropertyInt(YmlServerProperties::CHUNK_GENERATION_POPULATION_QUEUE_SIZE, 2);
 
 		/** [BetterPMMP-PATCH] Block cache size from config */
-		$this->blockCacheSizeCap = max(512, (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::WORLD_BLOCK_CACHE_SIZE, 8192));
+		/** [BetterPMMP-PATCH] Configurable block cache cap. Defaults to the upstream 2048 so memory use out
+		 * of the box matches vanilla; raising it trades RAM for a higher getBlockAt() hit rate. */
+		$this->blockCacheSizeCap = max(512, (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::WORLD_BLOCK_CACHE_SIZE, 2048));
 		$this->initRandomTickBlocksFromConfig($cfg);
 
 		$this->timings = new WorldTimings($this);
@@ -999,20 +999,24 @@ class World implements ChunkManager{
 		$this->timings->scheduledBlockUpdates->stopTiming();
 
 		$this->timings->neighbourBlockUpdates->startTiming();
-		/** [BetterPMMP-PATCH] Neighbour block update throttle */
-		$neighbourUpdateLimit = (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 512);
+		/** [BetterPMMP-PATCH] Neighbour block update throttle. Defaults to 0 (unlimited) because vanilla
+		 * drains this queue unconditionally - any positive limit defers overflow to the next tick and
+		 * visibly slows water/lava spread and sand/gravel collapses, so it must be opt-in. */
+		$neighbourUpdateLimit = (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 0);
 		$neighbourUpdateCount = 0;
 		while($this->neighbourBlockUpdateQueue->count() > 0){
 			if($neighbourUpdateLimit > 0 && $neighbourUpdateCount >= $neighbourUpdateLimit){
 				break;
 			}
-			$neighbourUpdateCount++;
 			$index = $this->neighbourBlockUpdateQueue->dequeue();
 			unset($this->neighbourBlockUpdateQueueIndex[$index]);
 			World::getBlockXYZ($index, $x, $y, $z);
 			if(!$this->isChunkLoaded($x >> Chunk::COORD_BIT_SIZE, $z >> Chunk::COORD_BIT_SIZE)){
 				continue;
 			}
+			/** [BetterPMMP-PATCH] Count after the unloaded-chunk skip - entries in unloaded chunks do no
+			 * work, so charging them against the budget shrinks it for no reason. */
+			$neighbourUpdateCount++;
 
 			$block = $this->getBlockAt($x, $y, $z);
 
@@ -1406,6 +1410,13 @@ class World implements ChunkManager{
 					$subChunk->setBlockSkyLightArray(LightArray::fill($fixedLevel));
 					$subChunk->setBlockLightArray(LightArray::fill($fixedLevel));
 				}
+				/** [BetterPMMP-PATCH] The async path derives a heightmap inside LightPopulationTask; this
+				 * path skipped it entirely, leaving whatever HeightArray the chunk deserialized with. That
+				 * is the array SkyLightUpdate reads, so with skip-runtime-updates off the next block edit
+				 * recomputed sky light against a bogus heightmap and progressively ate the fixed light.
+				 * Fill it with the world floor - "no sky-light blockers", which is the only value
+				 * consistent with a uniformly lit world. */
+				$targetChunk->setHeightMapArray(array_fill(0, 256, $this->minY));
 				$targetChunk->setLightPopulated(true);
 				$this->markTickingChunkForRecheck($chunkX, $chunkZ);
 				return;
@@ -1921,8 +1932,15 @@ class World implements ChunkManager{
 	private ?bool $pvpSkipLightUpdates = null;
 
 	public function updateAllLight(int $x, int $y, int $z) : void{
-		/** [BetterPMMP-PATCH] PvP optimization: skip runtime light recalculation entirely */
-		if($this->pvpSkipLightUpdates ??= (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::LIGHTING_SKIP_RUNTIME_UPDATES, false)){
+		/** [BetterPMMP-PATCH] PvP optimization: skip runtime light recalculation entirely.
+		 * fixed-light implies this: the fabricated uniform light is not derived from the terrain, so
+		 * letting SkyLightUpdate/BlockLightUpdate run against it would progressively overwrite it with
+		 * real values and defeat the whole option. Requiring the operator to remember to set both was a
+		 * silent footgun. */
+		if($this->pvpSkipLightUpdates ??= (
+			(bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::LIGHTING_SKIP_RUNTIME_UPDATES, false)
+			|| (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false)
+		)){
 			return;
 		}
 		if(($chunk = $this->getChunk($x >> Chunk::COORD_BIT_SIZE, $z >> Chunk::COORD_BIT_SIZE)) === null || $chunk->isLightPopulated() !== true){
@@ -2915,16 +2933,11 @@ class World implements ChunkManager{
 	 * @internal
 	 */
 	public function onEntityMoved(Entity $entity) : void{
-		/** [BetterPMMP-PATCH] PvP optimization: hoist the repeated getId() calls and use isset() - entries
-		 * are never null, so array_key_exists() only costs extra. The asVector3() copy below is deliberately
-		 * kept: storing the Position directly would save an allocation but leaks a World backreference into
-		 * this map, turning every entry into a GC cycle. */
-		$entityId = $entity->getId();
-		if(!isset($this->entityLastKnownPositions[$entityId])){
+		if(!array_key_exists($entity->getId(), $this->entityLastKnownPositions)){
 			//this can happen if the entity was teleported before addEntity() was called
 			return;
 		}
-		$oldPosition = $this->entityLastKnownPositions[$entityId];
+		$oldPosition = $this->entityLastKnownPositions[$entity->getId()];
 		$newPosition = $entity->getPosition();
 
 		$oldChunkX = $oldPosition->getFloorX() >> Chunk::COORD_BIT_SIZE;
@@ -2934,11 +2947,11 @@ class World implements ChunkManager{
 
 		if($oldChunkX !== $newChunkX || $oldChunkZ !== $newChunkZ){
 			$oldChunkHash = World::chunkHash($oldChunkX, $oldChunkZ);
-			if(isset($this->entitiesByChunk[$oldChunkHash][$entityId])){
+			if(isset($this->entitiesByChunk[$oldChunkHash][$entity->getId()])){
 				if(count($this->entitiesByChunk[$oldChunkHash]) === 1){
 					unset($this->entitiesByChunk[$oldChunkHash]);
 				}else{
-					unset($this->entitiesByChunk[$oldChunkHash][$entityId]);
+					unset($this->entitiesByChunk[$oldChunkHash][$entity->getId()]);
 				}
 			}
 
@@ -2955,9 +2968,9 @@ class World implements ChunkManager{
 			}
 
 			$newChunkHash = World::chunkHash($newChunkX, $newChunkZ);
-			$this->entitiesByChunk[$newChunkHash][$entityId] = $entity;
+			$this->entitiesByChunk[$newChunkHash][$entity->getId()] = $entity;
 		}
-		$this->entityLastKnownPositions[$entityId] = $newPosition->asVector3();
+		$this->entityLastKnownPositions[$entity->getId()] = $newPosition->asVector3();
 	}
 
 	/**

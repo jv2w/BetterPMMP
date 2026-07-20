@@ -177,9 +177,9 @@ better-pmmp:
   #! pocketmine.betterpmmp.yml.world
   world:
     #! pocketmine.betterpmmp.yml.world.block-cache-size
-    block-cache-size: 8192
+    block-cache-size: 2048
     #! pocketmine.betterpmmp.yml.world.neighbour-update-limit
-    neighbour-update-limit: 512
+    neighbour-update-limit: 0
     #! pocketmine.betterpmmp.yml.world.freeze-empty-worlds
     freeze-empty-worlds: false
     #! pocketmine.betterpmmp.yml.world.view-distance-per-world
@@ -219,6 +219,8 @@ better-pmmp:
     critical-hit-min-fall-distance: 0.0
     #! pocketmine.betterpmmp.yml.combat.explosion-block-destruction
     explosion-block-destruction: true
+    #! pocketmine.betterpmmp.yml.combat.instant-hit-feedback
+    instant-hit-feedback: true
 
   #! pocketmine.betterpmmp.yml.network
   network:
@@ -230,6 +232,12 @@ better-pmmp:
     skip-movement-send-event: false
     #! pocketmine.betterpmmp.yml.network.skip-auth-input-receive-event
     skip-auth-input-receive-event: false
+    #! pocketmine.betterpmmp.yml.network.interaction-spam-window
+    interaction-spam-window: 20
+    #! pocketmine.betterpmmp.yml.network.block-sync-snapshot
+    block-sync-snapshot: true
+    #! pocketmine.betterpmmp.yml.network.chunk-history-limit
+    chunk-history-limit: 8192
 
   #! pocketmine.betterpmmp.yml.events
   events:
@@ -243,12 +251,8 @@ better-pmmp:
 
   #! pocketmine.betterpmmp.yml.plugins
   plugins:
-    #! pocketmine.betterpmmp.yml.plugins.load-log
-    load-log: true
-    #! pocketmine.betterpmmp.yml.plugins.enable-log
-    enable-log: true
-    #! pocketmine.betterpmmp.yml.plugins.disable-log
-    disable-log: true
+    #! pocketmine.betterpmmp.yml.plugins.lifecycle-log
+    lifecycle-log: true
 
   #! pocketmine.betterpmmp.yml.gameplay
   gameplay:

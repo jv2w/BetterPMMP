@@ -123,8 +123,13 @@ class ItemEntity extends Entity{
 				}
 			}
 
-			/** [BetterPMMP-PATCH] PvP optimization: item merging toggle */
-			if($this->hasMovementUpdate() && $this->isMergeCandidate() && $this->despawnDelay % self::MERGE_CHECK_PERIOD === 0
+			/** [BetterPMMP-PATCH] PvP optimization: item merging toggle.
+			 * NEVER_DESPAWN is checked explicitly because despawnDelay is then frozen at -1, and PHP's
+			 * modulo keeps the sign: -1 % 2 === -1, never 0. Without this, better-pmmp.entities
+			 * .item-despawn-ticks: -1 silently disabled merging entirely, so permanent drops never stacked
+			 * - the exact opposite of what the option is for. */
+			if($this->hasMovementUpdate() && $this->isMergeCandidate()
+				&& ($this->despawnDelay === self::NEVER_DESPAWN || $this->despawnDelay % self::MERGE_CHECK_PERIOD === 0)
 				&& (bool) \pocketmine\Server::getInstance()->getConfigGroup()->getProperty(\pocketmine\betterpmmp\BetterPMMPProperties::ENTITIES_ITEM_MERGING, true)){
 				$mergeable = [$this]; //in case the merge target ends up not being this
 				$mergeTarget = $this;
