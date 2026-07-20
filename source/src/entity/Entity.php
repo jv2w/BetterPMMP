@@ -783,7 +783,12 @@ abstract class Entity{
 		$diffPosition = $this->location->distanceSquared($this->lastLocation);
 		$diffRotation = ($this->location->yaw - $this->lastLocation->yaw) ** 2 + ($this->location->pitch - $this->lastLocation->pitch) ** 2;
 
-		$diffMotion = $this->motion->subtractVector($this->lastMotion)->lengthSquared();
+		/** [BetterPMMP-PATCH] PvP optimization: subtractVector() allocated a throwaway Vector3 for every
+		 * entity every tick just to reach a scalar. Component math is bit-identical and allocation-free. */
+		$diffMotionX = $this->motion->x - $this->lastMotion->x;
+		$diffMotionY = $this->motion->y - $this->lastMotion->y;
+		$diffMotionZ = $this->motion->z - $this->lastMotion->z;
+		$diffMotion = $diffMotionX * $diffMotionX + $diffMotionY * $diffMotionY + $diffMotionZ * $diffMotionZ;
 
 		$still = $this->motion->lengthSquared() === 0.0;
 		$wasStill = $this->lastMotion->lengthSquared() === 0.0;

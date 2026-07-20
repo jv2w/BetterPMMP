@@ -181,11 +181,13 @@ class InGamePacketHandler extends PacketHandler{
 		$rawPos = $packet->getPosition();
 		$rawYaw = $packet->getYaw();
 		$rawPitch = $packet->getPitch();
-		foreach([$rawPos->x, $rawPos->y, $rawPos->z, $rawYaw, $packet->getHeadYaw(), $rawPitch] as $float){
-			if(is_infinite($float) || is_nan($float)){
-				$this->session->getLogger()->debug("Invalid movement received, contains NAN/INF components");
-				return false;
-			}
+		/** [BetterPMMP-PATCH] PvP optimization: the vanilla check allocated a 6-element array 20x/s per
+		 * player purely to iterate it. NAN and INF both propagate through addition, so one is_nan/is_finite
+		 * pair over the sum covers every component with no allocation and no loop. */
+		$floatSum = $rawPos->x + $rawPos->y + $rawPos->z + $rawYaw + $packet->getHeadYaw() + $rawPitch;
+		if(is_nan($floatSum) || is_infinite($floatSum)){
+			$this->session->getLogger()->debug("Invalid movement received, contains NAN/INF components");
+			return false;
 		}
 
 		if($rawYaw !== $this->lastPlayerAuthInputYaw || $rawPitch !== $this->lastPlayerAuthInputPitch){
@@ -202,7 +204,10 @@ class InGamePacketHandler extends PacketHandler{
 		}
 
 		$hasMoved = $this->lastPlayerAuthInputPosition === null || !$this->lastPlayerAuthInputPosition->equals($rawPos);
-		$newPos = $rawPos->subtract(0, 1.62, 0)->round(4);
+		/** [BetterPMMP-PATCH] PvP optimization: $newPos is consumed only by the two $hasMoved branches
+		 * below, but vanilla built it unconditionally - 2 Vector3 allocations + 3 libm round() calls 20x/s
+		 * for every player standing still (spawn, queue, aiming). */
+		$newPos = $hasMoved ? $rawPos->subtract(0, 1.62, 0)->round(4) : null;
 
 		if($this->forceMoveSync && $hasMoved){
 			$curPos = $this->player->getLocation();

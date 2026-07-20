@@ -2915,11 +2915,16 @@ class World implements ChunkManager{
 	 * @internal
 	 */
 	public function onEntityMoved(Entity $entity) : void{
-		if(!array_key_exists($entity->getId(), $this->entityLastKnownPositions)){
+		/** [BetterPMMP-PATCH] PvP optimization: hoist the repeated getId() calls and use isset() - entries
+		 * are never null, so array_key_exists() only costs extra. The asVector3() copy below is deliberately
+		 * kept: storing the Position directly would save an allocation but leaks a World backreference into
+		 * this map, turning every entry into a GC cycle. */
+		$entityId = $entity->getId();
+		if(!isset($this->entityLastKnownPositions[$entityId])){
 			//this can happen if the entity was teleported before addEntity() was called
 			return;
 		}
-		$oldPosition = $this->entityLastKnownPositions[$entity->getId()];
+		$oldPosition = $this->entityLastKnownPositions[$entityId];
 		$newPosition = $entity->getPosition();
 
 		$oldChunkX = $oldPosition->getFloorX() >> Chunk::COORD_BIT_SIZE;
@@ -2929,11 +2934,11 @@ class World implements ChunkManager{
 
 		if($oldChunkX !== $newChunkX || $oldChunkZ !== $newChunkZ){
 			$oldChunkHash = World::chunkHash($oldChunkX, $oldChunkZ);
-			if(isset($this->entitiesByChunk[$oldChunkHash][$entity->getId()])){
+			if(isset($this->entitiesByChunk[$oldChunkHash][$entityId])){
 				if(count($this->entitiesByChunk[$oldChunkHash]) === 1){
 					unset($this->entitiesByChunk[$oldChunkHash]);
 				}else{
-					unset($this->entitiesByChunk[$oldChunkHash][$entity->getId()]);
+					unset($this->entitiesByChunk[$oldChunkHash][$entityId]);
 				}
 			}
 
@@ -2950,9 +2955,9 @@ class World implements ChunkManager{
 			}
 
 			$newChunkHash = World::chunkHash($newChunkX, $newChunkZ);
-			$this->entitiesByChunk[$newChunkHash][$entity->getId()] = $entity;
+			$this->entitiesByChunk[$newChunkHash][$entityId] = $entity;
 		}
-		$this->entityLastKnownPositions[$entity->getId()] = $newPosition->asVector3();
+		$this->entityLastKnownPositions[$entityId] = $newPosition->asVector3();
 	}
 
 	/**
