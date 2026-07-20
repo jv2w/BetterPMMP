@@ -27,6 +27,7 @@ use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\player\Player;
 use pocketmine\timings\Timings;
 use function count;
+use function reset;
 use function spl_object_id;
 
 final class NetworkBroadcastUtils{
@@ -44,18 +45,12 @@ final class NetworkBroadcastUtils{
 			throw new \InvalidArgumentException("Cannot broadcast empty list of packets");
 		}
 
-		/** [BetterPMMP-PATCH] PvP optimization: broadcast fan-out fast path. The vanilla body was wrapped in
-		 * Timings::time(closure), which allocates a closure and binds both arrays before startTiming() can
-		 * early-out; inlined here with the TimingsHandler gate used by Event::call(). */
-		$timings = Timings::$broadcastPackets;
-		$timings->startTiming();
-		try{
+		return Timings::$broadcastPackets->time(function() use ($recipients, $packets) : bool{
 			/** @var NetworkSession[] $sessions */
 			$sessions = [];
 			foreach($recipients as $player){
 				if($player->isConnected()){
 					$session = $player->getNetworkSession();
-					//keyed by object id to preserve vanilla's de-duplication of repeated recipients
 					$sessions[spl_object_id($session)] = $session;
 				}
 			}
@@ -65,21 +60,18 @@ final class NetworkBroadcastUtils{
 
 			/** [BetterPMMP-PATCH] PvP optimization: a single PacketBroadcaster is shared server-wide in
 			 * practice, so probe for uniformity with one identity compare per session and skip building the
-			 * two spl_object_id-keyed grouping maps entirely. Saves 2 id calls + 2 hash writes per
-			 * (moving entity x viewer) pair per tick; the vanilla grouping below still runs whenever the
-			 * broadcasters genuinely differ, so behaviour is unchanged either way. */
-			$firstBroadcaster = null;
+			 * two spl_object_id-keyed grouping maps entirely. Saves 2 spl_object_id calls + 2 hash writes
+			 * per (moving entity x viewer) pair per tick; the vanilla grouping below still runs whenever
+			 * the broadcasters genuinely differ, so behaviour is unchanged either way. */
+			$firstBroadcaster = reset($sessions)->getBroadcaster();
 			$uniform = true;
 			foreach($sessions as $session){
-				$broadcaster = $session->getBroadcaster();
-				if($firstBroadcaster === null){
-					$firstBroadcaster = $broadcaster;
-				}elseif($broadcaster !== $firstBroadcaster){
+				if($session->getBroadcaster() !== $firstBroadcaster){
 					$uniform = false;
 					break;
 				}
 			}
-			if($uniform && $firstBroadcaster !== null){
+			if($uniform){
 				$firstBroadcaster->broadcastPackets($sessions, $packets);
 				return true;
 			}
@@ -99,9 +91,7 @@ final class NetworkBroadcastUtils{
 			}
 
 			return true;
-		}finally{
-			$timings->stopTiming();
-		}
+		});
 	}
 
 	/**
@@ -121,18 +111,15 @@ final class NetworkBroadcastUtils{
 			return;
 		}
 
-		$firstBroadcaster = null;
+		$firstBroadcaster = reset($sessions)->getEntityEventBroadcaster();
 		$uniform = true;
 		foreach($sessions as $session){
-			$broadcaster = $session->getEntityEventBroadcaster();
-			if($firstBroadcaster === null){
-				$firstBroadcaster = $broadcaster;
-			}elseif($broadcaster !== $firstBroadcaster){
+			if($session->getEntityEventBroadcaster() !== $firstBroadcaster){
 				$uniform = false;
 				break;
 			}
 		}
-		if($uniform && $firstBroadcaster !== null){
+		if($uniform){
 			$callback($firstBroadcaster, $sessions);
 			return;
 		}

@@ -229,6 +229,8 @@ class NetworkSession{
 	private array $sentChunkHistory = [];
 	/** [BetterPMMP-PATCH] Cached better-pmmp.network.chunk-history-limit */
 	private ?int $chunkHistoryLimit = null;
+	/** [BetterPMMP-PATCH] Cached better-pmmp.combat.instant-hit-feedback, read on every hit */
+	private static ?bool $instantHitFeedback = null;
 	/**
 	 * [BetterPMMP-PATCH] Chunk positions pending an empty-chunk overwrite after a world switch.
 	 * @var true[]
@@ -769,8 +771,9 @@ class NetworkSession{
 	public static function flushHitFeedbackAll(Entity $victim, ?Player $attacker) : void{
 		/** [BetterPMMP-PATCH] Gated behind better-pmmp.combat.instant-hit-feedback - this changes packet
 		 * scheduling for every hit on the server, so it needs to be switchable like every other
-		 * behaviour-affecting option. */
-		if(!Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::COMBAT_INSTANT_HIT_FEEDBACK, true)){
+		 * behaviour-affecting option. Cached statically: this runs on every melee and projectile hit, and
+		 * the config is immutable for the process lifetime. */
+		if(!(self::$instantHitFeedback ??= Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::COMBAT_INSTANT_HIT_FEEDBACK, true))){
 			return;
 		}
 		/** [BetterPMMP-PATCH] Only the victim and the attacker are flushed early. The viewer fan-out that
@@ -1377,7 +1380,7 @@ class NetworkSession{
 			unset($this->sentChunkHistory[$hash]);
 			$this->sentChunkHistory[$hash] = true;
 			unset($this->chunkEraseQueue[$hash]);
-			$historyLimit = $this->chunkHistoryLimit ??= max(0, (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_CHUNK_HISTORY_LIMIT, 8192));
+			$historyLimit = $this->chunkHistoryLimit ??= max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_CHUNK_HISTORY_LIMIT, 8192));
 			if($historyLimit > 0){
 				while(count($this->sentChunkHistory) > $historyLimit){
 					unset($this->sentChunkHistory[array_key_first($this->sentChunkHistory)]);

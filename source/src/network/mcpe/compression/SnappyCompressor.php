@@ -71,11 +71,24 @@ final class SnappyCompressor implements Compressor{
 	 */
 	public function decompress(string $payload) : string{
 		/** [BetterPMMP-PATCH] Cap the decompressed size like ZlibCompressor does. Inbound payloads are
-		 * attacker-controlled, and a Snappy stream declares its uncompressed length in a leading varint,
-		 * so a few bytes can otherwise ask for an arbitrarily large allocation. Check the declared length
-		 * before expanding, then re-check the real result in case the header lied. */
-		$declaredLength = self::readUncompressedLength($payload);
-		if($declaredLength === null || $declaredLength > $this->maxDecompressionSize){
+		 * attacker-controlled, and a Snappy stream declares its uncompressed length in a leading base-128
+		 * varint, so a few bytes can otherwise ask for an arbitrarily large allocation. Read that varint
+		 * and reject before expanding, then re-check the real result in case the header lied. */
+		$declaredLength = 0;
+		$shift = 0;
+		$size = strlen($payload);
+		for($i = 0; $i < $size; $i++){
+			$byte = ord($payload[$i]);
+			$declaredLength |= ($byte & 0x7f) << $shift;
+			if(($byte & 0x80) === 0){
+				break;
+			}
+			$shift += 7;
+			if($shift > 28){
+				throw new DecompressionException("Failed to decompress data");
+			}
+		}
+		if($declaredLength > $this->maxDecompressionSize){
 			throw new DecompressionException("Failed to decompress data");
 		}
 		$result = @snappy_uncompress($payload);
@@ -83,26 +96,6 @@ final class SnappyCompressor implements Compressor{
 			throw new DecompressionException("Failed to decompress data");
 		}
 		return $result;
-	}
-
-	/**
-	 * [BetterPMMP-PATCH]
-	 * Reads the little-endian base-128 varint that prefixes every Snappy stream with its uncompressed
-	 * length. Returns null if the header is truncated or malformed (>5 bytes, i.e. beyond 32 bits).
-	 */
-	private static function readUncompressedLength(string $payload) : ?int{
-		$length = 0;
-		$shift = 0;
-		$size = strlen($payload);
-		for($i = 0; $i < $size && $shift <= 28; $i++){
-			$byte = ord($payload[$i]);
-			$length |= ($byte & 0x7f) << $shift;
-			if(($byte & 0x80) === 0){
-				return $length;
-			}
-			$shift += 7;
-		}
-		return null;
 	}
 
 	public function compress(string $payload) : string{

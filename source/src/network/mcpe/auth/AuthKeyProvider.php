@@ -136,7 +136,9 @@ class AuthKeyProvider{
 					$this->logger->critical("No valid authentication keys returned by Mojang's API. Xbox players may not be able to authenticate!");
 					$resolver->reject();
 				}else{
-					$this->logger->debug("Successfully fetched " . count($keys) . " new authentication keys from issuer $issuer, key IDs: " . implode(", ", array_keys($pemKeys)));
+					$keyCount = count($keys);
+					$keyIds = implode(', ', array_keys($pemKeys));
+					$this->logger->debug("Successfully fetched {$keyCount} new authentication keys from issuer {$issuer}, key IDs: {$keyIds}");
 					$this->keyring = new AuthKeyring($issuer, $pemKeys);
 					$this->lastFetch = time();
 					$resolver->resolve($this->keyring);

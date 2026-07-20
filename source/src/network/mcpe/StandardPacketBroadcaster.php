@@ -31,6 +31,7 @@ use pocketmine\network\mcpe\protocol\serializer\PacketBatch;
 use pocketmine\Server;
 use pocketmine\timings\Timings;
 use function count;
+use function reset;
 use function spl_object_id;
 use function strlen;
 
@@ -64,14 +65,11 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 		 * session (see RakLibInterface), so probe for uniformity with a single identity compare per
 		 * recipient instead of building two spl_object_id-keyed grouping maps. Saves 2 id calls + 2 hash
 		 * writes per recipient per broadcast; the vanilla grouping below still runs when they differ. */
-		$firstCompressor = null;
+		//TODO: different compressors might be compatible, it might not be necessary to split them up by object
+		$firstCompressor = reset($recipients)->getCompressor();
 		$uniformCompressor = true;
 		foreach($recipients as $recipient){
-			//TODO: different compressors might be compatible, it might not be necessary to split them up by object
-			$compressor = $recipient->getCompressor();
-			if($firstCompressor === null){
-				$firstCompressor = $compressor;
-			}elseif($compressor !== $firstCompressor){
+			if($recipient->getCompressor() !== $firstCompressor){
 				$uniformCompressor = false;
 				break;
 			}
@@ -91,7 +89,7 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 			$packetBuffers[] = $buffer;
 		}
 
-		if($uniformCompressor && $firstCompressor !== null){
+		if($uniformCompressor){
 			$this->sendToCompressorGroup($firstCompressor, $recipients, $packetBuffers, $totalLength);
 			return;
 		}
@@ -116,6 +114,7 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 	 *
 	 * @param NetworkSession[] $compressorTargets
 	 * @param string[]         $packetBuffers
+	 * @phpstan-param list<string> $packetBuffers
 	 */
 	private function sendToCompressorGroup(Compressor $compressor, array $compressorTargets, array $packetBuffers, int $totalLength) : void{
 		$threshold = $compressor->getCompressionThreshold();
