@@ -799,7 +799,7 @@ abstract class Entity{
 			 * `!$wasStill && $still` (the entity just came to rest) always sends: that is the tick after
 			 * which World::tickEntities() may drop the entity from the update list, so a skip there would
 			 * leave viewers frozen at a position up to (period - 1) ticks stale, permanently. */
-			$pvpMovePeriod = $this->pvpMovementBroadcastPeriod ??= (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1);
+			$pvpMovePeriod = $this->pvpMovementBroadcastPeriod ??= $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1);
 			if($teleport || (!$wasStill && $still) || $pvpMovePeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMovePeriod) === 0){
 				$this->pvpMovementBroadcastPending = false;
 				$this->lastLocation = $this->location->asLocation();

@@ -573,7 +573,7 @@ class World implements ChunkManager{
 		/** [BetterPMMP-PATCH] Block cache size from config */
 		/** [BetterPMMP-PATCH] Configurable block cache cap. Defaults to the upstream 2048 so memory use out
 		 * of the box matches vanilla; raising it trades RAM for a higher getBlockAt() hit rate. */
-		$this->blockCacheSizeCap = max(512, (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::WORLD_BLOCK_CACHE_SIZE, 2048));
+		$this->blockCacheSizeCap = max(512, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_BLOCK_CACHE_SIZE, 2048));
 		$this->initRandomTickBlocksFromConfig($cfg);
 
 		$this->timings = new WorldTimings($this);
@@ -1002,7 +1002,7 @@ class World implements ChunkManager{
 		/** [BetterPMMP-PATCH] Neighbour block update throttle. Defaults to 0 (unlimited) because vanilla
 		 * drains this queue unconditionally - any positive limit defers overflow to the next tick and
 		 * visibly slows water/lava spread and sand/gravel collapses, so it must be opt-in. */
-		$neighbourUpdateLimit = (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 0);
+		$neighbourUpdateLimit = $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 0);
 		$neighbourUpdateCount = 0;
 		while($this->neighbourBlockUpdateQueue->count() > 0){
 			if($neighbourUpdateLimit > 0 && $neighbourUpdateCount >= $neighbourUpdateLimit){

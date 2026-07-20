@@ -58,17 +58,13 @@ final class BetterPMMPConfigComments{
 	 * [BetterPMMP-PATCH] Records which language the comments in a rendered file are written in, so
 	 * {@link retranslate()} can answer "is this already current?" without loading every shipped language.
 	 */
-	private const LANGUAGE_STAMP_PREFIX = "#@ betterpmmp-lang: ";
 	private const LANGUAGE_STAMP_PATTERN = '/^#@ betterpmmp-lang: (\S+)[ \t]*\n?/m';
 
 	private function __construct(){
 		//NOOP
 	}
 
-	/**
-	 * Expands `#! <key>` markers without touching the language stamp. Used when rendering a fragment that
-	 * is spliced into an already-stamped file.
-	 */
+	/** [BetterPMMP-PATCH] Expands `#! <key>` markers without stamping, for fragments spliced into an already-stamped file. */
 	public static function expand(string $template, Language $lang) : string{
 		$template = str_replace("\r\n", "\n", $template);
 		$result = preg_replace_callback(
@@ -91,7 +87,8 @@ final class BetterPMMPConfigComments{
 		 * comment line makes the probe below miss forever - render() only expands `#!` markers, which are
 		 * long gone from a rendered file, so the deleted line is never restored and the expensive path runs
 		 * on every startup, silently (the output equals the input, so nothing is even written). */
-		if(self::readStamp($content) === $current->getLang()){
+		$stamped = preg_match(self::LANGUAGE_STAMP_PATTERN, $content, $stampMatch) === 1 ? $stampMatch[1] : null;
+		if($stamped === $current->getLang()){
 			return self::render($content, $current);
 		}
 
@@ -106,12 +103,9 @@ final class BetterPMMPConfigComments{
 	}
 
 	private static function stamp(string $content, Language $lang) : string{
-		$stripped = preg_replace(self::LANGUAGE_STAMP_PATTERN, "", $content) ?? $content;
-		return self::LANGUAGE_STAMP_PREFIX . $lang->getLang() . "\n" . $stripped;
-	}
-
-	private static function readStamp(string $content) : ?string{
-		return preg_match(self::LANGUAGE_STAMP_PATTERN, $content, $matches) === 1 ? $matches[1] : null;
+		$stripped = preg_replace(self::LANGUAGE_STAMP_PATTERN, '', $content) ?? $content;
+		$code = $lang->getLang();
+		return "#@ betterpmmp-lang: {$code}\n{$stripped}";
 	}
 
 	/**

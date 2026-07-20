@@ -40,11 +40,7 @@ final class BetterPMMPProperties{
 		//NOOP
 	}
 
-	/**
-	 * Consumed by {@link BetterPMMPConfigFormat::enforceEnabled()} directly off the raw YAML, not through
-	 * ConfigGroup::getProperty() - it is read before the config group exists, so it is the one key with no
-	 * getProperty() call site.
-	 */
+	/** [BetterPMMP-PATCH] Read by {@link BetterPMMPConfigFormat::enforceEnabled()} straight off the raw YAML - it is needed before the config group exists, so this is the one key with no getProperty() call site. */
 	public const CONFIG_ENFORCE_FORMAT = 'better-pmmp.config.enforce-format';
 
 	public const WORLD_BLOCK_CACHE_SIZE = 'better-pmmp.world.block-cache-size';

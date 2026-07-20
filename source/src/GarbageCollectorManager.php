@@ -50,10 +50,10 @@ final class GarbageCollectorManager{
 
 	private TimingsHandler $timings;
 
-	/** [BetterPMMP-PATCH] $runs and $logger were orphaned when the per-GC debug log line was removed:
-	 * nothing read the counter (there is no getter) and nothing wrote to the logger. */
+	/** [BetterPMMP-PATCH] The $runs counter, the $logger field and the $logger parameter were orphaned when
+	 * the per-GC debug log line was removed - nothing read the counter (there is no getter) and nothing
+	 * wrote to the logger. */
 	public function __construct(
-		\Logger $logger,
 		?TimingsHandler $parentTimings,
 	){
 		gc_disable();
