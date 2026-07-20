@@ -44,33 +44,64 @@ final class NetworkBroadcastUtils{
 			throw new \InvalidArgumentException("Cannot broadcast empty list of packets");
 		}
 
-		return Timings::$broadcastPackets->time(function() use ($recipients, $packets) : bool{
+		/** [BetterPMMP-PATCH] PvP optimization: broadcast fan-out fast path. The vanilla body was wrapped in
+		 * Timings::time(closure), which allocates a closure and binds both arrays before startTiming() can
+		 * early-out; inlined here with the TimingsHandler gate used by Event::call(). */
+		$timings = Timings::$broadcastPackets;
+		$timings->startTiming();
+		try{
 			/** @var NetworkSession[] $sessions */
 			$sessions = [];
 			foreach($recipients as $player){
 				if($player->isConnected()){
-					$sessions[] = $player->getNetworkSession();
+					$session = $player->getNetworkSession();
+					//keyed by object id to preserve vanilla's de-duplication of repeated recipients
+					$sessions[spl_object_id($session)] = $session;
 				}
 			}
 			if(count($sessions) === 0){
 				return false;
 			}
 
+			/** [BetterPMMP-PATCH] PvP optimization: a single PacketBroadcaster is shared server-wide in
+			 * practice, so probe for uniformity with one identity compare per session and skip building the
+			 * two spl_object_id-keyed grouping maps entirely. Saves 2 id calls + 2 hash writes per
+			 * (moving entity x viewer) pair per tick; the vanilla grouping below still runs whenever the
+			 * broadcasters genuinely differ, so behaviour is unchanged either way. */
+			$firstBroadcaster = null;
+			$uniform = true;
+			foreach($sessions as $session){
+				$broadcaster = $session->getBroadcaster();
+				if($firstBroadcaster === null){
+					$firstBroadcaster = $broadcaster;
+				}elseif($broadcaster !== $firstBroadcaster){
+					$uniform = false;
+					break;
+				}
+			}
+			if($uniform && $firstBroadcaster !== null){
+				$firstBroadcaster->broadcastPackets($sessions, $packets);
+				return true;
+			}
+
 			/** @var PacketBroadcaster[] $uniqueBroadcasters */
 			$uniqueBroadcasters = [];
 			/** @var NetworkSession[][] $broadcasterTargets */
 			$broadcasterTargets = [];
-			foreach($sessions as $recipient){
+			foreach($sessions as $sessionId => $recipient){
 				$broadcaster = $recipient->getBroadcaster();
-				$uniqueBroadcasters[spl_object_id($broadcaster)] = $broadcaster;
-				$broadcasterTargets[spl_object_id($broadcaster)][spl_object_id($recipient)] = $recipient;
+				$broadcasterId = spl_object_id($broadcaster);
+				$uniqueBroadcasters[$broadcasterId] = $broadcaster;
+				$broadcasterTargets[$broadcasterId][$sessionId] = $recipient;
 			}
-			foreach($uniqueBroadcasters as $broadcaster){
-				$broadcaster->broadcastPackets($broadcasterTargets[spl_object_id($broadcaster)], $packets);
+			foreach($uniqueBroadcasters as $broadcasterId => $broadcaster){
+				$broadcaster->broadcastPackets($broadcasterTargets[$broadcasterId], $packets);
 			}
 
 			return true;
-		});
+		}finally{
+			$timings->stopTiming();
+		}
 	}
 
 	/**
@@ -78,14 +109,41 @@ final class NetworkBroadcastUtils{
 	 * @phpstan-param \Closure(EntityEventBroadcaster, array<int, NetworkSession>) : void $callback
 	 */
 	public static function broadcastEntityEvent(array $recipients, \Closure $callback) : void{
-		$uniqueBroadcasters = [];
-		$broadcasterTargets = [];
-
+		/** [BetterPMMP-PATCH] PvP optimization: same uniform-broadcaster fast path as broadcastPackets().
+		 * One EntityEventBroadcaster is shared server-wide, so the grouping maps below are pure overhead
+		 * in the common case. */
+		$sessions = [];
 		foreach($recipients as $recipient){
 			$session = $recipient->getNetworkSession();
+			$sessions[spl_object_id($session)] = $session;
+		}
+		if(count($sessions) === 0){
+			return;
+		}
+
+		$firstBroadcaster = null;
+		$uniform = true;
+		foreach($sessions as $session){
 			$broadcaster = $session->getEntityEventBroadcaster();
-			$uniqueBroadcasters[spl_object_id($broadcaster)] = $broadcaster;
-			$broadcasterTargets[spl_object_id($broadcaster)][spl_object_id($session)] = $session;
+			if($firstBroadcaster === null){
+				$firstBroadcaster = $broadcaster;
+			}elseif($broadcaster !== $firstBroadcaster){
+				$uniform = false;
+				break;
+			}
+		}
+		if($uniform && $firstBroadcaster !== null){
+			$callback($firstBroadcaster, $sessions);
+			return;
+		}
+
+		$uniqueBroadcasters = [];
+		$broadcasterTargets = [];
+		foreach($sessions as $sessionId => $session){
+			$broadcaster = $session->getEntityEventBroadcaster();
+			$broadcasterId = spl_object_id($broadcaster);
+			$uniqueBroadcasters[$broadcasterId] = $broadcaster;
+			$broadcasterTargets[$broadcasterId][$sessionId] = $session;
 		}
 
 		foreach($uniqueBroadcasters as $k => $broadcaster){

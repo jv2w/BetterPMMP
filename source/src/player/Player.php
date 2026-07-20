@@ -259,6 +259,10 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	 */
 	protected array $loadQueue = [];
 	protected int $nextChunkOrderRun = 5;
+	/** [BetterPMMP-PATCH] PvP optimization: chunk coords the last orderChunks() run was centred on, so a
+	 * player moving inside one chunk doesn't re-arm a recompute that provably yields the same result. */
+	private ?int $lastChunkOrderX = null;
+	private ?int $lastChunkOrderZ = null;
 
 	/** [BetterPMMP-PATCH] Progressive publisher-radius clamp: hides stale old-world chunks after a world switch until new terrain fills each ring. */
 	private bool $chunkPublisherClampArmed = false;
@@ -1091,10 +1095,17 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			$this->clampUnsentPerRing = [];
 		}
 
+		/** [BetterPMMP-PATCH] PvP optimization: remember the centre this run was computed for, so
+		 * handleMovement() can skip re-arming while the player stays inside the same chunk. */
+		$centerChunkX = $this->location->getFloorX() >> Chunk::COORD_BIT_SIZE;
+		$centerChunkZ = $this->location->getFloorZ() >> Chunk::COORD_BIT_SIZE;
+		$this->lastChunkOrderX = $centerChunkX;
+		$this->lastChunkOrderZ = $centerChunkZ;
+
 		foreach($this->chunkSelector->selectChunks(
 			$this->viewDistance,
-			$this->location->getFloorX() >> Chunk::COORD_BIT_SIZE,
-			$this->location->getFloorZ() >> Chunk::COORD_BIT_SIZE
+			$centerChunkX,
+			$centerChunkZ
 		) as $radius => $hash){
 			$status = $this->usedChunks[$hash] ?? null;
 			if($status === null || $status === UsedChunkStatus::NEEDED){
@@ -1600,8 +1611,18 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 					}
 				}
 
-				if($this->nextChunkOrderRun > 20){
-					$this->nextChunkOrderRun = 20;
+				/** [BetterPMMP-PATCH] PvP optimization: orderChunks() is idempotent while the player stays
+				 * inside the same chunk - selectChunks() yields the identical ring set, loadQueue drains
+				 * itself in requestChunks(), and the syncViewAreaCenterPoint() send is already gated on the
+				 * queues being non-empty. Re-arm only on an actual chunk crossing, or while the publisher
+				 * clamp is armed (its ring counters are rebuilt from scratch on every run). */
+				if($this->chunkPublisherClampArmed
+					|| ($to->getFloorX() >> Chunk::COORD_BIT_SIZE) !== $this->lastChunkOrderX
+					|| ($to->getFloorZ() >> Chunk::COORD_BIT_SIZE) !== $this->lastChunkOrderZ
+				){
+					if($this->nextChunkOrderRun > 20){
+						$this->nextChunkOrderRun = 20;
+					}
 				}
 			}
 		}elseif($this->pvpMoveBroadcastPending){

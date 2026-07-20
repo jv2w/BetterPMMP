@@ -26,6 +26,7 @@ namespace pocketmine\network\mcpe;
 use pmmp\encoding\ByteBufferWriter;
 use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\event\server\DataPacketSendEvent;
+use pocketmine\network\mcpe\compression\Compressor;
 use pocketmine\network\mcpe\protocol\serializer\PacketBatch;
 use pocketmine\Server;
 use pocketmine\timings\Timings;
@@ -55,15 +56,25 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 			$packets = $ev->getPackets();
 		}
 
-		$compressors = [];
+		if(count($recipients) === 0){
+			return;
+		}
 
-		$targetsByCompressor = [];
+		/** [BetterPMMP-PATCH] PvP optimization: one Compressor is resolved at startup and shared by every
+		 * session (see RakLibInterface), so probe for uniformity with a single identity compare per
+		 * recipient instead of building two spl_object_id-keyed grouping maps. Saves 2 id calls + 2 hash
+		 * writes per recipient per broadcast; the vanilla grouping below still runs when they differ. */
+		$firstCompressor = null;
+		$uniformCompressor = true;
 		foreach($recipients as $recipient){
 			//TODO: different compressors might be compatible, it might not be necessary to split them up by object
 			$compressor = $recipient->getCompressor();
-			$compressors[spl_object_id($compressor)] = $compressor;
-
-			$targetsByCompressor[spl_object_id($compressor)][] = $recipient;
+			if($firstCompressor === null){
+				$firstCompressor = $compressor;
+			}elseif($compressor !== $firstCompressor){
+				$uniformCompressor = false;
+				break;
+			}
 		}
 
 		$totalLength = 0;
@@ -80,25 +91,48 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 			$packetBuffers[] = $buffer;
 		}
 
+		if($uniformCompressor && $firstCompressor !== null){
+			$this->sendToCompressorGroup($firstCompressor, $recipients, $packetBuffers, $totalLength);
+			return;
+		}
+
+		$compressors = [];
+		$targetsByCompressor = [];
+		foreach($recipients as $recipient){
+			$compressor = $recipient->getCompressor();
+			$compressorId = spl_object_id($compressor);
+			$compressors[$compressorId] = $compressor;
+			$targetsByCompressor[$compressorId][] = $recipient;
+		}
+
 		foreach($targetsByCompressor as $compressorId => $compressorTargets){
-			$compressor = $compressors[$compressorId];
+			$this->sendToCompressorGroup($compressors[$compressorId], $compressorTargets, $packetBuffers, $totalLength);
+		}
+	}
 
-			$threshold = $compressor->getCompressionThreshold();
-			if(count($compressorTargets) > 1 && $threshold !== null && $totalLength >= $threshold){
-				//do not prepare shared batch unless we're sure it will be compressed
-				$stream = new ByteBufferWriter();
-				PacketBatch::encodeRaw($stream, $packetBuffers);
-				$batchBuffer = $stream->getData();
+	/**
+	 * [BetterPMMP-PATCH] Extracted from broadcastPackets() so the uniform-compressor fast path and the
+	 * vanilla per-compressor grouping share one implementation. Behaviour is byte-identical to vanilla.
+	 *
+	 * @param NetworkSession[] $compressorTargets
+	 * @param string[]         $packetBuffers
+	 */
+	private function sendToCompressorGroup(Compressor $compressor, array $compressorTargets, array $packetBuffers, int $totalLength) : void{
+		$threshold = $compressor->getCompressionThreshold();
+		if(count($compressorTargets) > 1 && $threshold !== null && $totalLength >= $threshold){
+			//do not prepare shared batch unless we're sure it will be compressed
+			$stream = new ByteBufferWriter();
+			PacketBatch::encodeRaw($stream, $packetBuffers);
+			$batchBuffer = $stream->getData();
 
-				$batch = $this->server->prepareBatch($batchBuffer, $compressor, timings: Timings::$playerNetworkSendCompressBroadcast);
-				foreach($compressorTargets as $target){
-					$target->queueCompressed($batch);
-				}
-			}else{
-				foreach($compressorTargets as $target){
-					foreach($packetBuffers as $packetBuffer){
-						$target->addToSendBuffer($packetBuffer);
-					}
+			$batch = $this->server->prepareBatch($batchBuffer, $compressor, timings: Timings::$playerNetworkSendCompressBroadcast);
+			foreach($compressorTargets as $target){
+				$target->queueCompressed($batch);
+			}
+		}else{
+			foreach($compressorTargets as $target){
+				foreach($packetBuffers as $packetBuffer){
+					$target->addToSendBuffer($packetBuffer);
 				}
 			}
 		}

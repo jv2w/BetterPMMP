@@ -45,9 +45,9 @@ network:
   #!pocketmine.yml.network.batch-threshold
   batch-threshold: 256
   #!pocketmine.yml.network.compression-level
-  compression-level: 6
+  compression-level: 1
   #!pocketmine.yml.network.async-compression
-  async-compression: false
+  async-compression: true
   #!pocketmine.yml.network.async-compression-threshold
   async-compression-threshold: 10000
   #!pocketmine.yml.network.upnp-forwarding

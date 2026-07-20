@@ -967,10 +967,14 @@ class Server{
 				$netCompressionThreshold = null;
 			}
 
-			$netCompressionLevel = $this->configGroup->getPropertyInt(Yml::NETWORK_COMPRESSION_LEVEL, 6);
+			/** [BetterPMMP-PATCH] PvP optimization: default zlib level 6 -> 1. With async-compression off
+			 * (or batches under the async threshold) every session's per-tick batch is compressed inline on
+			 * the main thread, so the level is paid straight out of MSPT. Level 1 is several times faster
+			 * for roughly 10-15% larger payloads - a trade that favours tick time on a PvP server. */
+			$netCompressionLevel = $this->configGroup->getPropertyInt(Yml::NETWORK_COMPRESSION_LEVEL, 1);
 			if($netCompressionLevel < 1 || $netCompressionLevel > 9){
-				$this->logger->warning("Invalid network compression level $netCompressionLevel set, setting to default 6");
-				$netCompressionLevel = 6;
+				$this->logger->warning("Invalid network compression level $netCompressionLevel set, setting to default 1");
+				$netCompressionLevel = 1;
 			}
 			ZlibCompressor::setInstance(new ZlibCompressor($netCompressionLevel, $netCompressionThreshold, ZlibCompressor::DEFAULT_MAX_DECOMPRESSION_SIZE));
 			/** [BetterPMMP-PATCH] Honour network.batch-threshold for Snappy too - without this the Snappy
