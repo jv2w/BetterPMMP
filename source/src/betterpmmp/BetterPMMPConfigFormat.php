@@ -28,9 +28,11 @@ use pocketmine\lang\Language;
 use function array_column;
 use function array_is_list;
 use function array_key_exists;
+use function array_merge;
 use function array_pop;
 use function array_reverse;
 use function array_slice;
+use function array_splice;
 use function count;
 use function explode;
 use function implode;
@@ -49,6 +51,7 @@ use function strlen;
 use function strpos;
 use function substr;
 use function trim;
+use function usort;
 use function var_export;
 use function yaml_emit;
 use function yaml_parse;
@@ -99,7 +102,148 @@ final class BetterPMMPConfigFormat{
 		}
 		$result = BetterPMMPConfigComments::retranslate($content, $template, $lang);
 		$root = explode('.', BetterPMMPProperties::CONFIG_ENFORCE_FORMAT)[0];
-		return array_key_exists($root, $data) ? $result : self::appendMissingRoot($result, $template, $root, $lang);
+		if(!array_key_exists($root, $data)){
+			return self::appendMissingRoot($result, $template, $root, $lang);
+		}
+		return self::fillMissingKeys($result, $template, $data, $root, $lang);
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] Adds the template keys the file does not carry yet, in place, leaving every existing
+	 * line - values, key order and the user's own comments - untouched. Without this, a `better-pmmp` section
+	 * written by an older build never gained the options a later build added: apply() only appended when the
+	 * whole root was missing, so those servers silently ran on the inline defaults and never saw the new key
+	 * or its localized comment, contradicting the promise that every option is documented in the file.
+	 *
+	 * @param array<int|string, mixed> $data
+	 */
+	private static function fillMissingKeys(string $content, string $template, array $data, string $root, Language $lang) : string{
+		$missing = self::missingFragments($template, $data, $root);
+		if($missing === []){
+			return $content;
+		}
+		$lines = explode("\n", $content);
+		$inserts = [];
+		foreach($missing as $ordinal => [$path, $fragment]){
+			$at = self::blockEnd($lines, $path);
+			if($at === null){
+				return $content;
+			}
+			$inserts[] = [$at, $ordinal, $fragment];
+		}
+		/** Apply back to front so the earlier insertion points stay valid; ties keep template order because
+		 * the later fragment is spliced in first. */
+		usort($inserts, static fn(array $a, array $b) : int => [$b[0], $b[1]] <=> [$a[0], $a[1]]);
+		foreach($inserts as [$at, $ordinal, $fragment]){
+			array_splice($lines, $at, 0, $fragment);
+		}
+		$result = BetterPMMPConfigComments::expand(implode("\n", $lines), $lang);
+		return self::parse($result) === null ? $content : $result;
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] Every template subtree under $root that $data does not have, paired with the path of
+	 * the parent it belongs under. Only subtrees whose parent exists are reported, so the insertion point is
+	 * always findable.
+	 *
+	 * @param array<int|string, mixed> $data
+	 * @return list<array{list<string>, list<string>}>
+	 */
+	private static function missingFragments(string $template, array $data, string $root) : array{
+		$lines = explode("\n", str_replace("\r\n", "\n", $template));
+		$start = null;
+		foreach($lines as $i => $line){
+			if($line === "{$root}:"){
+				$start = $i;
+				break;
+			}
+		}
+		if($start === null){
+			return [];
+		}
+		$missing = [];
+		/** @phpstan-var list<array{int, string}> $stack */
+		$stack = [];
+		$pending = [];
+		$count = count($lines);
+		for($i = $start + 1; $i < $count; $i++){
+			$line = $lines[$i];
+			if(preg_match(self::KEY_LINE_PATTERN, $line, $m) !== 1){
+				$pending[] = $line;
+				continue;
+			}
+			$indent = strlen($m[1]);
+			if($indent === 0){
+				break;
+			}
+			while($stack !== [] && $stack[count($stack) - 1][0] >= $indent){
+				array_pop($stack);
+			}
+			$parent = array_column($stack, 1);
+			$path = $parent;
+			$path[] = $m[2];
+			$found = false;
+			self::lookup($data, array_merge([$root], $path), $found);
+			if($found){
+				$stack[] = [$indent, $m[2]];
+				$pending = [];
+				continue;
+			}
+			$body = [$line];
+			$last = 0;
+			for($j = $i + 1; $j < $count; $j++){
+				$next = $lines[$j];
+				if(preg_match(self::KEY_LINE_PATTERN, $next, $n) === 1){
+					if(strlen($n[1]) <= $indent){
+						break;
+					}
+					$last = count($body);
+				}
+				$body[] = $next;
+			}
+			/** Cut the run of blank and comment lines that trails the subtree: those introduce the next key. */
+			$tail = array_slice($body, $last + 1);
+			$fragment = array_merge($pending, array_slice($body, 0, $last + 1));
+			$missing[] = [array_merge([$root], $parent), $fragment];
+			$pending = $tail;
+			$i = $j - 1;
+		}
+		return $missing;
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] Index of the line just past the block $path names, i.e. where a new child of it goes.
+	 *
+	 * @param list<string> $lines
+	 * @param list<string> $path
+	 */
+	private static function blockEnd(array $lines, array $path) : ?int{
+		/** @phpstan-var list<array{int, string}> $stack */
+		$stack = [];
+		$depth = count($path);
+		$end = null;
+		$count = count($lines);
+		for($i = 0; $i < $count; $i++){
+			if(preg_match(self::KEY_LINE_PATTERN, $lines[$i], $m) !== 1){
+				continue;
+			}
+			$indent = strlen($m[1]);
+			while($stack !== [] && $stack[count($stack) - 1][0] >= $indent){
+				array_pop($stack);
+			}
+			$stack[] = [$indent, $m[2]];
+			if($end !== null){
+				if(count($stack) <= $depth){
+					return $end;
+				}
+				$end = $i + 1;
+				continue;
+			}
+			if(count($stack) === $depth && array_column($stack, 1) === $path){
+				$end = $i + 1;
+			}
+		}
+		return $end;
 	}
 
 	private static function appendMissingRoot(string $content, string $template, string $root, Language $lang) : string{
