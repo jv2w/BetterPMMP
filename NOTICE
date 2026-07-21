@@ -20,6 +20,8 @@ contributors.
 Both the original work and the BetterPMMP modifications are licensed under the
 GNU Lesser General Public License, version 3, or (at your option) any later
 version (LGPL-3.0-or-later). See the LICENSE file for the full license text.
+LGPL-3.0 incorporates the terms of the GNU General Public License version 3;
+that text is in the LICENSE.GPL file.
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
@@ -42,6 +44,18 @@ Third-party components
 The source/vendor/ directory contains third-party libraries, each distributed
 under its own license as stated in that library's own LICENSE file, which is
 retained unmodified.
+
+One of those libraries is modified by BetterPMMP:
+
+  source/vendor/pocketmine/raklib/src/server/Server.php
+
+It is changed to slice the inter-tick sleep of the RakLib thread so that
+outbound packet batches are picked up within about a millisecond instead of up
+to a full 10 ms tick. The change is marked in-line with [BetterPMMP-PATCH], and
+the same diff is kept in source/build/betterpmmp-vendor-patches/ because a
+composer install or update overwrites the vendor tree and reverts it. RakLib is
+distributed under the GPL-3.0 with the exception stated in its own LICENSE.md,
+which is retained unmodified.
 
 The source/bin/ directory contains a build of PHP together with its extensions
 and supporting libraries, distributed under the PHP License v3.01 and the
