@@ -305,7 +305,10 @@ final class BetterPMMPConfigFormat{
 		$stack = [];
 		/** @phpstan-var array<string, array<string, true>> $seen */
 		$seen = [];
-		foreach(explode("\n", str_replace("\r\n", "\n", $template)) as $line){
+		$lines = explode("\n", str_replace("\r\n", "\n", $template));
+		$count = count($lines);
+		for($i = 0; $i < $count; $i++){
+			$line = $lines[$i];
 			if(preg_match(self::KEY_LINE_PATTERN, $line, $m) !== 1){
 				$out[] = $line;
 				continue;
@@ -319,36 +322,85 @@ final class BetterPMMPConfigFormat{
 			$path = array_column($stack, 1);
 			$path[] = $key;
 			[$valuePart, $comment] = self::splitValueComment($m[3]);
+			$found = false;
+			$value = self::lookup($data, $path, $found);
 			if($valuePart === ''){
+				/** [BetterPMMP-PATCH] A template container the file fills with something that is not a map -
+				 * a scalar, a list, or an empty collection - used to be dropped on the floor: the template's
+				 * own child lines were emitted with their defaults and the value in the file was lost. Emit
+				 * what the file says and skip the children the template would otherwise have supplied. */
+				if($found && !self::isMap($value)){
+					$stack[] = [$indent, $key, false];
+					self::emitValue($out, $m[1], $key, $value, $valuePart, $comment);
+					$i = self::subtreeEnd($lines, $i, $indent);
+					continue;
+				}
 				$stack[] = [$indent, $key, true];
 				$out[] = $line;
 				continue;
 			}
 			$stack[] = [$indent, $key, false];
-			$found = false;
-			$value = self::lookup($data, $path, $found);
 			if(!$found){
 				$out[] = $line;
-			}elseif(is_array($value)){
-				if($value === []){
-					$empty = $valuePart === '[]' ? '[]' : '{}';
-					$out[] = "{$m[1]}{$key}: {$empty}{$comment}";
-				}else{
-					$out[] = "{$m[1]}{$key}:";
-					foreach(self::emitBlock($value, "{$m[1]}  ") as $blockLine){
-						$out[] = $blockLine;
-					}
-				}
-			}else{
-				$scalar = self::scalar($value);
-				$out[] = "{$m[1]}{$key}: {$scalar}{$comment}";
+				continue;
 			}
+			self::emitValue($out, $m[1], $key, $value, $valuePart, $comment);
 		}
 		while($stack !== []){
 			self::close($out, $stack, $seen, $data);
 		}
 		self::insertExtras($out, '', self::extras($data, $seen[''] ?? []));
 		return implode("\n", $out);
+	}
+
+	/** [BetterPMMP-PATCH] Whether a value is a YAML mapping, i.e. the only shape a template container can keep. */
+	private static function isMap(mixed $value) : bool{
+		return is_array($value) && $value !== [] && !array_is_list($value);
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] Index of the last line of the subtree introduced at $i, so the caller can drop the
+	 * template's children. Trailing blank and comment lines are left behind: they introduce the next key.
+	 *
+	 * @param list<string> $lines
+	 */
+	private static function subtreeEnd(array $lines, int $i, int $indent) : int{
+		$last = $i;
+		$count = count($lines);
+		for($j = $i + 1; $j < $count; $j++){
+			if(preg_match(self::KEY_LINE_PATTERN, $lines[$j], $n) !== 1){
+				continue;
+			}
+			if(strlen($n[1]) <= $indent){
+				break;
+			}
+			$last = $j;
+		}
+		return $last;
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] Writes one key with the value the file holds for it, in the shape that value needs.
+	 *
+	 * @param list<string> $out
+	 */
+	private static function emitValue(array &$out, string $indent, string $key, mixed $value, string $valuePart, string $comment) : void{
+		if(!is_array($value)){
+			$scalar = self::scalar($value);
+			$out[] = "{$indent}{$key}: {$scalar}{$comment}";
+			return;
+		}
+		if($value === []){
+			$empty = $valuePart === '[]' ? '[]' : '{}';
+			$out[] = "{$indent}{$key}: {$empty}{$comment}";
+			return;
+		}
+		/** [BetterPMMP-PATCH] The trailing template comment is carried over here as well; the block form used
+		 * to be the one branch of the three that silently dropped it. */
+		$out[] = "{$indent}{$key}:{$comment}";
+		foreach(self::emitBlock($value, "{$indent}  ") as $blockLine){
+			$out[] = $blockLine;
+		}
 	}
 
 	/**
@@ -366,18 +418,13 @@ final class BetterPMMPConfigFormat{
 		$path[] = $entry[1];
 		$found = false;
 		$value = self::lookup($data, $path, $found);
-		if(!$found || !is_array($value) || $value === []){
+		/** [BetterPMMP-PATCH] rebuild() only marks a container as open when the file has a mapping there or
+		 * nothing at all, so the one case left is a mapping carrying keys the template does not know. */
+		if(!$found || !self::isMap($value)){
 			return;
 		}
-		$children = $seen[implode("\0", $path)] ?? [];
 		$indent = str_repeat(' ', $entry[0] + 2);
-		if(array_is_list($value)){
-			if($children === []){
-				self::insertExtras($out, $indent, $value);
-			}
-			return;
-		}
-		self::insertExtras($out, $indent, self::extras($value, $children));
+		self::insertExtras($out, $indent, self::extras($value, $seen[implode("\0", $path)] ?? []));
 	}
 
 	/**
