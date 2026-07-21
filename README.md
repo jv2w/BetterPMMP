@@ -16,20 +16,20 @@ The performance improvements are on from the start and leave gameplay untouched.
 
 ### Developer Experience
 
-- **Restart Command**: `/restart`, backed by a restart loop in `start.cmd`. Source edits are picked up across a clean process boundary.
-- **Run From Source**: `start.cmd` runs `source/src/PocketMine.php` directly instead of a `.phar`, so edits take effect on the next start.
+- **Restart Command**: `/restart`, backed by a restart loop in `start.cmd` and `start.sh`. Source edits are picked up across a clean process boundary.
+- **Run From Source**: the start scripts run `source/src/PocketMine.php` directly instead of a `.phar`, so edits take effect on the next start.
 - **Cleaner Logs & Paths**: tidier startup output and consolidated data / log / crashdump directories.
 - **Localized Config Comments**: the documentation comments in `pocketmine.yml` and `resource_packs.yml` render in the language you pick in the setup wizard, and re-translate when you change it in `server.properties`.
 
 ### Performance
 
-- **Block Input Lag Fix**: captures surrounding blocks before an interaction and sends back only the ones that changed, killing rubber-banding on place/break.
-- **Fixed Light**: skips `LightPopulationTask` and fills light arrays with a constant, dropping the async/serialization/flood-fill cost. Opt in via `pocketmine.yml`.
+- **Block Sync Trimming**: records the clicked block before an interaction and skips re-sending it when the interaction left it unchanged. The surrounding blocks are still sent, because that is what overwrites the client's optimistic prediction.
+- **Fixed Light**: skips `LightPopulationTask` and fills every chunk's light arrays with a constant as it loads, dropping the async/serialization/flood-fill cost. Opt in via `pocketmine.yml`.
 - **Per-World View Distance**: override `view-distance` per world (handy for lobbies).
 - **Per-World Chunk Ticking**: set `tick-radius` and `blocks-per-subchunk-per-tick` per world; set both to `0` to disable random ticking entirely.
 - **Event & Network Tuning**: event-bus fast paths, a closure-free attribute sync scan, cheaper packet framing, block and neighbour-update caching, and assorted engine fixes.
 - **Hot-Path Micro-Optimizations**: the armor tick loop only runs for items that actually do something when worn (no more per-tick item clones on every living entity), per-packet profiler bookkeeping is skipped entirely while `/timings` is off, and random block ticking iterates subchunks without rebuilding an array per chunk per tick. Behaviour is identical; only the overhead is gone.
-- **Snappy Compression**: opt-in Snappy packet compression as a lighter-CPU alternative to zlib; enable in `pocketmine.yml` (needs the `snappy` PHP extension).
+- **Snappy Compression**: opt-in Snappy packet compression as a lighter-CPU alternative to zlib; enable in `pocketmine.yml`. It needs the `snappy` PHP extension, which the bundled binary already has; without it the server warns and stays on zlib.
 - **PvP Toggles**: opt-in switches for vanilla systems an arena server rarely needs: runtime light updates, XP orbs, explosion block destruction, item merging, and empty-world ticking.
 
 ### Gameplay
@@ -37,10 +37,13 @@ The performance improvements are on from the start and leave gameplay untouched.
 - **Critical Hits**: configurable via `pocketmine.yml`; defaults match vanilla.
 - **Iron Door/Trapdoor No-Interact**: hand interaction no longer toggles iron doors and iron trapdoors, matching vanilla, where only redstone opens them. Set `gameplay.iron-door-hand-interaction` to put the upstream behaviour back.
 - **Mechanic Toggles**: hunger exhaustion, fall damage, and farmland drying/trampling can each be switched off for minigame and arena servers. All default to vanilla behaviour.
+- **No Upstream Telemetry**: crash reporting, the update check and usage statistics are off by default. Their stock hosts belong to the archived PocketMine-MP project and know nothing about this fork.
 
 ## Configuration
 
-Every option lives under the `better-pmmp:` section of `pocketmine.yml`, and each one carries a comment in your server language explaining what it does. **All of them require a server restart** — values are read once at startup.
+Every option lives under the `better-pmmp:` section of `pocketmine.yml`, and each one carries a comment in your server language explaining what it does. Options added by a later version are written into your existing file on the next startup, comments and all. **All of them require a server restart** — values are read once at startup.
+
+Two settings outside that section are also changed from upstream: `network.compression-level` ships at `1` instead of `6` (much cheaper to compress, 10–15 % larger payloads, a trade that favours tick time), and `auto-report`, `auto-updater` and `anonymous-statistics` all default to off.
 
 | Key | Default | What it does |
 | --- | --- | --- |
@@ -82,13 +85,13 @@ Options that change how the game plays are off by default; performance options t
 
 ## Requirements
 
-- Windows (the start script is `start.cmd`)
-- A PHP 8 binary. One is bundled at `source/bin/php/php.exe`; if it is missing, download a PM5 build from [pmmp/PHP-Binaries](https://github.com/pmmp/PHP-Binaries/releases) or use a `php.exe` on your `PATH`.
+- Windows (`start.cmd`) or Linux (`start.sh`)
+- A PHP 8 binary. A Windows build is bundled at `source/bin/php/php.exe`. If it is missing, or you are on Linux, download a PM5 build from [pmmp/PHP-Binaries](https://github.com/pmmp/PHP-Binaries/releases) into `source/bin/php/`, or put a `php` binary on your `PATH` — the start scripts prefer the bundled one and fall back to `PATH`.
 
 ## Installation
 
 1. Clone or download this repository.
-2. Start the server with `start.cmd`.
+2. Start the server with `start.cmd` on Windows, or `./start.sh` on Linux.
 
 That's it: the source in `source/` already contains every BetterPMMP change.
 
