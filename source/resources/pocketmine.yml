@@ -261,6 +261,8 @@ better-pmmp:
     hunger-exhaustion: true
     #! pocketmine.betterpmmp.yml.gameplay.fall-damage
     fall-damage: true
+    #! pocketmine.betterpmmp.yml.gameplay.iron-door-hand-interaction
+    iron-door-hand-interaction: false
     #! pocketmine.betterpmmp.yml.gameplay.farmland-persistent
     farmland-persistent: false
     #! pocketmine.betterpmmp.yml.gameplay.farmland-instant-hydration

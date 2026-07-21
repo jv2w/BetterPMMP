@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\block;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\block\utils\HorizontalFacing;
 use pocketmine\block\utils\HorizontalFacingTrait;
 use pocketmine\block\utils\SupportType;
@@ -32,6 +33,7 @@ use pocketmine\math\AxisAlignedBB;
 use pocketmine\math\Facing;
 use pocketmine\math\Vector3;
 use pocketmine\player\Player;
+use pocketmine\Server;
 use pocketmine\world\BlockTransaction;
 use pocketmine\world\sound\DoorSound;
 
@@ -139,10 +141,19 @@ class Door extends Transparent implements HorizontalFacing{
 		return false;
 	}
 
-	/** [BetterPMMP-PATCH] Iron door: block onInteract completely */
+	/** [BetterPMMP-PATCH] Iron doors do not open by hand in vanilla; PocketMine toggles them like any other
+	 * door. Gated behind better-pmmp.gameplay.iron-door-hand-interaction so the upstream behaviour can be
+	 * put back. Returning false rather than true leaves the interaction unhandled, so a block held in hand
+	 * is still placed against the door exactly as vanilla does - returning true also swallowed that. */
+	private static ?bool $handInteractionCache = null;
+
+	private static function isHandInteractionEnabled() : bool{
+		return self::$handInteractionCache ??= Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::GAMEPLAY_IRON_DOOR_HAND_INTERACTION, false);
+	}
+
 	public function onInteract(Item $item, int $face, Vector3 $clickVector, ?Player $player = null, array &$returnedItems = []) : bool{
-		if($this->getTypeId() === BlockTypeIds::IRON_DOOR){
-			return true;
+		if($this->getTypeId() === BlockTypeIds::IRON_DOOR && !self::isHandInteractionEnabled()){
+			return false;
 		}
 		$this->open = !$this->open;
 

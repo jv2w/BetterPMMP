@@ -35,7 +35,7 @@ The performance improvements are on from the start and leave gameplay untouched.
 ### Gameplay
 
 - **Critical Hits**: configurable via `pocketmine.yml`; defaults match vanilla.
-- **Iron Door/Trapdoor No-Interact**: hand interaction no longer toggles iron doors and iron trapdoors.
+- **Iron Door/Trapdoor No-Interact**: hand interaction no longer toggles iron doors and iron trapdoors, matching vanilla, where only redstone opens them. Set `gameplay.iron-door-hand-interaction` to put the upstream behaviour back.
 - **Mechanic Toggles**: hunger exhaustion, fall damage, and farmland drying/trampling can each be switched off for minigame and arena servers. All default to vanilla behaviour.
 
 ## Configuration
@@ -74,6 +74,7 @@ Every option lives under the `better-pmmp:` section of `pocketmine.yml`, and eac
 | `plugins.lifecycle-log` | `true` | Log plugin load/enable/disable. |
 | `gameplay.hunger-exhaustion` | `true` | Hunger drain from every cause. |
 | `gameplay.fall-damage` | `true` | Fall damage for living entities. |
+| `gameplay.iron-door-hand-interaction` | `false` | Let hand interaction toggle iron doors and trapdoors. Vanilla needs redstone. |
 | `gameplay.farmland-persistent` | `false` | Farmland never dries, tramples, or reverts. |
 | `gameplay.farmland-instant-hydration` | `false` | Tilled/placed farmland starts wet. Needs `farmland-persistent` to stay wet. |
 

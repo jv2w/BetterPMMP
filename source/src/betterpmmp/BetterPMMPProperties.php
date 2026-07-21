@@ -79,6 +79,7 @@ final class BetterPMMPProperties{
 	public const PLUGINS_LIFECYCLE_LOG = 'better-pmmp.plugins.lifecycle-log';
 
 	public const GAMEPLAY_HUNGER_EXHAUSTION = 'better-pmmp.gameplay.hunger-exhaustion';
+	public const GAMEPLAY_IRON_DOOR_HAND_INTERACTION = 'better-pmmp.gameplay.iron-door-hand-interaction';
 	public const GAMEPLAY_FALL_DAMAGE = 'better-pmmp.gameplay.fall-damage';
 	public const GAMEPLAY_FARMLAND_PERSISTENT = 'better-pmmp.gameplay.farmland-persistent';
 	public const GAMEPLAY_FARMLAND_INSTANT_HYDRATION = 'better-pmmp.gameplay.farmland-instant-hydration';
