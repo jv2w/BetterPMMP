@@ -14,13 +14,13 @@
 - **성능 > 가독성** — 핫패스에서는 가독성보다 MSPT/TPS를 우선.
 
 ## 검증 (phpstan) — 매 변경마다 필수
-- **dev 의존성은 `source/`에 절대 설치하지 않는다.** `cd source && composer install` 금지 — phpstan/phpunit 등이 `source/vendor/`에 쏟아지고 커밋에 휩쓸린 사고 이력이 있다. `source/vendor/`는 런타임 의존성만 추적한다.
-- dev 도구는 리포 루트 `.tools/`에만 둔다(추적 금지 — 커밋에 포함하지 않는다). 없으면 생성: `mkdir -p .tools && composer require --working-dir=.tools phpstan/phpstan:2.1.46` (버전은 `source/composer.json`의 `require-dev`와 일치시킨다).
-- 실행 — `source/`에서:
-  `./bin/php/php.exe ../.tools/vendor/phpstan/phpstan/phpstan.phar analyse -l max --autoload-file=vendor/autoload.php --no-progress <변경 파일>`
-- 번들 php(`source/bin/php/php.exe`)를 쓴다 — pmmp 확장이 리플렉션으로 잡혀 stub 누락 오탐이 사라진다. 임시 런타임 확인(`parse_ini_file`·`yaml_parse` 등)도 이 php로 한다.
-- 리포에는 `phpstan.neon.dist`가 **없다**. 전체 트리 분석은 기존 노이즈가 섞이므로 **변경 파일로 범위를 좁히고**, 출력에서 자신이 건드린 파일·식별자만 판정한다.
-- level `max`, PMMP 기준 완벽 준수. 타입·제네릭 PHPDoc·`@phpstan-*` 정확히. 새/수정 코드는 신규 에러 0. **EXIT 0 확인 후에만 "통과" 단정.**
+- 검사 구성은 소스에 내장되어 함께 배포된다: `source/phpstan.neon.dist`(level max, strict-rules·phpunit 확장) + `source/phpstan-baseline.neon`(업스트림 5.44.3 기존 에러 전용). dev 의존성은 `source/composer.json` `require-dev`로 선언되고 `source/vendor/`에 포함된다.
+- 실행 — `source/`에서: `./bin/php/php.exe vendor/bin/phpstan analyse --memory-limit=4G`
+- 반드시 번들 php(`source/bin/php/php.exe`)로 실행한다 — 서버 확장이 전부 내장되어 ext 심볼이 리플렉션으로 해석된다(시스템 php는 확장 부재로 오탐). 임시 런타임 확인(`parse_ini_file`·`yaml_parse` 등)도 이 php로 한다.
+- **전체 트리 EXIT 0 이 통과 기준. EXIT 0 확인 후에만 "통과" 단정.**
+- 새/수정 코드의 에러를 baseline·`@phpstan-ignore` 로 덮지 않는다 — 근본 원인을 고친다. baseline 은 업스트림 유래 기존 에러 전용.
+- `composer install`/`update` 는 `composer.json` `extra.betterpmmp-vendor-patches` 에 나열된 벤더 수정 파일을 되돌린다 — 실행했다면 해당 파일을 `git checkout -- <파일>` 로 복원하고 `[BetterPMMP-PATCH]` grep 으로 확인한다.
+- 타입·제네릭 PHPDoc·`@phpstan-*` 정확히. 새/수정 코드는 신규 에러 0.
 
 ## 코드 규칙
 - **주석** — 설명용 주석 금지. 허용은 아래 3종뿐.
@@ -37,7 +37,7 @@
 - **문자열** — 작은따옴표 기본. 보간만 `"Hello {$name}"`. 연결(`'a' . $x`) 금지.
 - **중괄호** — 클래스·함수 다음 줄. body 1문 한 줄, 2문↑ 블록.
 
-## CRITICAL — 코드, 위반 시 즉시 실패
+## CRITICAL — 위반 시 즉시 실패
 - 파일 첫 줄 `<?php`, 다음에 LGPL 헤더 블록, 그 뒤 `declare(strict_types=1);` — PMMP 표준 형식 유지.
 - LGPL 헤더 삭제·훼손 (§라이선스)
 - 허용 3종 외 주석 (§코드 규칙 「주석」)
@@ -45,10 +45,4 @@
 - `==` (반드시 `===`)
 - 출력 함수: `echo` `print` `PHP_EOL` `var_dump` `print_r` `var_export` `error_log` `debug_print_backtrace` — 콘솔은 `$this->getLogger()` 전용
 - 영어 전용 — 모든 소스 문자열 리터럴(수정·신규 코드·`start.cmd`/배치·로그·사용자 메시지 포함)은 영어만. 한국어 등 비영어 리터럴 금지
-
-## CRITICAL — 작업, 위반 시 즉시 실패
 - phpstan 미실행 상태에서 "오류 없음" 단정 (§검증)
-- 사용자의 언급 없이 `push`
-- `git add -A` / `git add -a` — 스테이징은 항상 명시 경로로. (`.tools/`·스크래치 파일이 휩쓸린 사고 이력)
-- 검증 절차·체크리스트 사용자 노출 (내부 전용)
-- 모호함 회피 — 클래스·기능명 명시 요청은 즉시 작업, 스펙 미정일 때만 ≤200자 질문
