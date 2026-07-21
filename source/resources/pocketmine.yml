@@ -96,8 +96,8 @@ ticks-per:
   autosave: 6000
 
 auto-report:
-  #!pocketmine.yml.auto-report.enabled
-  enabled: true
+  #! pocketmine.yml.auto-report.enabled
+  enabled: false
   send-code: true
   send-settings: true
   send-phpinfo: false
@@ -106,11 +106,12 @@ auto-report:
 
 anonymous-statistics:
   #!pocketmine.yml.anonymous-statistics.enabled
-  enabled: false #TODO: re-enable this when we have a new stats host
+  enabled: false
   host: stats.pocketmine.net
 
 auto-updater:
-  enabled: true
+  #! pocketmine.yml.auto-updater.enabled
+  enabled: false
   on-update:
     warn-console: true
   #!pocketmine.yml.auto-updater.preferred-channel

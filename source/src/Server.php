@@ -1709,7 +1709,10 @@ class Server{
 
 			$this->logger->emergency($this->language->translate(KnownTranslationFactory::pocketmine_crash_submit($crashDumpPath)));
 
-			if($this->configGroup->getPropertyBool(Yml::AUTO_REPORT_ENABLED, true)){
+			/** [BetterPMMP-PATCH] Off by default. The stock host is the archived upstream project's crash
+			 * archive, and a clean checkout has an undirty git hash, so the "locally modified" guard above
+			 * does not fire - BetterPMMP dumps were being filed against PocketMine-MP under its name. */
+			if($this->configGroup->getPropertyBool(Yml::AUTO_REPORT_ENABLED, false)){
 				$report = true;
 
 				/** [BetterPMMP-PATCH] Keep the rate-limit stamp beside the dumps in system/crashdumps. The

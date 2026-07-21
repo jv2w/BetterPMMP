@@ -44,7 +44,10 @@ class UpdateChecker{
 		$this->logger = new \PrefixedLogger($server->getLogger(), "Update Checker");
 		$this->endpoint = "http://$endpoint/api/";
 
-		if($server->getConfigGroup()->getPropertyBool(YmlServerProperties::AUTO_UPDATER_ENABLED, true)){
+		/** [BetterPMMP-PATCH] Off by default. The stock host publishes PocketMine-MP releases, which say
+		 * nothing about whether this fork is up to date, and running from source leaves the build number at
+		 * 0 so the result could never be shown anyway - the request was pure traffic to a dead project. */
+		if($server->getConfigGroup()->getPropertyBool(YmlServerProperties::AUTO_UPDATER_ENABLED, false)){
 			$this->doCheck();
 		}
 	}
