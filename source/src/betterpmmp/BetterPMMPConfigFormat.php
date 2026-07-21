@@ -138,7 +138,15 @@ final class BetterPMMPConfigFormat{
 			array_splice($lines, $at, 0, $fragment);
 		}
 		$result = BetterPMMPConfigComments::expand(implode("\n", $lines), $lang);
-		return self::parse($result) === null ? $content : $result;
+		$parsed = self::parse($result);
+		/** [BetterPMMP-PATCH] Only keep the rewrite if it actually did what it set out to do. A file that
+		 * declares the same root twice parses to the last one while the insertion point is found in the
+		 * first, so the keys stay missing and every startup appends them again - the file grows without
+		 * bound. Checking the result converges instead: a shape we cannot repair is left exactly as it is. */
+		if($parsed === null || self::missingFragments($template, $parsed, $root) !== []){
+			return $content;
+		}
+		return $result;
 	}
 
 	/**
@@ -305,6 +313,9 @@ final class BetterPMMPConfigFormat{
 		$stack = [];
 		/** @phpstan-var array<string, array<string, true>> $seen */
 		$seen = [];
+		/** [BetterPMMP-PATCH] The template's own values, used for keys the file does not carry - see the leaf
+		 * branch below for why copying the template line verbatim is not good enough. */
+		$templateData = self::parse($template) ?? [];
 		$lines = explode("\n", str_replace("\r\n", "\n", $template));
 		$count = count($lines);
 		for($i = 0; $i < $count; $i++){
@@ -328,8 +339,10 @@ final class BetterPMMPConfigFormat{
 				/** [BetterPMMP-PATCH] A template container the file fills with something that is not a map -
 				 * a scalar, a list, or an empty collection - used to be dropped on the floor: the template's
 				 * own child lines were emitted with their defaults and the value in the file was lost. Emit
-				 * what the file says and skip the children the template would otherwise have supplied. */
-				if($found && !self::isMap($value)){
+				 * what the file says and skip the children the template would otherwise have supplied.
+				 * null is not such a value: `key:` with nothing under it parses to null, so treating it as one
+				 * would rewrite every childless container as `key: null` on the second pass. */
+				if($found && $value !== null && !self::isMap($value)){
 					$stack[] = [$indent, $key, false];
 					self::emitValue($out, $m[1], $key, $value, $valuePart, $comment);
 					$i = self::subtreeEnd($lines, $i, $indent);
@@ -340,6 +353,13 @@ final class BetterPMMPConfigFormat{
 				continue;
 			}
 			$stack[] = [$indent, $key, false];
+			if(!$found){
+				/** [BetterPMMP-PATCH] Emit the template's parsed value instead of copying its line verbatim.
+				 * The verbatim copy kept the template's own quoting, and the next startup - by which time the
+				 * key does exist in the file - re-emitted the same value through scalar() in an equivalent but
+				 * differently spelled form, so an untouched server rewrote its config one extra time. */
+				$value = self::lookup($templateData, $path, $found);
+			}
 			if(!$found){
 				$out[] = $line;
 				continue;
