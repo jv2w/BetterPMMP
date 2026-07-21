@@ -13,7 +13,7 @@
 - **강화 근거** — 각 변경이 소스를 어떻게 강화하는지(제거되는 오버헤드·고쳐지는 버그·줄어드는 MSPT)를 명시. 근거 없는 변경 금지.
 - **성능 > 가독성** — 핫패스에서는 가독성보다 MSPT/TPS를 우선.
 
-## 검증 (phpstan) — 매 변경마다 필수
+## 검증 — 매 변경마다 필수
 - 검사 구성은 소스에 내장되어 함께 배포된다: `source/phpstan.neon.dist`(level max, strict-rules·phpunit 확장) + `source/phpstan-baseline.neon`(업스트림 5.44.3 기존 에러 전용). dev 의존성은 `source/composer.json` `require-dev`로 선언되고 `source/vendor/`에 포함된다.
 - 실행 — `source/`에서: `./bin/php/php.exe vendor/bin/phpstan analyse --memory-limit=4G`
 - 반드시 번들 php(`source/bin/php/php.exe`)로 실행한다 — 서버 확장이 전부 내장되어 ext 심볼이 리플렉션으로 해석된다(시스템 php는 확장 부재로 오탐). 임시 런타임 확인(`parse_ini_file`·`yaml_parse` 등)도 이 php로 한다.
@@ -21,6 +21,7 @@
 - 새/수정 코드의 에러를 baseline·`@phpstan-ignore` 로 덮지 않는다 — 근본 원인을 고친다. baseline 은 업스트림 유래 기존 에러 전용.
 - `composer install`/`update` 는 `composer.json` `extra.betterpmmp-vendor-patches` 에 나열된 벤더 수정 파일을 되돌린다 — 실행했다면 해당 파일을 `git checkout -- <파일>` 로 복원하고 `[BetterPMMP-PATCH]` grep 으로 확인한다.
 - 타입·제네릭 PHPDoc·`@phpstan-*` 정확히. 새/수정 코드는 신규 에러 0.
+- 런타임 확인(헤드리스 부팅) — `source/`에서 `./bin/php/php.exe src/PocketMine.php --no-wizard --disable-ansi --no-log-file "--data=<임시>" "--plugins=<임시>/plugins"`. 옵션은 반드시 `--opt=value` 형식(공백 구분 시 이후 플래그가 무시되고 설정 마법사가 STDIN 에서 대기). 설정 파일은 서버 구동 초기에 기록되므로 ~30초 후 종료해도 된다.
 
 ## 코드 규칙
 - **주석** — 설명용 주석 금지. 허용은 아래 3종뿐.
