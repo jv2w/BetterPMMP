@@ -1533,13 +1533,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	/**
 	 * Fires movement events and synchronizes player movement, every tick.
 	 */
-	/** [BetterPMMP-PATCH] PvP optimization: movement broadcast skipped this cycle, flush pending */
-	private bool $pvpMoveBroadcastPending = false;
 	/** [BetterPMMP-PATCH] event engine: last position fired in a PlayerMoveEvent (for period accumulation) */
 	private ?Location $pvpMoveEventFrom = null;
-
-	/** [BetterPMMP-PATCH] PvP optimization: cached movement broadcast period */
-	private ?int $pvpMoveBroadcastPeriod = null;
 
 	protected function processMostRecentMovements() : void{
 		$now = microtime(true);
@@ -1559,7 +1554,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			 * accumulated from, so listeners still see a gapless movement chain. Cancelling reverts
 			 * the whole accumulated span. */
 			if(PlayerMoveEvent::hasHandlers()){
-				$pvpMoveEvPeriod = (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::EVENTS_MOVE_EVENT_PERIOD, 1);
+				$pvpMoveEvPeriod = $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::EVENTS_MOVE_EVENT_PERIOD, 1);
 				$this->pvpMoveEventFrom ??= $from;
 				if($pvpMoveEvPeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMoveEvPeriod) === 0){
 					$evFrom = $pvpMoveEvPeriod <= 1 ? $from : $this->pvpMoveEventFrom;
@@ -1574,7 +1569,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 						 * lastLocation when period > 1 - and resync viewers who already saw the reverted span */
 						$this->lastLocation = $evFrom;
 						if($pvpMoveEvPeriod > 1){
-							$this->pvpMoveBroadcastPending = true;
+							$this->pvpMovementBroadcastPending = true;
 						}
 						return;
 					}
@@ -1589,12 +1584,12 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			$this->lastLocation = $to;
 			/** [BetterPMMP-PATCH] PvP optimization: player movement broadcast period - PlayerMoveEvent and
 			 * exhaustion above stay per-tick, only the packet send is decimated. */
-			$pvpMovePeriod = $this->pvpMoveBroadcastPeriod ??= (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1);
+			$pvpMovePeriod = $this->pvpMovementBroadcastPeriod ??= $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1);
 			if($pvpMovePeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMovePeriod) === 0){
-				$this->pvpMoveBroadcastPending = false;
+				$this->pvpMovementBroadcastPending = false;
 				$this->broadcastMovement();
 			}else{
-				$this->pvpMoveBroadcastPending = true;
+				$this->pvpMovementBroadcastPending = true;
 			}
 
 			/** [BetterPMMP-PATCH] gameplay toggle: hunger exhaustion - the chunk order clamp below must
@@ -1602,7 +1597,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			 * since the walking branch never uses the distance */
 			$horizontalDistanceSquared = (($from->x - $to->x) ** 2) + (($from->z - $to->z) ** 2);
 			if($horizontalDistanceSquared > 0){
-				if($this->hungerExhaustion ??= (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_HUNGER_EXHAUSTION, true)){
+				if($this->hungerManager->isExhaustionEnabled()){
 					//TODO: check for swimming
 					if($this->isSprinting()){
 						$this->hungerManager->exhaust(0.01 * sqrt($horizontalDistanceSquared), PlayerExhaustEvent::CAUSE_SPRINTING);
@@ -1625,10 +1620,10 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 					}
 				}
 			}
-		}elseif($this->pvpMoveBroadcastPending){
+		}elseif($this->pvpMovementBroadcastPending){
 			/** [BetterPMMP-PATCH] PvP optimization: flush the last skipped movement broadcast so the
 			 * resting position viewers see is always exact */
-			$this->pvpMoveBroadcastPending = false;
+			$this->pvpMovementBroadcastPending = false;
 			$this->broadcastMovement();
 		}
 
@@ -1716,7 +1711,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 			/** [BetterPMMP-PATCH] PvP optimization: pickup scan period - the nearby-entity sweep is
 			 * O(entities around each player) every tick; vanilla pickup delay is 10 ticks anyway */
-			$pvpScanPeriod = $this->pvpPickupScanPeriod ??= (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::ENTITIES_PICKUP_SCAN_PERIOD, 1);
+			$pvpScanPeriod = $this->pvpPickupScanPeriod ??= $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::ENTITIES_PICKUP_SCAN_PERIOD, 1);
 			if(!$this->isSpectator() && $this->isAlive() && ($pvpScanPeriod <= 1 || (($currentTick + $this->id) % $pvpScanPeriod) === 0)){
 				Timings::$playerCheckNearEntities->startTiming();
 				$this->checkNearEntities();
@@ -2180,7 +2175,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		/** [BetterPMMP-PATCH] Configurable critical hit logic */
 		$config = $this->server->getConfigGroup();
 		$critMinFall = (float) $config->getProperty(BetterPMMPProperties::COMBAT_CRITICAL_HIT_MIN_FALL_DISTANCE, 0.0);
-		$critIgnoreSprint = (bool) $config->getProperty(BetterPMMPProperties::COMBAT_CRITICAL_HIT_IGNORE_SPRINT, false);
+		$critIgnoreSprint = $config->getPropertyBool(BetterPMMPProperties::COMBAT_CRITICAL_HIT_IGNORE_SPRINT, false);
 		if(($critIgnoreSprint || !$this->isSprinting()) && !$this->isFlying() && $this->fallDistance > $critMinFall && !$this->effectManager->has(VanillaEffects::BLINDNESS()) && !$this->isUnderwater()){
 			$ev->setModifier($ev->getFinalDamage() / 2, EntityDamageEvent::MODIFIER_CRITICAL);
 		}

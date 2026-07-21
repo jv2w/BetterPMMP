@@ -51,7 +51,7 @@ class HungerManager{
 		$this->hungerAttr = self::fetchAttribute($entity, Attribute::HUNGER);
 		$this->saturationAttr = self::fetchAttribute($entity, Attribute::SATURATION);
 		$this->exhaustionAttr = self::fetchAttribute($entity, Attribute::EXHAUSTION);
-		$this->exhaustionEnabled = (bool) Server::getInstance()->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_HUNGER_EXHAUSTION, true);
+		$this->exhaustionEnabled = Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::GAMEPLAY_HUNGER_EXHAUSTION, true);
 	}
 
 	private static function fetchAttribute(Entity $entity, string $attributeId) : Attribute{
@@ -229,6 +229,11 @@ class HungerManager{
 
 	public function isEnabled() : bool{
 		return $this->enabled;
+	}
+
+	/** [BetterPMMP-PATCH] Single source of truth for the hunger-exhaustion toggle, so callers gate on this instead of re-reading the config. */
+	public function isExhaustionEnabled() : bool{
+		return $this->exhaustionEnabled;
 	}
 
 	public function setEnabled(bool $enabled) : void{

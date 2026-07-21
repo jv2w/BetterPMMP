@@ -583,7 +583,7 @@ class NetworkSession{
 			 * PlayerAuthInputPacket - it arrives 20/s per player and dominates inbound event dispatches */
 			if(DataPacketReceiveEvent::hasHandlers()
 				&& !($packet instanceof \pocketmine\network\mcpe\protocol\PlayerAuthInputPacket
-					&& (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_SKIP_AUTH_INPUT_RECEIVE_EVENT, false))){
+					&& $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_AUTH_INPUT_RECEIVE_EVENT, false))){
 				$ev = new DataPacketReceiveEvent($this, $packet);
 				$ev->call();
 				if($ev->isCancelled()){
@@ -638,7 +638,7 @@ class NetworkSession{
 			 * the largest outbound packet stream (moving entities x viewers x 20/s) */
 			if(DataPacketSendEvent::hasHandlers()
 				&& !(($packet instanceof \pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket || $packet instanceof \pocketmine\network\mcpe\protocol\SetActorMotionPacket)
-					&& (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_SKIP_MOVEMENT_SEND_EVENT, false))){
+					&& $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_MOVEMENT_SEND_EVENT, false))){
 				$ev = new DataPacketSendEvent([$this], [$packet]);
 				$ev->call();
 				if($ev->isCancelled()){
@@ -764,9 +764,9 @@ class NetworkSession{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] hit-latency: flushes buffered hit feedback for everyone who observes a hit -
-	 * the victim (with its own attribute sync so its red flash lands now), the attacker, and every viewer
-	 * of the victim - deduped so each session flushes at most once.
+	 * [BetterPMMP-PATCH] hit-latency: flushes buffered hit feedback for the victim (with its own attribute
+	 * sync so its red flash lands now) and the attacker, deduped so a session that is both flushes at most
+	 * once.
 	 */
 	public static function flushHitFeedbackAll(Entity $victim, ?Player $attacker) : void{
 		/** [BetterPMMP-PATCH] Gated behind better-pmmp.combat.instant-hit-feedback - this changes packet

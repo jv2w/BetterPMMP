@@ -498,10 +498,10 @@ class InGamePacketHandler extends PacketHandler{
 
 				/** [BetterPMMP-PATCH] Block lag fix - capture snapshot before interaction. Gated behind
 				 * better-pmmp.network.block-sync-snapshot, and skipped when syncBlocksNearby() would bail on
-				 * the distance check anyway - capturing 14 blocks for a click 100+ blocks away was pure waste. */
+				 * the distance check anyway - capturing the block state for a click 100+ blocks away was pure waste. */
 				$this->blockSyncSnapshot ??= Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_BLOCK_SYNC_SNAPSHOT, true);
 				$oldBlockSnapshot = $this->blockSyncSnapshot && $vBlockPos->distanceSquared($this->player->getLocation()) < 10000
-					? $this->captureBlockSnapshot($vBlockPos, $data->getFace())
+					? $this->captureBlockSnapshot($vBlockPos)
 					: [];
 				$interactResult = $this->player->interactBlock($vBlockPos, $data->getFace(), $clickPos);
 
@@ -580,18 +580,14 @@ class InGamePacketHandler extends PacketHandler{
 	/**
 	 * @phpstan-return array<int, int>
 	 */
-	private function captureBlockSnapshot(Vector3 $blockPos, int $face): array
+	private function captureBlockSnapshot(Vector3 $blockPos): array
 	{
-		$world = $this->player->getWorld();
-		$sidePos = $blockPos->getSide($face);
-		$snapshot = [];
-		foreach ([$blockPos, ...$blockPos->sidesArray(), $sidePos, ...$sidePos->sidesArray()] as $pos) {
-			$x = (int) $pos->x;
-			$y = (int) $pos->y;
-			$z = (int) $pos->z;
-			$snapshot[World::blockHash($x, $y, $z)] = $world->getBlockAt($x, $y, $z)->getStateId();
-		}
-		return $snapshot;
+		/** [BetterPMMP-PATCH] Only the clicked block is ever read back in syncBlocksNearby() (suppression is
+		 * limited to it), so capture just that one state instead of the clicked block plus its 13 neighbours. */
+		$x = (int) $blockPos->x;
+		$y = (int) $blockPos->y;
+		$z = (int) $blockPos->z;
+		return [World::blockHash($x, $y, $z) => $this->player->getWorld()->getBlockAt($x, $y, $z)->getStateId()];
 	}
 	private function handleUseItemOnEntityTransaction(UseItemOnEntityTransactionData $data) : bool{
 		$target = $this->player->getWorld()->getEntity($data->getActorRuntimeId());

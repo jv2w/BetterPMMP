@@ -403,7 +403,7 @@ abstract class Living extends Entity{
 	protected function calculateFallDamage(float $fallDistance) : float{
 		/** [BetterPMMP-PATCH] gameplay toggle: no fall damage - returning 0.0 here skips the jump boost
 		 * effect lookup, the damage event/attack and both fall sounds in onHitGround() */
-		if(!($this->pvpFallDamage ??= (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::GAMEPLAY_FALL_DAMAGE, true))){
+		if(!($this->pvpFallDamage ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::GAMEPLAY_FALL_DAMAGE, true))){
 			return 0.0;
 		}
 		return ceil($fallDistance - 3 - (($jumpBoost = $this->effectManager->get(VanillaEffects::JUMP_BOOST())) !== null ? $jumpBoost->getEffectLevel() : 0));

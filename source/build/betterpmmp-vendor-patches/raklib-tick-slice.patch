@@ -14,7 +14,7 @@ index f9c3fb5..30ebac1 100644
  
  	private const RAKLIB_TPS = 100;
  	private const RAKLIB_TIME_PER_TICK = 1 / self::RAKLIB_TPS;
-+	/* [BetterPMMP-PATCH] hit-latency: inter-tick sleep is sliced at this granularity so outbound batches queued
++	/** [BetterPMMP-PATCH] hit-latency: inter-tick sleep is sliced at this granularity so outbound batches queued
 +	 * by the main thread are picked up within ~1ms instead of up to a full RAKLIB_TIME_PER_TICK (10ms). */
 +	private const RAKLIB_SLEEP_SLICE = 0.001;
  	private const BLOCK_MESSAGE_SUPPRESSION_THRESHOLD = 2;
@@ -27,7 +27,8 @@ index f9c3fb5..30ebac1 100644
 +		$this->processEventsAndSocket();
 +		$this->tick();
 +
- 		/*
+-		/*
++		/**
 -		 * The below code is designed to allow co-op between sending and receiving to avoid slowing down either one
 -		 * when high traffic is coming either way. Yielding will occur after 100 messages.
 +		 * [BetterPMMP-PATCH] hit-latency: slice the inter-tick sleep and re-poll the main-thread event source

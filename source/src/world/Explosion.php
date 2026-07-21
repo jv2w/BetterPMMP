@@ -100,7 +100,7 @@ class Explosion{
 
 		/** [BetterPMMP-PATCH] PvP optimization: explosion block destruction toggle - skips the
 		 * ray-tracing block destruction pass entirely; entity damage/knockback in explodeB() still applies */
-		if(!(bool) \pocketmine\Server::getInstance()->getConfigGroup()->getProperty(\pocketmine\betterpmmp\BetterPMMPProperties::COMBAT_EXPLOSION_BLOCK_DESTRUCTION, true)){
+		if(!\pocketmine\Server::getInstance()->getConfigGroup()->getPropertyBool(\pocketmine\betterpmmp\BetterPMMPProperties::COMBAT_EXPLOSION_BLOCK_DESTRUCTION, true)){
 			return true;
 		}
 

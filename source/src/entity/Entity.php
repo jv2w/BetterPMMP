@@ -776,10 +776,10 @@ abstract class Entity{
 		return $this->isAlive();
 	}
 
-	/** [BetterPMMP-PATCH] PvP optimization: cached movement broadcast period */
-	private ?int $pvpMovementBroadcastPeriod = null;
+	/** [BetterPMMP-PATCH] PvP optimization: cached movement broadcast period. protected so Player, whose updateMovement() is a no-op, reuses the same cache/flush pair instead of declaring its own. */
+	protected ?int $pvpMovementBroadcastPeriod = null;
 	/** [BetterPMMP-PATCH] Set when a movement broadcast was skipped by the period, so the resting position can be flushed. */
-	private bool $pvpMovementBroadcastPending = false;
+	protected bool $pvpMovementBroadcastPending = false;
 
 	protected function updateMovement(bool $teleport = false) : void{
 		$diffPosition = $this->location->distanceSquared($this->lastLocation);

@@ -130,7 +130,7 @@ class ItemEntity extends Entity{
 			 * - the exact opposite of what the option is for. */
 			if($this->hasMovementUpdate() && $this->isMergeCandidate()
 				&& ($this->despawnDelay === self::NEVER_DESPAWN || $this->despawnDelay % self::MERGE_CHECK_PERIOD === 0)
-				&& (bool) \pocketmine\Server::getInstance()->getConfigGroup()->getProperty(\pocketmine\betterpmmp\BetterPMMPProperties::ENTITIES_ITEM_MERGING, true)){
+				&& \pocketmine\Server::getInstance()->getConfigGroup()->getPropertyBool(\pocketmine\betterpmmp\BetterPMMPProperties::ENTITIES_ITEM_MERGING, true)){
 				$mergeable = [$this]; //in case the merge target ends up not being this
 				$mergeTarget = $this;
 				foreach($this->getWorld()->getNearbyEntities($this->boundingBox->expandedCopy(0.5, 0.5, 0.5), $this) as $entity){

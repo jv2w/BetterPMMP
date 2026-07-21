@@ -946,7 +946,7 @@ class World implements ChunkManager{
 		 * only 1 tick in 100 so chunk unloading and provider GC still happen eventually */
 		if(count($this->players) === 0
 			&& ($currentTick % 100) !== 0
-			&& (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::WORLD_FREEZE_EMPTY_WORLDS, false)){
+			&& ($this->pvpFreezeEmptyWorlds ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::WORLD_FREEZE_EMPTY_WORLDS, false))){
 			return;
 		}
 
@@ -1002,7 +1002,7 @@ class World implements ChunkManager{
 		/** [BetterPMMP-PATCH] Neighbour block update throttle. Defaults to 0 (unlimited) because vanilla
 		 * drains this queue unconditionally - any positive limit defers overflow to the next tick and
 		 * visibly slows water/lava spread and sand/gravel collapses, so it must be opt-in. */
-		$neighbourUpdateLimit = $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 0);
+		$neighbourUpdateLimit = $this->pvpNeighbourUpdateLimit ??= $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 0);
 		$neighbourUpdateCount = 0;
 		while($this->neighbourBlockUpdateQueue->count() > 0){
 			if($neighbourUpdateLimit > 0 && $neighbourUpdateCount >= $neighbourUpdateLimit){
@@ -1306,7 +1306,7 @@ class World implements ChunkManager{
 			$this->timings->randomChunkUpdatesChunkSelection->startTiming();
 
 			$chunkTickableCache = [];
-			$batchLimit = (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::WORLD_CHUNK_TICKING_BATCH_RECHECK_LIMIT, 64);
+			$batchLimit = $this->pvpChunkTickBatchLimit ??= $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_CHUNK_TICKING_BATCH_RECHECK_LIMIT, 64);
 			$processed = 0;
 
 			foreach($this->recheckTickingChunks as $hash => $_){
@@ -1403,8 +1403,8 @@ class World implements ChunkManager{
 		$chunkHash = World::chunkHash($chunkX, $chunkZ);
 		$lightPopulatedState = $this->chunks[$chunkHash]->isLightPopulated();
 		if($lightPopulatedState === false){
-			if((bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false)){
-				$fixedLevel = min(15, max(0, (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::LIGHTING_FIXED_LIGHT_LEVEL, 15)));
+			if($this->pvpFixedLight ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false)){
+				$fixedLevel = $this->pvpFixedLightLevel ??= min(15, max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::LIGHTING_FIXED_LIGHT_LEVEL, 15)));
 				$targetChunk = $this->chunks[$chunkHash];
 				foreach($targetChunk->getSubChunks() as $subChunk){
 					$subChunk->setBlockSkyLightArray(LightArray::fill($fixedLevel));
@@ -1930,6 +1930,15 @@ class World implements ChunkManager{
 
 	/** [BetterPMMP-PATCH] PvP optimization: cached skip-light-updates flag */
 	private ?bool $pvpSkipLightUpdates = null;
+	/** [BetterPMMP-PATCH] PvP optimization: cached empty-world freeze toggle */
+	private ?bool $pvpFreezeEmptyWorlds = null;
+	/** [BetterPMMP-PATCH] PvP optimization: cached neighbour-update throttle */
+	private ?int $pvpNeighbourUpdateLimit = null;
+	/** [BetterPMMP-PATCH] PvP optimization: cached chunk-tick batch recheck limit */
+	private ?int $pvpChunkTickBatchLimit = null;
+	/** [BetterPMMP-PATCH] Fixed light values bypass: cached toggle and level */
+	private ?bool $pvpFixedLight = null;
+	private ?int $pvpFixedLightLevel = null;
 
 	public function updateAllLight(int $x, int $y, int $z) : void{
 		/** [BetterPMMP-PATCH] PvP optimization: skip runtime light recalculation entirely.
@@ -1938,8 +1947,8 @@ class World implements ChunkManager{
 		 * real values and defeat the whole option. Requiring the operator to remember to set both was a
 		 * silent footgun. */
 		if($this->pvpSkipLightUpdates ??= (
-			(bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::LIGHTING_SKIP_RUNTIME_UPDATES, false)
-			|| (bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false)
+			$this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_SKIP_RUNTIME_UPDATES, false)
+			|| $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false)
 		)){
 			return;
 		}
@@ -2193,7 +2202,7 @@ class World implements ChunkManager{
 
 		$itemEntity->setPickupDelay($delay);
 		/** [BetterPMMP-PATCH] PvP optimization: configurable item despawn time (-1 = never despawn) */
-		$pvpDespawnTicks = (int) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::ENTITIES_ITEM_DESPAWN_TICKS, ItemEntity::DEFAULT_DESPAWN_DELAY);
+		$pvpDespawnTicks = $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::ENTITIES_ITEM_DESPAWN_TICKS, ItemEntity::DEFAULT_DESPAWN_DELAY);
 		if($pvpDespawnTicks === -1){
 			$itemEntity->setDespawnDelay(ItemEntity::NEVER_DESPAWN);
 		}elseif($pvpDespawnTicks > 0 && $pvpDespawnTicks !== ItemEntity::DEFAULT_DESPAWN_DELAY){
@@ -2213,7 +2222,7 @@ class World implements ChunkManager{
 	 */
 	public function dropExperience(Vector3 $pos, int $amount) : array{
 		/** [BetterPMMP-PATCH] PvP optimization: XP orb spawn toggle */
-		if(!(bool) $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::ENTITIES_XP_ORBS, true)){
+		if(!$this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::ENTITIES_XP_ORBS, true)){
 			return [];
 		}
 		$orbs = [];

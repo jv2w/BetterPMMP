@@ -48,7 +48,7 @@ class Server implements ServerInterface{
 
 	private const RAKLIB_TPS = 100;
 	private const RAKLIB_TIME_PER_TICK = 1 / self::RAKLIB_TPS;
-	/* [BetterPMMP-PATCH] hit-latency: inter-tick sleep is sliced at this granularity so outbound batches queued
+	/** [BetterPMMP-PATCH] hit-latency: inter-tick sleep is sliced at this granularity so outbound batches queued
 	 * by the main thread are picked up within ~1ms instead of up to a full RAKLIB_TIME_PER_TICK (10ms). */
 	private const RAKLIB_SLEEP_SLICE = 0.001;
 	private const BLOCK_MESSAGE_SUPPRESSION_THRESHOLD = 2;
@@ -133,7 +133,7 @@ class Server implements ServerInterface{
 		$this->processEventsAndSocket();
 		$this->tick();
 
-		/*
+		/**
 		 * [BetterPMMP-PATCH] hit-latency: slice the inter-tick sleep and re-poll the main-thread event source
 		 * and socket between ~1ms slices, so outbound batches (and inbound datagrams) are picked up in ~1ms
 		 * instead of up to 10ms. The session update cadence (ACK/resend timers in tick()) is unchanged -

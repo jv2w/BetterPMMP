@@ -170,9 +170,6 @@ class Human extends Living implements ProjectileSource, InventoryHolder{
 		]);
 	}
 
-	/** [BetterPMMP-PATCH] Cached hunger-exhaustion toggle, read by Player::handleMovement() to skip the sprint-distance sqrt. */
-	protected ?bool $hungerExhaustion = null;
-
 	public function jump() : void{
 		parent::jump();
 		/** [BetterPMMP-PATCH] The hunger-exhaustion gate that used to sit here was removed as dead:

@@ -105,7 +105,7 @@ class RakLibInterface implements ServerEventListener, AdvancedNetworkInterface{
 		$this->typeConverter = $typeConverter;
 		/** [BetterPMMP-PATCH] Prefer Snappy (cheaper CPU, lower MSPT on the sync compress path) when enabled and ext-snappy is present; otherwise zlib.
 		 * Warn on the fallback - silently running zlib while the config says Snappy makes the setting look broken. */
-		$snappyRequested = (bool) $server->getConfigGroup()->getProperty(BetterPMMPProperties::NETWORK_SNAPPY_COMPRESSION, false);
+		$snappyRequested = $server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SNAPPY_COMPRESSION, false);
 		if($snappyRequested && !SnappyCompressor::isAvailable()){
 			$server->getLogger()->warning("better-pmmp.network.snappy-compression is enabled, but the 'snappy' PHP extension is not loaded. Falling back to zlib.");
 		}
