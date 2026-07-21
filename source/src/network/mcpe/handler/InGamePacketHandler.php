@@ -500,9 +500,9 @@ class InGamePacketHandler extends PacketHandler{
 				 * better-pmmp.network.block-sync-snapshot, and skipped when syncBlocksNearby() would bail on
 				 * the distance check anyway - capturing the block state for a click 100+ blocks away was pure waste. */
 				$this->blockSyncSnapshot ??= Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_BLOCK_SYNC_SNAPSHOT, true);
-				$oldBlockSnapshot = $this->blockSyncSnapshot && $vBlockPos->distanceSquared($this->player->getLocation()) < 10000
-					? $this->captureBlockSnapshot($vBlockPos)
-					: [];
+				$clickedStateBefore = $this->blockSyncSnapshot && $vBlockPos->distanceSquared($this->player->getLocation()) < 10000
+					? $this->captureClickedBlockState($vBlockPos)
+					: null;
 				$interactResult = $this->player->interactBlock($vBlockPos, $data->getFace(), $clickPos);
 
 				$syncAdjacentFace = null;
@@ -510,7 +510,7 @@ class InGamePacketHandler extends PacketHandler{
 					$syncAdjacentFace = $data->getFace();
 				}
 
-				$this->syncBlocksNearby($vBlockPos, $syncAdjacentFace, $interactResult ? $oldBlockSnapshot : []);
+				$this->syncBlocksNearby($vBlockPos, $syncAdjacentFace, $interactResult ? $clickedStateBefore : null);
 				return true;
 			case UseItemTransactionData::ACTION_CLICK_AIR:
 				if($this->player->isUsingItem()){
@@ -540,55 +540,46 @@ class InGamePacketHandler extends PacketHandler{
 		}
 	}
 
-	/** [BetterPMMP-PATCH] Block lag fix - snapshot-based sync */
 	/**
-	 * @phpstan-param array<int, int> $oldBlockSnapshot
+	 * [BetterPMMP-PATCH] Block lag fix - re-send the clicked block only when the interaction actually changed
+	 * it, given its state from before as $clickedStateIdBefore (null to send it unconditionally, as vanilla
+	 * does). Suppression stops at the clicked block on purpose: vanilla sends the surrounding neighbours
+	 * precisely to overwrite the client's optimistic prediction, so dropping an unchanged neighbour left a
+	 * ghost wherever the client had predicted a change the server rejected. The clicked block is the one
+	 * position the server authoritatively just resolved, so it is the only one that is safe to skip.
 	 */
-	private function syncBlocksNearby(Vector3 $blockPos, ?int $face, array $oldBlockSnapshot = []): void
-	{
-		if ($blockPos->distanceSquared($this->player->getLocation()) >= 10000) {
+	private function syncBlocksNearby(Vector3 $blockPos, ?int $face, ?int $clickedStateIdBefore = null) : void{
+		if($blockPos->distanceSquared($this->player->getLocation()) >= 10000){
 			return;
 		}
 		$blocks = $blockPos->sidesArray();
 		$blocks[] = $blockPos;
-		if ($face !== null) {
+		if($face !== null){
 			$sidePos = $blockPos->getSide($face);
 			array_push($blocks, ...$sidePos->sidesArray());
 		}
-		$world = $this->player->getWorld();
-		$blockTranslator = $this->session->getTypeConverter()->getBlockTranslator();
-		/** [BetterPMMP-PATCH] Suppression is limited to the clicked block. Vanilla sends the surrounding
-		 * neighbours precisely to overwrite the client's optimistic prediction, so dropping an unchanged
-		 * neighbour left a ghost wherever the client had predicted a change the server rejected. The
-		 * clicked block is the one position the server authoritatively just resolved, so it is safe. */
 		$clickedHash = World::blockHash((int) $blockPos->x, (int) $blockPos->y, (int) $blockPos->z);
-		foreach ($world->createBlockUpdatePackets($blocks) as $packet) {
-			if (count($oldBlockSnapshot) > 0 && $packet instanceof UpdateBlockPacket) {
-				$hash = World::blockHash(
-					$packet->blockPosition->getX(),
-					$packet->blockPosition->getY(),
-					$packet->blockPosition->getZ()
-				);
-				if ($hash === $clickedHash && isset($oldBlockSnapshot[$hash]) && $blockTranslator->internalIdToNetworkId($oldBlockSnapshot[$hash]) === $packet->blockRuntimeId) {
-					continue;
-				}
+		$unchangedRuntimeId = $clickedStateIdBefore === null
+			? null
+			: $this->session->getTypeConverter()->getBlockTranslator()->internalIdToNetworkId($clickedStateIdBefore);
+		foreach($this->player->getWorld()->createBlockUpdatePackets($blocks) as $packet){
+			if(
+				$unchangedRuntimeId !== null &&
+				$packet instanceof UpdateBlockPacket &&
+				$packet->blockRuntimeId === $unchangedRuntimeId &&
+				World::blockHash($packet->blockPosition->getX(), $packet->blockPosition->getY(), $packet->blockPosition->getZ()) === $clickedHash
+			){
+				continue;
 			}
 			$this->session->sendDataPacket($packet);
 		}
 	}
 
-	/**
-	 * @phpstan-return array<int, int>
-	 */
-	private function captureBlockSnapshot(Vector3 $blockPos): array
-	{
-		/** [BetterPMMP-PATCH] Only the clicked block is ever read back in syncBlocksNearby() (suppression is
-		 * limited to it), so capture just that one state instead of the clicked block plus its 13 neighbours. */
-		$x = (int) $blockPos->x;
-		$y = (int) $blockPos->y;
-		$z = (int) $blockPos->z;
-		return [World::blockHash($x, $y, $z) => $this->player->getWorld()->getBlockAt($x, $y, $z)->getStateId()];
+	/** [BetterPMMP-PATCH] Block lag fix - the state of the clicked block from before the interaction resolves it. */
+	private function captureClickedBlockState(Vector3 $blockPos) : int{
+		return $this->player->getWorld()->getBlockAt((int) $blockPos->x, (int) $blockPos->y, (int) $blockPos->z)->getStateId();
 	}
+
 	private function handleUseItemOnEntityTransaction(UseItemOnEntityTransactionData $data) : bool{
 		$target = $this->player->getWorld()->getEntity($data->getActorRuntimeId());
 		//TODO: HACK! We really shouldn't be keeping disconnected players (and generally flagged-for-despawn entities)
