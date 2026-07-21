@@ -88,7 +88,7 @@
    },
    "extra": {
       "betterpmmp-vendor-patches": {
-         "_comment": "BetterPMMP modifies these vendor files in place. Composer owns vendor/, so install/update silently reverts them. After any composer install/update, re-apply with: git apply source/build/<patch>. Each patched file carries a [BetterPMMP-PATCH] marker, so grep for it to check.",
+         "_comment": "BetterPMMP modifies these vendor files in place, and the patched versions are what this repository commits. Composer owns vendor/, so an install or update silently reverts them; restore with 'git checkout -- <file>'. The .patch files record the change for review and for trees that are not checkouts - they are already applied here, so 'git apply' on a fresh clone will report that the patch does not apply. Each patched file carries a [BetterPMMP-PATCH] marker, so grep for it to check.",
          "vendor/pocketmine/raklib/src/server/Server.php": "build/betterpmmp-vendor-patches/raklib-tick-slice.patch"
       }
    },
