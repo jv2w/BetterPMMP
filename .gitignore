@@ -18,6 +18,9 @@
 /resource_packs/
 /system/
 
+# Test runner cache
+/source/.phpunit.cache/
+
 # Local editor and OS noise
 .idea/
 .vscode/
