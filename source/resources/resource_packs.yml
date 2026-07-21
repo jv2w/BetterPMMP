@@ -1,10 +1,10 @@
-#!pocketmine.resource-packs.yml.header
+#! pocketmine.resource-packs.yml.header
 
-#!pocketmine.resource-packs.yml.force-resources
+#! pocketmine.resource-packs.yml.force-resources
 force_resources: false
 resource_stack:
-  #!pocketmine.resource-packs.yml.stack
+  #! pocketmine.resource-packs.yml.stack
   # - natural.zip
   # - vanilla.zip
-  #!pocketmine.resource-packs.yml.stack.force-vanilla
-  #!pocketmine.resource-packs.yml.stack.encryption-key
+  #! pocketmine.resource-packs.yml.stack.force-vanilla
+  #! pocketmine.resource-packs.yml.stack.encryption-key

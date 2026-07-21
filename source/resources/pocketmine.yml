@@ -1,95 +1,95 @@
-#!pocketmine.yml.header
+#! pocketmine.yml.header
 
 settings:
-  #!pocketmine.yml.settings.force-language
+  #! pocketmine.yml.settings.force-language
   force-language: false
   shutdown-message: "Server closed"
-  #!pocketmine.yml.settings.query-plugins
+  #! pocketmine.yml.settings.query-plugins
   query-plugins: true
-  #!pocketmine.yml.settings.enable-profiling
+  #! pocketmine.yml.settings.enable-profiling
   enable-profiling: false
-  #!pocketmine.yml.settings.profile-report-trigger
+  #! pocketmine.yml.settings.profile-report-trigger
   profile-report-trigger: 20
-  #!pocketmine.yml.settings.async-workers
+  #! pocketmine.yml.settings.async-workers
   async-workers: auto
-  #!pocketmine.yml.settings.enable-dev-builds
+  #! pocketmine.yml.settings.enable-dev-builds
   enable-dev-builds: false
 
 memory:
-  #!pocketmine.yml.memory.global-limit
+  #! pocketmine.yml.memory.global-limit
   global-limit: 0
-  #!pocketmine.yml.memory.main-limit
+  #! pocketmine.yml.memory.main-limit
   main-limit: 0
-  #!pocketmine.yml.memory.main-hard-limit
+  #! pocketmine.yml.memory.main-hard-limit
   main-hard-limit: 1024
-  #!pocketmine.yml.memory.async-worker-hard-limit
+  #! pocketmine.yml.memory.async-worker-hard-limit
   async-worker-hard-limit: 256
-  #!pocketmine.yml.memory.check-rate
+  #! pocketmine.yml.memory.check-rate
   check-rate: 20
-  #!pocketmine.yml.memory.continuous-trigger
+  #! pocketmine.yml.memory.continuous-trigger
   continuous-trigger: true
-  #!pocketmine.yml.memory.continuous-trigger-rate
+  #! pocketmine.yml.memory.continuous-trigger-rate
   continuous-trigger-rate: 30
   garbage-collection:
-    #!pocketmine.yml.memory.garbage-collection.period
+    #! pocketmine.yml.memory.garbage-collection.period
     period: 36000
-  #!pocketmine.yml.memory.memory-dump
+  #! pocketmine.yml.memory.memory-dump
   memory-dump:
-    #!pocketmine.yml.memory.memory-dump.dump-async-worker
+    #! pocketmine.yml.memory.memory-dump.dump-async-worker
     dump-async-worker: true
   max-chunks:
-    #!pocketmine.yml.memory.max-chunks.chunk-radius
+    #! pocketmine.yml.memory.max-chunks.chunk-radius
     chunk-radius: 4
 
 network:
-  #!pocketmine.yml.network.batch-threshold
+  #! pocketmine.yml.network.batch-threshold
   batch-threshold: 256
-  #!pocketmine.yml.network.compression-level
+  #! pocketmine.yml.network.compression-level
   compression-level: 1
-  #!pocketmine.yml.network.async-compression
+  #! pocketmine.yml.network.async-compression
   async-compression: true
-  #!pocketmine.yml.network.async-compression-threshold
+  #! pocketmine.yml.network.async-compression-threshold
   async-compression-threshold: 10000
-  #!pocketmine.yml.network.upnp-forwarding
+  #! pocketmine.yml.network.upnp-forwarding
   upnp-forwarding: false
-  #!pocketmine.yml.network.max-mtu-size
+  #! pocketmine.yml.network.max-mtu-size
   max-mtu-size: 1492
-  #!pocketmine.yml.network.enable-encryption
+  #! pocketmine.yml.network.enable-encryption
   enable-encryption: true
 
 debug:
-  #!pocketmine.yml.debug.level
+  #! pocketmine.yml.debug.level
   level: 1
 
 player:
-  #!pocketmine.yml.player.save-player-data
+  #! pocketmine.yml.player.save-player-data
   save-player-data: true
-  #!pocketmine.yml.player.verify-xuid
+  #! pocketmine.yml.player.verify-xuid
   verify-xuid: true
 
 level-settings:
-  #!pocketmine.yml.level-settings.default-format
+  #! pocketmine.yml.level-settings.default-format
   default-format: leveldb
 
 chunk-sending:
-  #!pocketmine.yml.chunk-sending.per-tick
+  #! pocketmine.yml.chunk-sending.per-tick
   per-tick: 4
-  #!pocketmine.yml.chunk-sending.spawn-radius
+  #! pocketmine.yml.chunk-sending.spawn-radius
   spawn-radius: 4
 
 chunk-ticking:
-  #!pocketmine.yml.chunk-ticking.tick-radius
+  #! pocketmine.yml.chunk-ticking.tick-radius
   tick-radius: 3
-  #!pocketmine.yml.chunk-ticking.blocks-per-subchunk-per-tick
+  #! pocketmine.yml.chunk-ticking.blocks-per-subchunk-per-tick
   blocks-per-subchunk-per-tick: 3
-  #!pocketmine.yml.chunk-ticking.disable-block-ticking
+  #! pocketmine.yml.chunk-ticking.disable-block-ticking
   disable-block-ticking:
     #- grass
     #- ice
     #- fire
 
 chunk-generation:
-  #!pocketmine.yml.chunk-generation.population-queue-size
+  #! pocketmine.yml.chunk-generation.population-queue-size
   population-queue-size: 32
 
 ticks-per:
@@ -105,7 +105,7 @@ auto-report:
   host: crash.pmmp.io
 
 anonymous-statistics:
-  #!pocketmine.yml.anonymous-statistics.enabled
+  #! pocketmine.yml.anonymous-statistics.enabled
   enabled: false
   host: stats.pocketmine.net
 
@@ -114,61 +114,60 @@ auto-updater:
   enabled: false
   on-update:
     warn-console: true
-  #!pocketmine.yml.auto-updater.preferred-channel
+  #! pocketmine.yml.auto-updater.preferred-channel
   preferred-channel: stable
-  #!pocketmine.yml.auto-updater.suggest-channels
+  #! pocketmine.yml.auto-updater.suggest-channels
   suggest-channels: true
   host: update.pmmp.io
 
 timings:
-  #!pocketmine.yml.timings.host
+  #! pocketmine.yml.timings.host
   host: timings.pmmp.io
 
 console:
-  #!pocketmine.yml.console.enable-input
+  #! pocketmine.yml.console.enable-input
   enable-input: true
-  #!pocketmine.yml.console.title-tick
+  #! pocketmine.yml.console.title-tick
   title-tick: true
 
 aliases:
-  #!pocketmine.yml.aliases.1
+  #! pocketmine.yml.aliases.1
 
-  #!pocketmine.yml.aliases.2
+  #! pocketmine.yml.aliases.2
   #stop: []
 
-  #!pocketmine.yml.aliases.3
+  #! pocketmine.yml.aliases.3
   #abort: [pocketmine:stop]
 
-  #!pocketmine.yml.aliases.4
+  #! pocketmine.yml.aliases.4
   #showtheversion: [version]
   #savestop: [save-all, stop]
 
-  #!pocketmine.yml.aliases.5
+  #! pocketmine.yml.aliases.5
   #giveadmin: [op $1] ## `giveadmin alex` -> `op alex`
   #kill: [suicide, say "I tried to kill $1"] ## `kill alex` -> `suicide` + `say "I tried to kill alex"`
   #giverandom: [give $1 $2, say "Someone has just received a $2!"] ## `giverandom alex diamond` -> `give alex diamond` + `say "Someone has just received a diamond!"`
 
-  #!pocketmine.yml.aliases.6
+  #! pocketmine.yml.aliases.6
   #makeadmin: [op $$1] ## `makeadmin alex` -> `op alex`, `makeadmin` with no arguments = error
 
-  #!pocketmine.yml.aliases.7
+  #! pocketmine.yml.aliases.7
   #tpalias: [tp $1-] ## `tpalias 256 70 256` -> `tp 256 70 256` - this passes arguments 1 and everything after it to the `tp` command
 
-  #!pocketmine.yml.aliases.8
+  #! pocketmine.yml.aliases.8
   #tp: [suicide]
 
 worlds:
-  #!pocketmine.yml.worlds
+  #! pocketmine.yml.worlds
   #world:
   # seed: 404
   # generator: FLAT
   # preset: 2;bedrock,59xstone,3xdirt,grass;1
 
 plugins:
-  #!pocketmine.yml.plugins.legacy-data-dir
+  #! pocketmine.yml.plugins.legacy-data-dir
   legacy-data-dir: false
 
-# [BetterPMMP-PATCH]
 better-pmmp:
   #! pocketmine.betterpmmp.yml.config
   config:
