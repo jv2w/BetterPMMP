@@ -8,16 +8,19 @@ printf '\033]0;BetterPMMP By UserX0001\007'
 
 PHP_BINARY=""
 
-if [ -f "$DIR/source/bin/php7/bin/php" ]; then
+# [BetterPMMP-PATCH] The bundled binary lives in source/bin/php, matching start.cmd. This probed
+# source/bin/php7/bin/php, a PHP 7 era path that no build of this repository has ever shipped, so the
+# branch could never be taken and Linux always fell through to whatever php was on PATH.
+if [ -x "$DIR/source/bin/php/bin/php" ]; then
 	# always use the local PHP binary if it exists
 	export PHPRC=""
-	PHP_BINARY="$DIR/source/bin/php7/bin/php"
+	PHP_BINARY="$DIR/source/bin/php/bin/php"
 elif command -v php >/dev/null 2>&1; then
 	PHP_BINARY="php"
 fi
 
 if [ "$PHP_BINARY" = "" ]; then
-	echo "Couldn't find a PHP binary in system PATH or \"$DIR/source/bin/php7/bin\""
+	echo "Couldn't find a PHP binary in system PATH or \"$DIR/source/bin/php/bin\""
 	echo "Please refer to the installation instructions at https://doc.pmmp.io/en/rtfd/installation.html"
 	exit 1
 fi
