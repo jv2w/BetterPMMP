@@ -2208,12 +2208,11 @@ class World implements ChunkManager{
 		$itemEntity = new ItemEntity(Location::fromObject($source, $this, Utils::getRandomFloat() * 360, 0), $item);
 
 		$itemEntity->setPickupDelay($delay);
-		/** [BetterPMMP-PATCH] PvP optimization: configurable item despawn time (-1 = never despawn) */
-		$pvpDespawnTicks = $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::ENTITIES_ITEM_DESPAWN_TICKS, ItemEntity::DEFAULT_DESPAWN_DELAY);
-		if($pvpDespawnTicks === -1){
-			$itemEntity->setDespawnDelay(ItemEntity::NEVER_DESPAWN);
-		}elseif($pvpDespawnTicks > 0 && $pvpDespawnTicks !== ItemEntity::DEFAULT_DESPAWN_DELAY){
-			$itemEntity->setDespawnDelay(min($pvpDespawnTicks, ItemEntity::MAX_DESPAWN_DELAY));
+		/** [BetterPMMP-PATCH] PvP optimization: configurable item despawn time (-1 = never despawn). ItemEntity
+		 * resolves the setting so drops made here and items restored from chunk NBT follow the same rule. */
+		$configuredDespawn = ItemEntity::configuredDespawnDelay($this->server);
+		if($configuredDespawn !== null){
+			$itemEntity->setDespawnDelay($configuredDespawn);
 		}
 		$itemEntity->setMotion($motion ?? new Vector3(Utils::getRandomFloat() * 0.2 - 0.1, 0.2, Utils::getRandomFloat() * 0.2 - 0.1));
 		$itemEntity->spawnToAll();

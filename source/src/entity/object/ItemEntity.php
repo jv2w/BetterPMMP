@@ -94,6 +94,15 @@ class ItemEntity extends Entity{
 		}else{
 			$this->despawnDelay = max(0, self::DEFAULT_DESPAWN_DELAY - $age);
 		}
+		/** [BetterPMMP-PATCH] Apply the configured despawn policy to items restored from chunk NBT too. Only
+		 * World::dropItem() used to consult it, so everything already lying on the ground kept the hardcoded
+		 * vanilla lifetime and "-1: items never despawn" did not actually hold for them. */
+		$configured = self::configuredDespawnDelay($this->server);
+		if($configured === self::NEVER_DESPAWN){
+			$this->despawnDelay = self::NEVER_DESPAWN;
+		}elseif($configured !== null && $this->despawnDelay !== self::NEVER_DESPAWN){
+			$this->despawnDelay = min($this->despawnDelay, $configured);
+		}
 		$this->pickupDelay = $nbt->getShort(self::TAG_PICKUP_DELAY, $this->pickupDelay);
 		$this->owner = $nbt->getString(self::TAG_OWNER, $this->owner);
 		$this->thrower = $nbt->getString(self::TAG_THROWER, $this->thrower);
@@ -211,6 +220,22 @@ class ItemEntity extends Entity{
 		$consumer->despawnDelay = self::longerDelay($consumer->despawnDelay, $this->despawnDelay);
 
 		return true;
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] The despawn delay better-pmmp.entities.item-despawn-ticks asks for, or null when the
+	 * setting leaves vanilla behaviour alone. One place decides it so that every item obeys the same rule,
+	 * however it came into the world.
+	 */
+	public static function configuredDespawnDelay(Server $server) : ?int{
+		$ticks = $server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::ENTITIES_ITEM_DESPAWN_TICKS, self::DEFAULT_DESPAWN_DELAY);
+		if($ticks === self::NEVER_DESPAWN){
+			return self::NEVER_DESPAWN;
+		}
+		if($ticks <= 0 || $ticks === self::DEFAULT_DESPAWN_DELAY){
+			return null;
+		}
+		return min($ticks, self::MAX_DESPAWN_DELAY);
 	}
 
 	/**
