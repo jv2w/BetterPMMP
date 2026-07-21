@@ -1320,9 +1320,10 @@ class World implements ChunkManager{
 				unset($this->recheckTickingChunks[$hash]);
 				$processed++;
 			}
-			if($batchLimit <= 0 || $processed < $batchLimit){
-				$this->recheckTickingChunks = [];
-			}
+			/** [BetterPMMP-PATCH] No blanket clear here. Each processed hash is unset above, so the only
+			 * entries a clear could still reach are the ones isChunkTickable() re-marked while the loop was
+			 * running - and dropping those left those chunks out of the ticking set until something unrelated
+			 * loaded or replaced a chunk near them. */
 
 			$this->timings->randomChunkUpdatesChunkSelection->stopTiming();
 		}
@@ -1363,9 +1364,15 @@ class World implements ChunkManager{
 				if($lightPopulatedState !== true){
 					if($lightPopulatedState === false){
 						$this->orderLightPopulation($chunkX + $cx, $chunkZ + $cz);
+						/** [BetterPMMP-PATCH] Fixed light fills the arrays inline, so the chunk is already
+						 * populated by the time orderLightPopulation() returns. Re-read the state instead of
+						 * failing the whole 3x3 for an async result that is never coming. */
+						$lightPopulatedState = $adjacentChunk->isLightPopulated();
 					}
-					$cache[$chunkHash] = false;
-					return false;
+					if($lightPopulatedState !== true){
+						$cache[$chunkHash] = false;
+						return false;
+					}
 				}
 
 				$cache[$chunkHash] = true;
