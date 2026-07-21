@@ -47,7 +47,7 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 		 * the largest outbound packet stream (moving entities x viewers x 20/s) */
 		if(DataPacketSendEvent::hasHandlers()
 			&& !(count($packets) === 1
-				&& (($packets[0] ?? null) instanceof \pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket || ($packets[0] ?? null) instanceof \pocketmine\network\mcpe\protocol\SetActorMotionPacket)
+				&& ($packets[0] instanceof \pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket || $packets[0] instanceof \pocketmine\network\mcpe\protocol\SetActorMotionPacket)
 				&& $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_MOVEMENT_SEND_EVENT, false))){
 			$ev = new DataPacketSendEvent($recipients, $packets);
 			$ev->call();
@@ -82,8 +82,10 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 			$writer->clear(); //memory reuse let's gooooo
 			$buffer = NetworkSession::encodePacketTimed($writer, $packet);
 			//varint length prefix + packet buffer
-			/** [BetterPMMP-PATCH] inline varint length: replace libm log() with a branch-predicted
-			 * bit-range lookup (byte-perfect parity with vanilla log-truncation across all reachable lengths) */
+			/** [BetterPMMP-PATCH] inline varint length: replace libm log() with a branch-predicted bit-range
+			 * lookup. This is the exact byte count; vanilla's ((int) log($len, 128)) + 1 can be one short at
+			 * exact powers of 128 when log() returns just under the integer. Either way $totalLength only
+			 * feeds the >= threshold test below, so nothing on the wire depends on the difference. */
 			$len = strlen($buffer);
 			$totalLength += ($len <= 0x7F ? 1 : ($len <= 0x3FFF ? 2 : ($len <= 0x1FFFFF ? 3 : ($len <= 0xFFFFFFF ? 4 : 5)))) + $len;
 			$packetBuffers[] = $buffer;
