@@ -15,7 +15,7 @@
 
 ## 검증 (phpstan) — 매 변경마다 필수
 - **dev 의존성은 `source/`에 절대 설치하지 않는다.** `cd source && composer install` 금지 — phpstan/phpunit 등이 `source/vendor/`에 쏟아지고 커밋에 휩쓸린 사고 이력이 있다. `source/vendor/`는 런타임 의존성만 추적한다.
-- dev 도구는 리포 루트 `.tools/`(gitignored)에만 둔다. 없으면 생성: `mkdir -p .tools && composer require --working-dir=.tools phpstan/phpstan:2.1.46` (버전은 `source/composer.json`의 `require-dev`와 일치시킨다).
+- dev 도구는 리포 루트 `.tools/`에만 둔다(추적 금지 — 커밋에 포함하지 않는다). 없으면 생성: `mkdir -p .tools && composer require --working-dir=.tools phpstan/phpstan:2.1.46` (버전은 `source/composer.json`의 `require-dev`와 일치시킨다).
 - 실행 — `source/`에서:
   `./bin/php/php.exe ../.tools/vendor/phpstan/phpstan/phpstan.phar analyse -l max --autoload-file=vendor/autoload.php --no-progress <변경 파일>`
 - 번들 php(`source/bin/php/php.exe`)를 쓴다 — pmmp 확장이 리플렉션으로 잡혀 stub 누락 오탐이 사라진다. 임시 런타임 확인(`parse_ini_file`·`yaml_parse` 등)도 이 php로 한다.
