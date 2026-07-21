@@ -1128,7 +1128,9 @@ class Server{
 				return;
 			}
 
-			if($this->configGroup->getPropertyBool(Yml::ANONYMOUS_STATISTICS_ENABLED, true)){
+			/** [BetterPMMP-PATCH] The shipped pocketmine.yml has this off, but the code default said on, so
+			 * deleting the key turned usage reporting back on behind the operator's back. Both say off now. */
+			if($this->configGroup->getPropertyBool(Yml::ANONYMOUS_STATISTICS_ENABLED, false)){
 				$this->sendUsageTicker = self::TICKS_PER_STATS_REPORT;
 				$this->sendUsage(SendUsageTask::TYPE_OPEN);
 			}
@@ -1844,7 +1846,7 @@ class Server{
 	}
 
 	public function sendUsage(int $type = SendUsageTask::TYPE_STATUS) : void{
-		if($this->configGroup->getPropertyBool(Yml::ANONYMOUS_STATISTICS_ENABLED, true)){
+		if($this->configGroup->getPropertyBool(Yml::ANONYMOUS_STATISTICS_ENABLED, false)){
 			$this->asyncPool->submitTask(new SendUsageTask($this, $type, $this->uniquePlayers));
 		}
 		$this->uniquePlayers = [];
