@@ -94,7 +94,14 @@ final class BetterPMMPConfigFormat{
 		}
 		$data = self::parse($content);
 		if($data === null){
-			return BetterPMMPConfigComments::retranslate($content, $template, $lang);
+			/** [BetterPMMP-PATCH] "Valid YAML that declares nothing" and "YAML we cannot read" both parse to
+			 * null but need opposite treatment. A file whose keys are all commented out leaves the server
+			 * running entirely on defaults with a config that documents none of them, so regenerate it as the
+			 * class docblock promises; a file we genuinely failed to parse is the user's, and only its
+			 * comments are retranslated so nothing of theirs is thrown away. */
+			return self::declaresNothing($content)
+				? BetterPMMPConfigComments::render($template, $lang)
+				: BetterPMMPConfigComments::retranslate($content, $template, $lang);
 		}
 		if($data === []){
 			return BetterPMMPConfigComments::render($template, $lang);
@@ -278,6 +285,15 @@ final class BetterPMMPConfigFormat{
 		$section = rtrim($section, "\n");
 		$result = "{$body}\n\n{$section}\n";
 		return self::parse($result) === null ? $content : $result;
+	}
+
+	/** [BetterPMMP-PATCH] Whether the content is readable YAML that simply carries no keys. */
+	private static function declaresNothing(string $content) : bool{
+		try{
+			return ErrorToExceptionHandler::trap(static fn() : mixed => yaml_parse($content)) === null;
+		}catch(\ErrorException){
+			return false;
+		}
 	}
 
 	/**
