@@ -42,6 +42,7 @@ use pocketmine\crash\CrashDumpRenderer;
 use pocketmine\data\bedrock\BedrockDataFiles;
 use pocketmine\entity\EntityDataHelper;
 use pocketmine\entity\Location;
+use pocketmine\entity\object\ItemEntity;
 use pocketmine\event\HandlerListManager;
 use pocketmine\event\player\PlayerCreationEvent;
 use pocketmine\event\player\PlayerDataSaveEvent;
@@ -983,6 +984,8 @@ class Server{
 			 * so network.compression-level remains zlib-only. */
 			SnappyCompressor::setInstance(new SnappyCompressor($netCompressionThreshold, SnappyCompressor::DEFAULT_MAX_DECOMPRESSION_SIZE));
 
+			$this->warnOutOfRangeBetterPMMPProperties();
+
 			$this->networkCompressionAsync = $this->configGroup->getPropertyBool(Yml::NETWORK_ASYNC_COMPRESSION, true);
 			$this->networkCompressionAsyncThreshold = max(
 				$this->configGroup->getPropertyInt(Yml::NETWORK_ASYNC_COMPRESSION_THRESHOLD, self::DEFAULT_ASYNC_COMPRESSION_THRESHOLD),
@@ -1154,6 +1157,48 @@ class Server{
 			$this->forceShutdown();
 		}catch(\Throwable $e){
 			$this->exceptionHandler($e);
+		}
+	}
+
+	/**
+	 * [BetterPMMP-PATCH]
+	 * Tells the operator when a better-pmmp number is outside the range its call site accepts. Every one of
+	 * these is clamped where it is read, but the clamp used to be silent, so a typo was indistinguishable
+	 * from the option doing nothing at all - and several of them were not clamped either, which is worse.
+	 */
+	private function warnOutOfRangeBetterPMMPProperties() : void{
+		/** @phpstan-var array<string, array{int, int|null, int}> $ranges */
+		$ranges = [
+			BetterPMMPProperties::WORLD_BLOCK_CACHE_SIZE => [512, null, 2048],
+			BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT => [0, null, 0],
+			BetterPMMPProperties::WORLD_CHUNK_TICKING_BATCH_RECHECK_LIMIT => [0, null, 64],
+			BetterPMMPProperties::LIGHTING_FIXED_LIGHT_LEVEL => [0, 15, 15],
+			BetterPMMPProperties::ENTITIES_PICKUP_SCAN_PERIOD => [1, null, 1],
+			BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD => [1, null, 1],
+			BetterPMMPProperties::NETWORK_INTERACTION_SPAM_WINDOW => [0, null, 20],
+			BetterPMMPProperties::NETWORK_CHUNK_HISTORY_LIMIT => [0, null, 8192],
+			BetterPMMPProperties::EVENTS_MOVE_EVENT_PERIOD => [1, null, 1],
+		];
+		foreach($ranges as $key => [$min, $max, $default]){
+			$value = $this->configGroup->getPropertyInt($key, $default);
+			$clamped = $max === null ? max($min, $value) : min($max, max($min, $value));
+			if($clamped !== $value){
+				$bound = $max === null ? "$min or above" : "$min to $max";
+				$this->logger->warning("$key is set to $value, which is outside $bound; using $clamped");
+			}
+		}
+
+		/** -1 means "never", so it is in range; anything else below 1 is not. */
+		$despawn = $this->configGroup->getPropertyInt(BetterPMMPProperties::ENTITIES_ITEM_DESPAWN_TICKS, ItemEntity::DEFAULT_DESPAWN_DELAY);
+		if($despawn < 1 && $despawn !== ItemEntity::NEVER_DESPAWN){
+			$this->logger->warning(BetterPMMPProperties::ENTITIES_ITEM_DESPAWN_TICKS . " is set to $despawn, which is neither a tick count nor -1 (never); using the vanilla " . ItemEntity::DEFAULT_DESPAWN_DELAY);
+		}elseif($despawn > ItemEntity::MAX_DESPAWN_DELAY){
+			$this->logger->warning(BetterPMMPProperties::ENTITIES_ITEM_DESPAWN_TICKS . " is set to $despawn, which is more than the " . ItemEntity::MAX_DESPAWN_DELAY . " ticks the save format can hold; using " . ItemEntity::MAX_DESPAWN_DELAY);
+		}
+
+		$critFallDistance = (float) $this->configGroup->getProperty(BetterPMMPProperties::COMBAT_CRITICAL_HIT_MIN_FALL_DISTANCE, 0.0);
+		if($critFallDistance < 0.0){
+			$this->logger->warning(BetterPMMPProperties::COMBAT_CRITICAL_HIT_MIN_FALL_DISTANCE . " is set to $critFallDistance; a negative distance makes every hit critical, using 0.0");
 		}
 	}
 

@@ -1002,7 +1002,7 @@ class World implements ChunkManager{
 		/** [BetterPMMP-PATCH] Neighbour block update throttle. Defaults to 0 (unlimited) because vanilla
 		 * drains this queue unconditionally - any positive limit defers overflow to the next tick and
 		 * visibly slows water/lava spread and sand/gravel collapses, so it must be opt-in. */
-		$neighbourUpdateLimit = $this->pvpNeighbourUpdateLimit ??= $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 0);
+		$neighbourUpdateLimit = $this->pvpNeighbourUpdateLimit ??= max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 0));
 		$neighbourUpdateCount = 0;
 		while($this->neighbourBlockUpdateQueue->count() > 0){
 			if($neighbourUpdateLimit > 0 && $neighbourUpdateCount >= $neighbourUpdateLimit){
@@ -1306,7 +1306,7 @@ class World implements ChunkManager{
 			$this->timings->randomChunkUpdatesChunkSelection->startTiming();
 
 			$chunkTickableCache = [];
-			$batchLimit = $this->pvpChunkTickBatchLimit ??= $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_CHUNK_TICKING_BATCH_RECHECK_LIMIT, 64);
+			$batchLimit = $this->pvpChunkTickBatchLimit ??= max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_CHUNK_TICKING_BATCH_RECHECK_LIMIT, 64));
 			$processed = 0;
 
 			foreach($this->recheckTickingChunks as $hash => $_){
