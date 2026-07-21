@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\entity\object;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\entity\animation\ItemEntityStackSizeChangeAnimation;
 use pocketmine\entity\Entity;
 use pocketmine\entity\EntitySizeInfo;
@@ -40,8 +41,10 @@ use pocketmine\network\mcpe\protocol\AddItemActorPacket;
 use pocketmine\network\mcpe\protocol\types\entity\EntityIds;
 use pocketmine\network\mcpe\protocol\types\inventory\ItemStackWrapper;
 use pocketmine\player\Player;
+use pocketmine\Server;
 use pocketmine\timings\Timings;
 use function max;
+use function min;
 
 class ItemEntity extends Entity{
 
@@ -204,10 +207,24 @@ class ItemEntity extends Entity{
 
 		$consumer->setStackSize($consumer->item->getCount() + $this->item->getCount());
 		$this->flagForDespawn();
-		$consumer->pickupDelay = max($consumer->pickupDelay, $this->pickupDelay);
-		$consumer->despawnDelay = max($consumer->despawnDelay, $this->despawnDelay);
+		$consumer->pickupDelay = self::longerDelay($consumer->pickupDelay, $this->pickupDelay);
+		$consumer->despawnDelay = self::longerDelay($consumer->despawnDelay, $this->despawnDelay);
 
 		return true;
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] Picks the delay that expires later, treating NEVER_DESPAWN as "never". A plain max()
+	 * got that backwards: NEVER_DESPAWN is -1, so max(-1, 5000) is 5000 and merging a permanent drop into any
+	 * item that still had a countdown quietly turned the permanent one into a despawning one. Reachable as
+	 * soon as better-pmmp.entities.item-despawn-ticks is -1 and items saved before that meet items dropped
+	 * after it, and it applies to the infinite pickup delay the same way.
+	 */
+	private static function longerDelay(int $a, int $b) : int{
+		if($a === self::NEVER_DESPAWN || $b === self::NEVER_DESPAWN){
+			return self::NEVER_DESPAWN;
+		}
+		return max($a, $b);
 	}
 
 	protected function tryChangeMovement() : void{
