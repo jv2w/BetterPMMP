@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\entity\projectile;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\event\entity\EntityDamageEvent;
 use pocketmine\event\entity\ProjectileHitEvent;
 use pocketmine\network\mcpe\protocol\types\entity\EntityIds;
@@ -43,7 +44,12 @@ class EnderPearl extends Throwable{
 			$owner->teleport($target = $event->getRayTraceResult()->getHitVector());
 			$this->getWorld()->addSound($target, new EndermanTeleportSound());
 
-			$owner->attack(new EntityDamageEvent($owner, EntityDamageEvent::CAUSE_FALL, 5));
+			/** [BetterPMMP-PATCH] gameplay toggle: no fall damage - this flat 5 is dealt as CAUSE_FALL but
+			 * never passes through Living::calculateFallDamage(), which is where the toggle lives, so ender
+			 * pearls kept dealing fall damage on a server that had it switched off. */
+			if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::GAMEPLAY_FALL_DAMAGE, true)){
+				$owner->attack(new EntityDamageEvent($owner, EntityDamageEvent::CAUSE_FALL, 5));
+			}
 		}
 	}
 }
