@@ -128,7 +128,6 @@ abstract class PluginBase implements Plugin, CommandExecutor{
 	}
 
 	final public function getDataFolder() : string{
-		$this->ensureDataFolderExists();
 		return $this->dataFolder;
 	}
 
@@ -244,16 +243,7 @@ abstract class PluginBase implements Plugin, CommandExecutor{
 	/**
 	 * Saves an embedded resource to its relative location in the data folder
 	 */
-		/** [BETTERPMMP-PATCH-LAZY-DATAFOLDER] Lazy data folder creation */
-	private function ensureDataFolderExists(): void
-	{
-		if (!is_dir($this->dataFolder)) {
-			@mkdir($this->dataFolder, 0777, true);
-		}
-	}
-
 	public function saveResource(string $filename, bool $replace = false) : bool{
-		$this->ensureDataFolderExists();
 		if(trim($filename) === ""){
 			return false;
 		}
@@ -293,7 +283,6 @@ abstract class PluginBase implements Plugin, CommandExecutor{
 	}
 
 	public function saveConfig() : void{
-		$this->ensureDataFolderExists();
 		$this->getConfig()->save();
 	}
 

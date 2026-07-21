@@ -150,7 +150,9 @@ class PluginManager{
 			)));
 			return null;
 		}
-		/** [BETTERPMMP-PATCH-LAZY-DATAFOLDER] Data folder creation deferred to first use */
+		if(!file_exists($dataFolder)){
+			mkdir($dataFolder, 0777, true);
+		}
 
 		$prefixed = $loader->getAccessProtocol() . $path;
 		$loader->loadPlugin($prefixed);
