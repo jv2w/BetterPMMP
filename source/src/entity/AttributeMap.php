@@ -46,9 +46,10 @@ class AttributeMap{
 	 * @return Attribute[]
 	 */
 	public function needSend() : array{
-		/** [BetterPMMP-PATCH] Manual needSend collect: drop the array_filter closure (per-element zend_call)
-		 * and share the empty array on the common zero-dirty case. Both consumers ignore keys, so the
-		 * re-indexed list is observably identical to the key-preserved filtered map. */
+		/** [BetterPMMP-PATCH] Manual needSend collect: drop the array_filter closure, which costs one call
+		 * per attribute per check, on a method that runs once per player per tick. Both consumers ignore
+		 * keys, so the re-indexed list is observably identical to the key-preserved filtered map. This is a
+		 * cheaper scan, not dirty tracking - every attribute is still examined on every call. */
 		$dirty = [];
 		foreach($this->attributes as $attribute){
 			if($attribute->isSyncable() && $attribute->isDesynchronized()){
