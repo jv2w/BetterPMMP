@@ -39,8 +39,12 @@ if not exist source\bin (
 
 :betterpmmp_start
 %PHP_BINARY% %POCKETMINE_FILE% %*
+set BETTERPMMP_EXIT=%ERRORLEVEL%
 if exist system\restart.flag (
 	del system\restart.flag
 	goto :betterpmmp_start
 )
-if errorlevel 1 pause
+REM [BetterPMMP-PATCH] Keep the server's exit code. pause ran last and overwrote it with its own 0, so a
+REM crashed server reported success to whatever launched this script, and start.sh already did this right.
+if not "%BETTERPMMP_EXIT%"=="0" pause
+exit /b %BETTERPMMP_EXIT%
