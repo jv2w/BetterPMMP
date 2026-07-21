@@ -52,7 +52,11 @@ use const PREG_SET_ORDER;
  */
 final class BetterPMMPConfigComments{
 
-	private const MARKER_PATTERN = '/^([ \t]*)#!\s*(\S+)[ \t]*$/m';
+	/**
+	 * [BetterPMMP-PATCH] The separator is `[ \t]*`, not `\s*`: `\s` matches newlines too, so a lone `#!` line
+	 * used to swallow the config line that followed it and delete it from the file.
+	 */
+	private const MARKER_PATTERN = '/^([ \t]*)#![ \t]*(\S+)[ \t]*$/m';
 
 	/**
 	 * [BetterPMMP-PATCH] Records which language the comments in a rendered file are written in, so
@@ -78,7 +82,13 @@ final class BetterPMMPConfigComments{
 		$template = str_replace("\r\n", "\n", $template);
 		$result = preg_replace_callback(
 			self::MARKER_PATTERN,
-			static fn(array $m) : string => self::block($m[2], $m[1], $lang),
+			/** [BetterPMMP-PATCH] A marker whose key we do not know is not one of ours - `#!todo` in a user's
+			 * file is an ordinary YAML comment. Leave it exactly as it is; replacing it with the empty block
+			 * deleted it silently, and expand() runs over the user's own file on every startup. */
+			static function(array $m) use ($lang) : string{
+				$block = self::block($m[2], $m[1], $lang);
+				return $block === "" ? $m[0] : $block;
+			},
 			$template
 		);
 		return $result ?? $template;
