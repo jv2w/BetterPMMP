@@ -113,21 +113,24 @@ final class BetterPMMPConfigComments{
 	 */
 	private static function convert(string $content, array $map, Language $current) : string{
 		$pairs = [];
-		$currentCode = $current->getLang();
+		/** [BetterPMMP-PATCH] The current language is no longer skipped: upstream PocketMine-MP writes the
+		 * very same text as `#text`, so a config carried over from a vanilla build still needs the
+		 * `#text` -> `# text` normalization even when its comments are already in the right language. */
 		foreach(Language::getLanguageList() as $code => $name){
-			if($code === $currentCode){
-				continue;
-			}
 			try{
 				$other = new Language($code);
 			}catch(LanguageNotFoundException){
 				continue;
 			}
 			foreach($map as [$key, $indent]){
-				$old = self::block($key, $indent, $other);
 				$new = self::block($key, $indent, $current);
-				if($old !== "" && $new !== "" && $old !== $new){
-					$pairs[$old] = $new;
+				if($new === ""){
+					continue;
+				}
+				foreach(self::blockForms($key, $indent, $other) as $old){
+					if($old !== $new){
+						$pairs[$old] = $new;
+					}
 				}
 			}
 		}
@@ -148,10 +151,32 @@ final class BetterPMMPConfigComments{
 	}
 
 	private static function block(string $key, string $indent, Language $lang) : string{
+		return self::renderBlock($key, $indent, $lang, "# ");
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] Every spelling of one key's comment block that may already be sitting in a config
+	 * file. render() always writes `# text`, but upstream PocketMine-MP ships `#text`; both have to be
+	 * recognized or a migrated config is never converted.
+	 *
+	 * @return list<string>
+	 */
+	private static function blockForms(string $key, string $indent, Language $lang) : array{
+		$forms = [];
+		foreach(["# ", "#"] as $prefix){
+			$block = self::renderBlock($key, $indent, $lang, $prefix);
+			if($block !== ""){
+				$forms[] = $block;
+			}
+		}
+		return $forms;
+	}
+
+	private static function renderBlock(string $key, string $indent, Language $lang, string $prefix) : string{
 		$text = $lang->get($key);
 		if($text === $key){
 			return "";
 		}
-		return implode("\n", array_map(static fn(string $line) : string => $indent . "# " . $line, explode("\n", $text)));
+		return implode("\n", array_map(static fn(string $line) : string => $indent . $prefix . $line, explode("\n", $text)));
 	}
 }
