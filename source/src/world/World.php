@@ -1405,26 +1405,40 @@ class World implements ChunkManager{
 		}
 	}
 
+	/**
+	 * [BetterPMMP-PATCH] Fills a chunk's light with better-pmmp.lighting.fixed-light-level, and reports whether
+	 * the setting is on at all. Called both from orderLightPopulation() and, for chunks the tick radius never
+	 * reaches, straight from the load path: orderLightPopulation() is only reachable through isChunkTickable(),
+	 * so "fill the world with a constant light level" used to stop at the edge of the ticking area and every
+	 * getBlockLightAt() outside it still read 0.
+	 */
+	private function applyFixedLight(Chunk $chunk) : bool{
+		if(!($this->pvpFixedLight ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false))){
+			return false;
+		}
+		$fixedLevel = $this->pvpFixedLightLevel ??= min(15, max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::LIGHTING_FIXED_LIGHT_LEVEL, 15)));
+		for($y = Chunk::MIN_SUBCHUNK_INDEX; $y <= Chunk::MAX_SUBCHUNK_INDEX; $y++){
+			$subChunk = $chunk->getSubChunk($y);
+			$subChunk->setBlockSkyLightArray(LightArray::fill($fixedLevel));
+			$subChunk->setBlockLightArray(LightArray::fill($fixedLevel));
+		}
+		/** [BetterPMMP-PATCH] The async path derives a heightmap inside LightPopulationTask; this
+		 * path skipped it entirely, leaving whatever HeightArray the chunk deserialized with. That
+		 * is the array SkyLightUpdate reads, so with skip-runtime-updates off the next block edit
+		 * recomputed sky light against a bogus heightmap and progressively ate the fixed light.
+		 * Fill it with the world floor - "no sky-light blockers", which is the only value
+		 * consistent with a uniformly lit world. */
+		$chunk->setHeightMapArray(array_fill(0, 256, $this->minY));
+		$chunk->setLightPopulated(true);
+		return true;
+	}
+
 	/** [BetterPMMP-PATCH] Fixed light values bypass - skip LightPopulationTask when enabled */
 	private function orderLightPopulation(int $chunkX, int $chunkZ) : void{
 		$chunkHash = World::chunkHash($chunkX, $chunkZ);
 		$lightPopulatedState = $this->chunks[$chunkHash]->isLightPopulated();
 		if($lightPopulatedState === false){
-			if($this->pvpFixedLight ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false)){
-				$fixedLevel = $this->pvpFixedLightLevel ??= min(15, max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::LIGHTING_FIXED_LIGHT_LEVEL, 15)));
-				$targetChunk = $this->chunks[$chunkHash];
-				foreach($targetChunk->getSubChunks() as $subChunk){
-					$subChunk->setBlockSkyLightArray(LightArray::fill($fixedLevel));
-					$subChunk->setBlockLightArray(LightArray::fill($fixedLevel));
-				}
-				/** [BetterPMMP-PATCH] The async path derives a heightmap inside LightPopulationTask; this
-				 * path skipped it entirely, leaving whatever HeightArray the chunk deserialized with. That
-				 * is the array SkyLightUpdate reads, so with skip-runtime-updates off the next block edit
-				 * recomputed sky light against a bogus heightmap and progressively ate the fixed light.
-				 * Fill it with the world floor - "no sky-light blockers", which is the only value
-				 * consistent with a uniformly lit world. */
-				$targetChunk->setHeightMapArray(array_fill(0, 256, $this->minY));
-				$targetChunk->setLightPopulated(true);
+			if($this->applyFixedLight($this->chunks[$chunkHash])){
 				$this->markTickingChunkForRecheck($chunkX, $chunkZ);
 				return;
 			}
@@ -2792,6 +2806,13 @@ class World implements ChunkManager{
 		$this->chunks[$chunkHash] = $chunk;
 		unset($this->knownUngeneratedChunks[$chunkHash]);
 
+		/** [BetterPMMP-PATCH] Newly generated and replaced chunks arrive here rather than through loadChunk(),
+		 * so they need the fixed light fill too - otherwise it would only ever reach chunks read back from
+		 * disk. */
+		if($chunk->isLightPopulated() === false){
+			$this->applyFixedLight($chunk);
+		}
+
 		$this->blockCacheSize -= count($this->blockCache[$chunkHash] ?? []);
 		unset($this->blockCache[$chunkHash]);
 		unset($this->blockCollisionBoxCache[$chunkHash]);
@@ -3095,6 +3116,12 @@ class World implements ChunkManager{
 		unset($this->blockCollisionBoxCache[$chunkHash]);
 
 		$this->initChunk($x, $z, $chunkData, $chunk);
+
+		/** [BetterPMMP-PATCH] Light every chunk as it loads, not just the ones the tick radius happens to
+		 * reach, so getBlockLightAt() outside the ticking area returns the configured level too. */
+		if($chunk->isLightPopulated() === false){
+			$this->applyFixedLight($chunk);
+		}
 
 		if(ChunkLoadEvent::hasHandlers()){
 			(new ChunkLoadEvent($this, $x, $z, $this->chunks[$chunkHash], false))->call();
