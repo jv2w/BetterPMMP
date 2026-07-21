@@ -1174,6 +1174,7 @@ class Server{
 			BetterPMMPProperties::LIGHTING_FIXED_LIGHT_LEVEL => [0, 15, 15],
 			BetterPMMPProperties::ENTITIES_PICKUP_SCAN_PERIOD => [1, null, 1],
 			BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD => [1, null, 1],
+			BetterPMMPProperties::NETWORK_ROTATION_BROADCAST_PERIOD => [1, null, 1],
 			BetterPMMPProperties::NETWORK_INTERACTION_SPAM_WINDOW => [0, null, 20],
 			BetterPMMPProperties::NETWORK_CHUNK_HISTORY_LIMIT => [0, null, 8192],
 			BetterPMMPProperties::EVENTS_MOVE_EVENT_PERIOD => [1, null, 1],

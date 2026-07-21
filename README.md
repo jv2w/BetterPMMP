@@ -67,6 +67,7 @@ Two settings outside that section are also changed from upstream: `network.compr
 | `combat.instant-hit-feedback` | `true` | Send hit feedback immediately instead of at end of tick. |
 | `network.snappy-compression` | `false` | Snappy instead of zlib (needs `ext-snappy`). |
 | `network.movement-broadcast-period` | `1` | Send movement packets every N ticks. |
+| `network.rotation-broadcast-period` | `1` | Send view rotation every N ticks while the player stands still. |
 | `network.skip-movement-send-event` | `false` | Skip `DataPacketSendEvent` for movement/motion packets. |
 | `network.skip-auth-input-receive-event` | `false` | Skip `DataPacketReceiveEvent` for auth input. |
 | `network.interaction-spam-window` | `20` | Duplicate-interaction filter window, in ms (upstream 100). |
@@ -81,7 +82,7 @@ Two settings outside that section are also changed from upstream: `network.compr
 | `gameplay.farmland-persistent` | `false` | Farmland never dries, tramples, or reverts. |
 | `gameplay.farmland-instant-hydration` | `false` | Tilled/placed farmland starts wet. Needs `farmland-persistent` to stay wet. |
 
-Options that change how the game plays are off by default; performance options that alter vanilla behaviour (`neighbour-update-limit`, `move-event-period`, `movement-broadcast-period`, `pickup-scan-period`) ship at their vanilla-equivalent value.
+Options that change how the game plays are off by default; performance options that alter vanilla behaviour (`neighbour-update-limit`, `move-event-period`, `movement-broadcast-period`, `rotation-broadcast-period`, `pickup-scan-period`) ship at their vanilla-equivalent value.
 
 ## Requirements
 

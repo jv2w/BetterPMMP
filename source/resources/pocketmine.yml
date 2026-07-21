@@ -228,6 +228,8 @@ better-pmmp:
     snappy-compression: false
     #! pocketmine.betterpmmp.yml.network.movement-broadcast-period
     movement-broadcast-period: 1
+    #! pocketmine.betterpmmp.yml.network.rotation-broadcast-period
+    rotation-broadcast-period: 1
     #! pocketmine.betterpmmp.yml.network.skip-movement-send-event
     skip-movement-send-event: false
     #! pocketmine.betterpmmp.yml.network.skip-auth-input-receive-event

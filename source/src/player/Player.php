@@ -297,6 +297,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	 * already cached this way, so the split was arbitrary as well as wasteful.
 	 */
 	private ?int $moveEventPeriod = null;
+	private ?int $rotationBroadcastPeriod = null;
 	private ?bool $criticalHitIgnoreSprint = null;
 	private ?float $criticalHitMinFallDistance = null;
 
@@ -1557,8 +1558,9 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 		$delta = $to->distanceSquared($from);
 		$deltaAngle = abs($this->lastLocation->yaw - $to->yaw) + abs($this->lastLocation->pitch - $to->pitch);
+		$moved = $delta > 0.0001;
 
-		if($delta > 0.0001 || $deltaAngle > 1.0){
+		if($moved || $deltaAngle > 1.0){
 			/** [BetterPMMP-PATCH] event engine: PlayerMoveEvent period - fire every N ticks with the
 			 * accumulated from, so listeners still see a gapless movement chain. Cancelling reverts
 			 * the whole accumulated span. */
@@ -1592,9 +1594,14 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 			$this->lastLocation = $to;
 			/** [BetterPMMP-PATCH] PvP optimization: player movement broadcast period - PlayerMoveEvent and
-			 * exhaustion above stay per-tick, only the packet send is decimated. */
-			$movementPeriod = $this->movementBroadcastPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1));
-			if($movementPeriod <= 1 || (($this->server->getTick() + $this->id) % $movementPeriod) === 0){
+			 * exhaustion above stay per-tick, only the packet send is decimated. A tick that only turned the
+			 * head gets its own period: viewers extrapolate position, so a skipped position desyncs where the
+			 * body is, while a skipped rotation only delays where it looks. Rotation rides along for free on
+			 * any tick the position moved, because MoveActorAbsolutePacket carries both. */
+			$broadcastPeriod = $moved
+				? ($this->movementBroadcastPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1)))
+				: ($this->rotationBroadcastPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_ROTATION_BROADCAST_PERIOD, 1)));
+			if($broadcastPeriod <= 1 || (($this->server->getTick() + $this->id) % $broadcastPeriod) === 0){
 				$this->movementBroadcastPending = false;
 				$this->broadcastMovement();
 			}else{

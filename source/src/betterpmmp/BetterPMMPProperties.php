@@ -66,6 +66,7 @@ final class BetterPMMPProperties{
 
 	public const NETWORK_SNAPPY_COMPRESSION = 'better-pmmp.network.snappy-compression';
 	public const NETWORK_MOVEMENT_BROADCAST_PERIOD = 'better-pmmp.network.movement-broadcast-period';
+	public const NETWORK_ROTATION_BROADCAST_PERIOD = 'better-pmmp.network.rotation-broadcast-period';
 	public const NETWORK_SKIP_MOVEMENT_SEND_EVENT = 'better-pmmp.network.skip-movement-send-event';
 	public const NETWORK_SKIP_AUTH_INPUT_RECEIVE_EVENT = 'better-pmmp.network.skip-auth-input-receive-event';
 	public const NETWORK_INTERACTION_SPAM_WINDOW = 'better-pmmp.network.interaction-spam-window';
