@@ -211,6 +211,19 @@ class World implements ChunkManager{
 	private int $blockCacheSize = 0;
 	/** [BetterPMMP-PATCH] Configurable block cache cap */
 	private int $blockCacheSizeCap = 2048;
+
+	/** [BetterPMMP-PATCH] PvP optimization: cached skip-light-updates flag */
+	private ?bool $skipLightUpdates = null;
+	/** [BetterPMMP-PATCH] PvP optimization: cached empty-world freeze toggle */
+	private ?bool $freezeEmptyWorlds = null;
+	/** [BetterPMMP-PATCH] PvP optimization: cached neighbour-update throttle */
+	private ?int $neighbourUpdateLimit = null;
+	/** [BetterPMMP-PATCH] PvP optimization: cached chunk-tick batch recheck limit */
+	private ?int $chunkTickBatchLimit = null;
+	/** [BetterPMMP-PATCH] Fixed light values bypass: cached toggle and level */
+	private ?bool $fixedLightEnabled = null;
+	private ?int $fixedLightLevel = null;
+
 	/**
 	 * @var AxisAlignedBB[][][] chunkHash => [relativeBlockHash => AxisAlignedBB[]]
 	 * @phpstan-var array<ChunkPosHash, array<ChunkBlockPosHash, list<AxisAlignedBB>>>
@@ -946,7 +959,7 @@ class World implements ChunkManager{
 		 * only 1 tick in 100 so chunk unloading and provider GC still happen eventually */
 		if(count($this->players) === 0
 			&& ($currentTick % 100) !== 0
-			&& ($this->pvpFreezeEmptyWorlds ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::WORLD_FREEZE_EMPTY_WORLDS, false))){
+			&& ($this->freezeEmptyWorlds ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::WORLD_FREEZE_EMPTY_WORLDS, false))){
 			return;
 		}
 
@@ -1002,7 +1015,7 @@ class World implements ChunkManager{
 		/** [BetterPMMP-PATCH] Neighbour block update throttle. Defaults to 0 (unlimited) because vanilla
 		 * drains this queue unconditionally - any positive limit defers overflow to the next tick and
 		 * visibly slows water/lava spread and sand/gravel collapses, so it must be opt-in. */
-		$neighbourUpdateLimit = $this->pvpNeighbourUpdateLimit ??= max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 0));
+		$neighbourUpdateLimit = $this->neighbourUpdateLimit ??= max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 0));
 		$neighbourUpdateCount = 0;
 		while($this->neighbourBlockUpdateQueue->count() > 0){
 			if($neighbourUpdateLimit > 0 && $neighbourUpdateCount >= $neighbourUpdateLimit){
@@ -1305,7 +1318,7 @@ class World implements ChunkManager{
 			$this->timings->randomChunkUpdatesChunkSelection->startTiming();
 
 			$chunkTickableCache = [];
-			$batchLimit = $this->pvpChunkTickBatchLimit ??= max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_CHUNK_TICKING_BATCH_RECHECK_LIMIT, 64));
+			$batchLimit = $this->chunkTickBatchLimit ??= max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_CHUNK_TICKING_BATCH_RECHECK_LIMIT, 64));
 			$processed = 0;
 
 			foreach($this->recheckTickingChunks as $hash => $_){
@@ -1412,10 +1425,10 @@ class World implements ChunkManager{
 	 * getBlockLightAt() outside it still read 0.
 	 */
 	private function applyFixedLight(Chunk $chunk) : bool{
-		if(!($this->pvpFixedLight ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false))){
+		if(!($this->fixedLightEnabled ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false))){
 			return false;
 		}
-		$fixedLevel = $this->pvpFixedLightLevel ??= min(15, max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::LIGHTING_FIXED_LIGHT_LEVEL, 15)));
+		$fixedLevel = $this->fixedLightLevel ??= min(15, max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::LIGHTING_FIXED_LIGHT_LEVEL, 15)));
 		for($y = Chunk::MIN_SUBCHUNK_INDEX; $y <= Chunk::MAX_SUBCHUNK_INDEX; $y++){
 			$subChunk = $chunk->getSubChunk($y);
 			$subChunk->setBlockSkyLightArray(LightArray::fill($fixedLevel));
@@ -1945,26 +1958,13 @@ class World implements ChunkManager{
 		}
 		return 0; //TODO: this should probably throw instead (light not calculated yet)
 	}
-
-	/** [BetterPMMP-PATCH] PvP optimization: cached skip-light-updates flag */
-	private ?bool $pvpSkipLightUpdates = null;
-	/** [BetterPMMP-PATCH] PvP optimization: cached empty-world freeze toggle */
-	private ?bool $pvpFreezeEmptyWorlds = null;
-	/** [BetterPMMP-PATCH] PvP optimization: cached neighbour-update throttle */
-	private ?int $pvpNeighbourUpdateLimit = null;
-	/** [BetterPMMP-PATCH] PvP optimization: cached chunk-tick batch recheck limit */
-	private ?int $pvpChunkTickBatchLimit = null;
-	/** [BetterPMMP-PATCH] Fixed light values bypass: cached toggle and level */
-	private ?bool $pvpFixedLight = null;
-	private ?int $pvpFixedLightLevel = null;
-
 	public function updateAllLight(int $x, int $y, int $z) : void{
 		/** [BetterPMMP-PATCH] PvP optimization: skip runtime light recalculation entirely.
 		 * fixed-light implies this: the fabricated uniform light is not derived from the terrain, so
 		 * letting SkyLightUpdate/BlockLightUpdate run against it would progressively overwrite it with
 		 * real values and defeat the whole option. Requiring the operator to remember to set both was a
 		 * silent footgun. */
-		if($this->pvpSkipLightUpdates ??= (
+		if($this->skipLightUpdates ??= (
 			$this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_SKIP_RUNTIME_UPDATES, false)
 			|| $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false)
 		)){

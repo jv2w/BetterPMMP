@@ -1563,10 +1563,10 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			 * accumulated from, so listeners still see a gapless movement chain. Cancelling reverts
 			 * the whole accumulated span. */
 			if(PlayerMoveEvent::hasHandlers()){
-				$pvpMoveEvPeriod = $this->moveEventPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::EVENTS_MOVE_EVENT_PERIOD, 1));
+				$moveEventPeriod = $this->moveEventPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::EVENTS_MOVE_EVENT_PERIOD, 1));
 				$this->moveEventFrom ??= $from;
-				if($pvpMoveEvPeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMoveEvPeriod) === 0){
-					$evFrom = $pvpMoveEvPeriod <= 1 ? $from : $this->moveEventFrom;
+				if($moveEventPeriod <= 1 || (($this->server->getTick() + $this->id) % $moveEventPeriod) === 0){
+					$evFrom = $moveEventPeriod <= 1 ? $from : $this->moveEventFrom;
 					$this->moveEventFrom = null;
 					$ev = new PlayerMoveEvent($this, $evFrom, $to);
 
@@ -1577,8 +1577,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 						/** keep the vanilla position==lastLocation invariant - evFrom may be older than
 						 * lastLocation when period > 1 - and resync viewers who already saw the reverted span */
 						$this->lastLocation = $evFrom;
-						if($pvpMoveEvPeriod > 1){
-							$this->pvpMovementBroadcastPending = true;
+						if($moveEventPeriod > 1){
+							$this->movementBroadcastPending = true;
 						}
 						return;
 					}
@@ -1593,12 +1593,12 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			$this->lastLocation = $to;
 			/** [BetterPMMP-PATCH] PvP optimization: player movement broadcast period - PlayerMoveEvent and
 			 * exhaustion above stay per-tick, only the packet send is decimated. */
-			$pvpMovePeriod = $this->pvpMovementBroadcastPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1));
-			if($pvpMovePeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMovePeriod) === 0){
-				$this->pvpMovementBroadcastPending = false;
+			$movementPeriod = $this->movementBroadcastPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1));
+			if($movementPeriod <= 1 || (($this->server->getTick() + $this->id) % $movementPeriod) === 0){
+				$this->movementBroadcastPending = false;
 				$this->broadcastMovement();
 			}else{
-				$this->pvpMovementBroadcastPending = true;
+				$this->movementBroadcastPending = true;
 			}
 
 			/** [BetterPMMP-PATCH] gameplay toggle: hunger exhaustion - the chunk order clamp below must
@@ -1629,10 +1629,10 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 					}
 				}
 			}
-		}elseif($this->pvpMovementBroadcastPending){
+		}elseif($this->movementBroadcastPending){
 			/** [BetterPMMP-PATCH] PvP optimization: flush the last skipped movement broadcast so the
 			 * resting position viewers see is always exact */
-			$this->pvpMovementBroadcastPending = false;
+			$this->movementBroadcastPending = false;
 			$this->broadcastMovement();
 		}
 
@@ -1675,7 +1675,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	}
 
 	/** [BetterPMMP-PATCH] PvP optimization: cached pickup scan period */
-	private ?int $pvpPickupScanPeriod = null;
+	private ?int $pickupScanPeriod = null;
 
 	public function onUpdate(int $currentTick) : bool{
 		$tickDiff = $currentTick - $this->lastUpdate;
@@ -1720,8 +1720,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 			/** [BetterPMMP-PATCH] PvP optimization: pickup scan period - the nearby-entity sweep is
 			 * O(entities around each player) every tick; vanilla pickup delay is 10 ticks anyway */
-			$pvpScanPeriod = $this->pvpPickupScanPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::ENTITIES_PICKUP_SCAN_PERIOD, 1));
-			if(!$this->isSpectator() && $this->isAlive() && ($pvpScanPeriod <= 1 || (($currentTick + $this->id) % $pvpScanPeriod) === 0)){
+			$scanPeriod = $this->pickupScanPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::ENTITIES_PICKUP_SCAN_PERIOD, 1));
+			if(!$this->isSpectator() && $this->isAlive() && ($scanPeriod <= 1 || (($currentTick + $this->id) % $scanPeriod) === 0)){
 				Timings::$playerCheckNearEntities->startTiming();
 				$this->checkNearEntities();
 				Timings::$playerCheckNearEntities->stopTiming();
