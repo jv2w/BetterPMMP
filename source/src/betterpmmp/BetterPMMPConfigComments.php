@@ -57,8 +57,17 @@ final class BetterPMMPConfigComments{
 	/**
 	 * [BetterPMMP-PATCH] Records which language the comments in a rendered file are written in, so
 	 * {@link retranslate()} can answer "is this already current?" without loading every shipped language.
+	 * Used for stripping, so it deliberately matches a stamp on any line - a file that somehow collected
+	 * more than one must come back out with exactly one.
 	 */
 	private const LANGUAGE_STAMP_PATTERN = '/^#@ betterpmmp-lang: (\S+)[ \t]*\n?/m';
+
+	/**
+	 * [BetterPMMP-PATCH] Reading the stamp is anchored to the first line instead. stamp() always writes it
+	 * there, so a stamp found anywhere else was not written by us and must not be allowed to decide which
+	 * language the file is in.
+	 */
+	private const LANGUAGE_STAMP_READ_PATTERN = '/\A#@ betterpmmp-lang: (\S+)[ \t]*$/m';
 
 	private function __construct(){
 		//NOOP
@@ -82,24 +91,34 @@ final class BetterPMMPConfigComments{
 	public static function retranslate(string $content, string $template, Language $current) : string{
 		$content = str_replace("\r\n", "\n", $content);
 
-		/** [BetterPMMP-PATCH] Fast path: the stamp says the comments are already in the current language,
-		 * so skip the probe and the 13-language load in convert() entirely. Without this, deleting a single
-		 * comment line makes the probe below miss forever - render() only expands `#!` markers, which are
-		 * long gone from a rendered file, so the deleted line is never restored and the expensive path runs
-		 * on every startup, silently (the output equals the input, so nothing is even written). */
-		$stamped = preg_match(self::LANGUAGE_STAMP_PATTERN, $content, $stampMatch) === 1 ? $stampMatch[1] : null;
-		if($stamped === $current->getLang()){
-			return self::render($content, $current);
-		}
-
+		/** [BetterPMMP-PATCH] Decide by evidence, not by the stamp alone. Counting how many of the current
+		 * language's comment blocks are actually in the file separates the two cases the stamp cannot:
+		 * a user who deleted a comment line (nearly all blocks still present - skip the 13-language load in
+		 * convert(), because render() only expands `#!` markers and could never restore that line anyway)
+		 * from a file whose stamp does not describe its contents at all (no blocks present - a hand-edited
+		 * stamp, or a file written by a build whose conversion missed). The latter has to be converted, and
+		 * trusting the stamp there left the file stuck in the wrong language forever. */
 		$map = self::markers($template);
+		$found = 0;
+		$total = 0;
 		foreach($map as [$key, $indent]){
 			$block = self::block($key, $indent, $current);
-			if($block !== "" && strpos($content, $block) === false){
-				return self::render(self::convert($content, $map, $current), $current);
+			if($block === ""){
+				continue;
+			}
+			$total++;
+			if(strpos($content, $block) !== false){
+				$found++;
 			}
 		}
-		return self::render($content, $current);
+		if($found === $total){
+			return self::render($content, $current);
+		}
+		$stamped = preg_match(self::LANGUAGE_STAMP_READ_PATTERN, $content, $stampMatch) === 1 ? $stampMatch[1] : null;
+		if($found > 0 && $stamped === $current->getLang()){
+			return self::render($content, $current);
+		}
+		return self::render(self::convert($content, $map, $current), $current);
 	}
 
 	private static function stamp(string $content, Language $lang) : string{
