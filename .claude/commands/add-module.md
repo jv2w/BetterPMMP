@@ -23,7 +23,7 @@ Reject: key already exists → ask whether this extends the existing module. Cha
 
 5. **`README.md`** and 6. **`README.ko.md`** — add a row to the `| Key | Default | ... |` table in yml order, key and default in backticks, description matching the .ini text in each README's language.
 
-7. **Verify** — phpstan per CLAUDE.md §검증 (full tree, EXIT 0). Confirm the default is identical in all 4 places: call-site argument / yml / both READMEs. Headless-boot (command in CLAUDE.md §검증) a temp data dir whose `pocketmine.yml` lacks the new key; confirm the key is spliced in with its comment and no `#!` marker remains.
+7. **Verify** — phpstan per CLAUDE.md §Verification (full tree, EXIT 0). Confirm the default is identical in all 4 places: call-site argument / yml / both READMEs. Headless-boot (command in CLAUDE.md §Verification) a temp data dir whose `pocketmine.yml` lacks the new key; confirm the key is spliced in with its comment and no `#!` marker remains.
 
 ## Done
 

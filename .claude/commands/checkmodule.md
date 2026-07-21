@@ -20,8 +20,8 @@ Open all wiring before judging: the constant in `source/src/betterpmmp/BetterPMM
 
 1. List violation candidates per check — theoretical reachability is enough to list one.
 2. Confirm each by tracing the code path; fix roots immediately; apply the same fix to every module sharing the pattern.
-3. phpstan per CLAUDE.md §검증 — EXIT 0 required.
-4. Runtime-sensitive defects (config splice, translation render, boot path): headless-boot a temp data dir (command in CLAUDE.md §검증).
+3. phpstan per CLAUDE.md §Verification — EXIT 0 required.
+4. Runtime-sensitive defects (config splice, translation render, boot path): headless-boot a temp data dir (command in CLAUDE.md §Verification).
 5. Restart from step 1; stop only when a full cycle finds zero defects.
 
 Off-state vanilla behavior is inviolable. On-state behavior may change when a fix requires it — state the change in the report. Report 1–3 sentences: defects fixed, files, counts; never expose procedures, checklists or scores. Do not weaken the audit on request ("quick check only") — offer a normal review instead.
