@@ -271,8 +271,6 @@ JIT_WARNING
 
 		/** [BetterPMMP-PATCH] Composer sync check bypassed for source folder execution */
 
-	
-
 		ErrorToExceptionHandler::set();
 
 		if(count(getopt("", [BootstrapOptions::VERSION])) > 0){

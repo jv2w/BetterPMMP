@@ -1208,7 +1208,6 @@ class World implements ChunkManager{
 	}
 
 	private function trimBlockCache() : void{
-		$before = $this->blockCacheSize;
 		//Since PHP maintains key order, earliest in foreach should be the oldest entries
 		//Older entries are less likely to be hot, so destroying these should usually have the lowest impact on performance
 		foreach($this->blockCache as $chunkHash => $blocks){
@@ -1422,12 +1421,10 @@ class World implements ChunkManager{
 			$subChunk->setBlockSkyLightArray(LightArray::fill($fixedLevel));
 			$subChunk->setBlockLightArray(LightArray::fill($fixedLevel));
 		}
-		/** [BetterPMMP-PATCH] The async path derives a heightmap inside LightPopulationTask; this
-		 * path skipped it entirely, leaving whatever HeightArray the chunk deserialized with. That
-		 * is the array SkyLightUpdate reads, so with skip-runtime-updates off the next block edit
-		 * recomputed sky light against a bogus heightmap and progressively ate the fixed light.
-		 * Fill it with the world floor - "no sky-light blockers", which is the only value
-		 * consistent with a uniformly lit world. */
+		/** [BetterPMMP-PATCH] The async path derives a heightmap inside LightPopulationTask; this path skips
+		 * that, so without filling it the chunk would keep whatever HeightArray it deserialized with. The
+		 * world floor - "no sky-light blockers" - is the only value consistent with a uniformly lit world,
+		 * and it is what any consumer of the heightmap has to see for the fixed light to make sense. */
 		$chunk->setHeightMapArray(array_fill(0, 256, $this->minY));
 		$chunk->setLightPopulated(true);
 		return true;
