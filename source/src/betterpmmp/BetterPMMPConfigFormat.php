@@ -39,7 +39,9 @@ use function implode;
 use function is_array;
 use function is_bool;
 use function is_float;
+use function is_infinite;
 use function is_int;
+use function is_nan;
 use function is_string;
 use function json_encode;
 use function preg_match;
@@ -549,19 +551,41 @@ final class BetterPMMPConfigFormat{
 		if($rest === '' || $rest[0] === '#'){
 			return ['', ''];
 		}
-		$offset = 0;
-		$first = $rest[0];
-		if($first === '"' || $first === "'"){
-			$end = strpos($rest, $first, 1);
-			if($end !== false){
-				$offset = $end;
-			}
-		}
+		$offset = self::quotedValueEnd($rest);
 		$pos = strpos($rest, ' #', $offset);
 		if($pos === false){
 			return [rtrim($rest), ''];
 		}
 		return [rtrim(substr($rest, 0, $pos)), substr($rest, $pos)];
+	}
+
+	/**
+	 * [BetterPMMP-PATCH] Index just past a leading quoted scalar, or 0 when the value is not quoted. The old
+	 * scan stopped at the first repeat of the opening quote, so a YAML-escaped value like 'it''s # here' cut
+	 * off inside the string and the rest of it was split away as a comment.
+	 */
+	private static function quotedValueEnd(string $rest) : int{
+		$quote = $rest[0];
+		if($quote !== '"' && $quote !== "'"){
+			return 0;
+		}
+		$length = strlen($rest);
+		for($i = 1; $i < $length; $i++){
+			$char = $rest[$i];
+			if($quote === '"' && $char === '\\'){
+				$i++;
+				continue;
+			}
+			if($char !== $quote){
+				continue;
+			}
+			if($quote === "'" && ($rest[$i + 1] ?? '') === "'"){
+				$i++;
+				continue;
+			}
+			return $i + 1;
+		}
+		return 0;
 	}
 
 	private static function scalar(mixed $value) : string{
@@ -572,6 +596,14 @@ final class BetterPMMPConfigFormat{
 			return (string) $value;
 		}
 		if(is_float($value)){
+			/** [BetterPMMP-PATCH] var_export() writes INF, -INF and NAN, which YAML reads back as the strings
+			 * "INF", "-INF" and "NAN" - the value silently changes type on the next startup. */
+			if(is_nan($value)){
+				return '.nan';
+			}
+			if(is_infinite($value)){
+				return $value > 0 ? '.inf' : '-.inf';
+			}
 			return var_export($value, true);
 		}
 		if($value === null){
