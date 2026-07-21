@@ -1,0 +1,26 @@
+# Everything the server writes into its data directory at runtime.
+# source/vendor and source/bin are deliberately committed - the point of this repository is
+# "clone and run" - so nothing under source/ is ignored here.
+
+/server.properties
+/pocketmine.yml
+/resource_packs.yml
+/banned-ips.txt
+/banned-players.txt
+/ops.txt
+/white-list.txt
+/whitelist.txt
+
+/worlds/
+/players/
+/plugins/
+/plugin_data/
+/resource_packs/
+/system/
+
+# Local editor and OS noise
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
