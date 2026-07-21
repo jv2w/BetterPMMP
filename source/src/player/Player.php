@@ -288,6 +288,18 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	/** @var true[] */
 	private array $tickingChunks = [];
 
+	/** [BetterPMMP-PATCH] event engine: last position fired in a PlayerMoveEvent (for period accumulation) */
+	private ?Location $moveEventFrom = null;
+	/**
+	 * [BetterPMMP-PATCH] Config values resolved once per player instead of on every movement and every swing.
+	 * These are read once at startup and never change, so re-reading them through the config group on paths
+	 * that run 20 times a second per player was pure overhead - and the periods right beside them were
+	 * already cached this way, so the split was arbitrary as well as wasteful.
+	 */
+	private ?int $moveEventPeriod = null;
+	private ?bool $criticalHitIgnoreSprint = null;
+	private ?float $criticalHitMinFallDistance = null;
+
 	protected int $viewDistance = -1;
 	/** [BetterPMMP-PATCH] Original view-distance requested by client (pre-clamp, pre-override). Used to re-apply per-world override on world change. */
 	protected int $requestedViewDistance = -1;
@@ -1533,9 +1545,6 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	/**
 	 * Fires movement events and synchronizes player movement, every tick.
 	 */
-	/** [BetterPMMP-PATCH] event engine: last position fired in a PlayerMoveEvent (for period accumulation) */
-	private ?Location $pvpMoveEventFrom = null;
-
 	protected function processMostRecentMovements() : void{
 		$now = microtime(true);
 		$multiplier = $this->lastMovementProcess !== null ? ($now - $this->lastMovementProcess) * 20 : 1;
@@ -1554,11 +1563,11 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			 * accumulated from, so listeners still see a gapless movement chain. Cancelling reverts
 			 * the whole accumulated span. */
 			if(PlayerMoveEvent::hasHandlers()){
-				$pvpMoveEvPeriod = max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::EVENTS_MOVE_EVENT_PERIOD, 1));
-				$this->pvpMoveEventFrom ??= $from;
+				$pvpMoveEvPeriod = $this->moveEventPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::EVENTS_MOVE_EVENT_PERIOD, 1));
+				$this->moveEventFrom ??= $from;
 				if($pvpMoveEvPeriod <= 1 || (($this->server->getTick() + $this->id) % $pvpMoveEvPeriod) === 0){
-					$evFrom = $pvpMoveEvPeriod <= 1 ? $from : $this->pvpMoveEventFrom;
-					$this->pvpMoveEventFrom = null;
+					$evFrom = $pvpMoveEvPeriod <= 1 ? $from : $this->moveEventFrom;
+					$this->moveEventFrom = null;
 					$ev = new PlayerMoveEvent($this, $evFrom, $to);
 
 					$ev->call();
@@ -2174,8 +2183,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 		/** [BetterPMMP-PATCH] Configurable critical hit logic */
 		$config = $this->server->getConfigGroup();
-		$critMinFall = max(0.0, (float) $config->getProperty(BetterPMMPProperties::COMBAT_CRITICAL_HIT_MIN_FALL_DISTANCE, 0.0));
-		$critIgnoreSprint = $config->getPropertyBool(BetterPMMPProperties::COMBAT_CRITICAL_HIT_IGNORE_SPRINT, false);
+		$critMinFall = $this->criticalHitMinFallDistance ??= max(0.0, (float) $config->getProperty(BetterPMMPProperties::COMBAT_CRITICAL_HIT_MIN_FALL_DISTANCE, 0.0));
+		$critIgnoreSprint = $this->criticalHitIgnoreSprint ??= $config->getPropertyBool(BetterPMMPProperties::COMBAT_CRITICAL_HIT_IGNORE_SPRINT, false);
 		if(($critIgnoreSprint || !$this->isSprinting()) && !$this->isFlying() && $this->fallDistance > $critMinFall && !$this->effectManager->has(VanillaEffects::BLINDNESS()) && !$this->isUnderwater()){
 			$ev->setModifier($ev->getFinalDamage() / 2, EntityDamageEvent::MODIFIER_CRITICAL);
 		}
@@ -2898,7 +2907,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			$this->removeCurrentWindow();
 			$this->stopSleep();
 			/** [BetterPMMP-PATCH] event engine: teleport breaks move-event accumulation */
-			$this->pvpMoveEventFrom = null;
+			$this->moveEventFrom = null;
 
 			/** [BetterPMMP-PATCH] Re-evaluate per-world view distance using the original requested distance,
 			 * so a previous world's override does not leak into a world that has no override. */

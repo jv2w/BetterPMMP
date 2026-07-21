@@ -229,6 +229,10 @@ class NetworkSession{
 	private array $sentChunkHistory = [];
 	/** [BetterPMMP-PATCH] Cached better-pmmp.network.chunk-history-limit */
 	private ?int $chunkHistoryLimit = null;
+	/** [BetterPMMP-PATCH] Cached better-pmmp.network.skip-auth-input-receive-event, tested on every inbound packet */
+	private ?bool $skipAuthInputReceiveEvent = null;
+	/** [BetterPMMP-PATCH] Cached better-pmmp.network.skip-movement-send-event, tested on every outbound packet */
+	private ?bool $skipMovementSendEvent = null;
 	/** [BetterPMMP-PATCH] Cached better-pmmp.combat.instant-hit-feedback, read on every hit */
 	private static ?bool $instantHitFeedback = null;
 	/**
@@ -583,7 +587,7 @@ class NetworkSession{
 			 * PlayerAuthInputPacket - it arrives 20/s per player and dominates inbound event dispatches */
 			if(DataPacketReceiveEvent::hasHandlers()
 				&& !($packet instanceof \pocketmine\network\mcpe\protocol\PlayerAuthInputPacket
-					&& $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_AUTH_INPUT_RECEIVE_EVENT, false))){
+					&& ($this->skipAuthInputReceiveEvent ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_AUTH_INPUT_RECEIVE_EVENT, false)))){
 				$ev = new DataPacketReceiveEvent($this, $packet);
 				$ev->call();
 				if($ev->isCancelled()){
@@ -638,7 +642,7 @@ class NetworkSession{
 			 * the largest outbound packet stream (moving entities x viewers x 20/s) */
 			if(DataPacketSendEvent::hasHandlers()
 				&& !(($packet instanceof \pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket || $packet instanceof \pocketmine\network\mcpe\protocol\SetActorMotionPacket)
-					&& $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_MOVEMENT_SEND_EVENT, false))){
+					&& ($this->skipMovementSendEvent ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_MOVEMENT_SEND_EVENT, false)))){
 				$ev = new DataPacketSendEvent([$this], [$packet]);
 				$ev->call();
 				if($ev->isCancelled()){
