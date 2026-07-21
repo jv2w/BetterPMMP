@@ -1139,9 +1139,8 @@ class Server{
 			}
 
 			$this->configGroup->save();
-		/** [BetterPMMP-PATCH] Default game mode log removed */
-		/** [BetterPMMP-PATCH] Start link logs removed */
-
+			/** [BetterPMMP-PATCH] Default game mode log removed */
+			/** [BetterPMMP-PATCH] Start link logs removed */
 			$this->logger->info($this->language->translate(KnownTranslationFactory::pocketmine_server_startFinished(strval(round(microtime(true) - $this->startTime, 3)))));
 
 			$forwarder = new BroadcastLoggerForwarder($this, $this->logger, $this->language);

@@ -27,6 +27,8 @@ use pmmp\encoding\ByteBufferWriter;
 use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\network\mcpe\compression\Compressor;
+use pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket;
+use pocketmine\network\mcpe\protocol\SetActorMotionPacket;
 use pocketmine\network\mcpe\protocol\serializer\PacketBatch;
 use pocketmine\Server;
 use pocketmine\timings\Timings;
@@ -50,7 +52,7 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 		 * the largest outbound packet stream (moving entities x viewers x 20/s) */
 		if(DataPacketSendEvent::hasHandlers()
 			&& !(count($packets) === 1
-				&& ($packets[0] instanceof \pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket || $packets[0] instanceof \pocketmine\network\mcpe\protocol\SetActorMotionPacket)
+				&& ($packets[0] instanceof MoveActorAbsolutePacket || $packets[0] instanceof SetActorMotionPacket)
 				&& ($this->skipMovementSendEvent ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_MOVEMENT_SEND_EVENT, false)))){
 			$ev = new DataPacketSendEvent($recipients, $packets);
 			$ev->call();

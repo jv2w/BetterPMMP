@@ -33,6 +33,7 @@ namespace pocketmine {
 	use pocketmine\utils\Process;
 	use pocketmine\utils\ServerKiller;
 	use pocketmine\utils\Terminal;
+	use pocketmine\utils\TextFormat;
 	use pocketmine\utils\Timezone;
 	use pocketmine\utils\Utils;
 	use pocketmine\wizard\SetupWizard;
@@ -188,7 +189,7 @@ namespace pocketmine {
 		}
 		if(\Phar::running(true) === ""){
 			/** [BetterPMMP-PATCH] Start warning replaced */
-		$logger->info("§aBetterPMMP By UserX0001");
+			$logger->info(TextFormat::GREEN . "BetterPMMP By UserX0001");
 		}
 		if(function_exists('opcache_get_status') && ($opcacheStatus = opcache_get_status(false)) !== false){
 			$jitEnabled = $opcacheStatus["jit"]["on"] ?? false;

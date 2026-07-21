@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\world;
 
+use pocketmine\betterpmmp\BetterPMMPProperties;
 use pocketmine\block\Block;
 use pocketmine\block\RuntimeBlockStateRegistry;
 use pocketmine\block\TNT;
@@ -100,7 +101,7 @@ class Explosion{
 
 		/** [BetterPMMP-PATCH] PvP optimization: explosion block destruction toggle - skips the
 		 * ray-tracing block destruction pass entirely; entity damage/knockback in explodeB() still applies */
-		if(!\pocketmine\Server::getInstance()->getConfigGroup()->getPropertyBool(\pocketmine\betterpmmp\BetterPMMPProperties::COMBAT_EXPLOSION_BLOCK_DESTRUCTION, true)){
+		if(!$this->world->getServer()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::COMBAT_EXPLOSION_BLOCK_DESTRUCTION, true)){
 			return true;
 		}
 

@@ -46,6 +46,7 @@ use pocketmine\command\defaults\PardonCommand;
 use pocketmine\command\defaults\PardonIpCommand;
 use pocketmine\command\defaults\ParticleCommand;
 use pocketmine\command\defaults\PluginsCommand;
+use pocketmine\command\defaults\RestartCommand; //[BetterPMMP-PATCH]
 use pocketmine\command\defaults\SaveCommand;
 use pocketmine\command\defaults\SaveOffCommand;
 use pocketmine\command\defaults\SaveOnCommand;
@@ -55,7 +56,6 @@ use pocketmine\command\defaults\SetWorldSpawnCommand;
 use pocketmine\command\defaults\SpawnpointCommand;
 use pocketmine\command\defaults\StatusCommand;
 use pocketmine\command\defaults\StopCommand;
-use pocketmine\command\defaults\RestartCommand; /** [BetterPMMP-PATCH] */
 use pocketmine\command\defaults\TeleportCommand;
 use pocketmine\command\defaults\TellCommand;
 use pocketmine\command\defaults\TimeCommand;
@@ -119,6 +119,7 @@ class SimpleCommandMap implements CommandMap{
 			new PardonIpCommand(),
 			new ParticleCommand(),
 			new PluginsCommand(),
+			new RestartCommand(), //[BetterPMMP-PATCH]
 			new SaveCommand(),
 			new SaveOffCommand(),
 			new SaveOnCommand(),
@@ -128,7 +129,6 @@ class SimpleCommandMap implements CommandMap{
 			new SpawnpointCommand(),
 			new StatusCommand(),
 			new StopCommand(),
-			new RestartCommand(),
 			new TeleportCommand(),
 			new TellCommand(),
 			new TimeCommand(),

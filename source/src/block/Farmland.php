@@ -34,6 +34,7 @@ use pocketmine\math\AxisAlignedBB;
 use pocketmine\math\Facing;
 use pocketmine\math\Vector3;
 use pocketmine\player\Player;
+use pocketmine\Server;
 use pocketmine\utils\Utils;
 use pocketmine\world\BlockTransaction;
 use function intdiv;
@@ -72,11 +73,11 @@ class Farmland extends Transparent{
 	private static ?bool $instantHydrationCache = null;
 
 	private static function isPersistent() : bool{
-		return self::$persistentCache ??= \pocketmine\Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::GAMEPLAY_FARMLAND_PERSISTENT, false);
+		return self::$persistentCache ??= Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::GAMEPLAY_FARMLAND_PERSISTENT, false);
 	}
 
 	private static function hasInstantHydration() : bool{
-		return self::$instantHydrationCache ??= \pocketmine\Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::GAMEPLAY_FARMLAND_INSTANT_HYDRATION, false);
+		return self::$instantHydrationCache ??= Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::GAMEPLAY_FARMLAND_INSTANT_HYDRATION, false);
 	}
 
 	/** [BetterPMMP-PATCH] farmland instant hydration: shared factory for hoe-tilled farmland */

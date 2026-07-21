@@ -68,16 +68,19 @@ use pocketmine\network\mcpe\protocol\ClientboundPacket;
 use pocketmine\network\mcpe\protocol\DisconnectPacket;
 use pocketmine\network\mcpe\protocol\LevelChunkPacket;
 use pocketmine\network\mcpe\protocol\ModalFormRequestPacket;
+use pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket;
 use pocketmine\network\mcpe\protocol\MovePlayerPacket;
 use pocketmine\network\mcpe\protocol\NetworkChunkPublisherUpdatePacket;
 use pocketmine\network\mcpe\protocol\OpenSignPacket;
 use pocketmine\network\mcpe\protocol\Packet;
 use pocketmine\network\mcpe\protocol\PacketDecodeException;
 use pocketmine\network\mcpe\protocol\PacketPool;
+use pocketmine\network\mcpe\protocol\PlayerAuthInputPacket;
 use pocketmine\network\mcpe\protocol\PlayerListPacket;
 use pocketmine\network\mcpe\protocol\PlayerStartItemCooldownPacket;
 use pocketmine\network\mcpe\protocol\PlayStatusPacket;
 use pocketmine\network\mcpe\protocol\ProtocolInfo;
+use pocketmine\network\mcpe\protocol\SetActorMotionPacket;
 use pocketmine\network\mcpe\protocol\serializer\AvailableCommandsPacketAssembler;
 use pocketmine\network\mcpe\protocol\serializer\PacketBatch;
 use pocketmine\network\mcpe\protocol\ServerboundPacket;
@@ -586,7 +589,7 @@ class NetworkSession{
 			/** [BetterPMMP-PATCH] event engine: optionally skip DataPacketReceiveEvent for
 			 * PlayerAuthInputPacket - it arrives 20/s per player and dominates inbound event dispatches */
 			if(DataPacketReceiveEvent::hasHandlers()
-				&& !($packet instanceof \pocketmine\network\mcpe\protocol\PlayerAuthInputPacket
+				&& !($packet instanceof PlayerAuthInputPacket
 					&& ($this->skipAuthInputReceiveEvent ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_AUTH_INPUT_RECEIVE_EVENT, false)))){
 				$ev = new DataPacketReceiveEvent($this, $packet);
 				$ev->call();
@@ -641,7 +644,7 @@ class NetworkSession{
 			/** [BetterPMMP-PATCH] event engine: optionally skip DataPacketSendEvent for movement packets -
 			 * the largest outbound packet stream (moving entities x viewers x 20/s) */
 			if(DataPacketSendEvent::hasHandlers()
-				&& !(($packet instanceof \pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket || $packet instanceof \pocketmine\network\mcpe\protocol\SetActorMotionPacket)
+				&& !(($packet instanceof MoveActorAbsolutePacket || $packet instanceof SetActorMotionPacket)
 					&& ($this->skipMovementSendEvent ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_MOVEMENT_SEND_EVENT, false)))){
 				$ev = new DataPacketSendEvent([$this], [$packet]);
 				$ev->call();
