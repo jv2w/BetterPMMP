@@ -893,6 +893,27 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		unset($this->tickingChunks[$index]);
 	}
 
+	/**
+	 * [BetterPMMP-PATCH] Whether the current chunk order covers this position - already in use, or still queued for
+	 * sending. Exactly the set of coordinates the world is going to overwrite with real terrain.
+	 */
+	public function isChunkOrdered(int $chunkX, int $chunkZ) : bool{
+		$index = World::chunkHash($chunkX, $chunkZ);
+		return isset($this->usedChunks[$index]) || isset($this->loadQueue[$index]);
+	}
+
+	/** [BetterPMMP-PATCH] Re-publish the view area the current chunk order expects: the clamped ring frontier while new terrain is still streaming in, the full render radius otherwise. */
+	public function syncViewArea() : void{
+		if(!$this->isConnected()){
+			return;
+		}
+		if($this->chunkPublisherClampArmed){
+			$this->getNetworkSession()->syncViewAreaCenterPoint($this->clampCenter ?? $this->location, $this->clampFirstIncompleteRing);
+		}else{
+			$this->getNetworkSession()->syncViewAreaCenterPoint($this->location, $this->viewDistance);
+		}
+	}
+
 	/** [BetterPMMP-PATCH] Disarm the publisher clamp. When $sendFullRadius, restore the client view to the full render radius so it never stays stuck at a partial ring. */
 	private function disarmChunkPublisherClamp(bool $sendFullRadius) : void{
 		$this->chunkPublisherClampArmed = false;

@@ -244,6 +244,11 @@ class NetworkSession{
 	 * @phpstan-var array<int, true>
 	 */
 	private array $chunkEraseQueue = [];
+	/**
+	 * [BetterPMMP-PATCH] Blank chunks sent per tick. One tick of sends is flushed as a single batch and the client
+	 * hard-drops any batch above 300 packets, so this has to leave room for the tick's regular traffic.
+	 */
+	private const CHUNK_ERASE_PER_TICK = 128;
 	/** [BetterPMMP-PATCH] */
 	private static ?string $emptyChunkPayload = null;
 
@@ -1438,6 +1443,51 @@ class NetworkSession{
 
 	}
 
+	/**
+	 * [BetterPMMP-PATCH] Overwrites chunk positions the client still caches from a previously visited world with empty
+	 * chunks. The client renders a cached chunk until its coordinate is overwritten and does not drop it when the
+	 * publisher radius shrinks, so a world with a shorter view distance than the previous one leaves a permanent ring
+	 * of foreign terrain just outside the render radius unless every stale coordinate is blanked.
+	 *
+	 * Positions the new world is going to send are left in the queue rather than dropped: blanking a coordinate right
+	 * before its real chunk lands leaves a near-player hole the client only re-meshes on a later block update, and
+	 * sendChunkPacket() removes them once real terrain actually arrives. If the player walks away before that happens,
+	 * they leave the chunk order and become blankable again on a later tick.
+	 */
+	private function flushChunkEraseQueue(Player $player) : void{
+		$loc = $player->getLocation();
+		$centerChunkX = $loc->getFloorX() >> Chunk::COORD_BIT_SIZE;
+		$centerChunkZ = $loc->getFloorZ() >> Chunk::COORD_BIT_SIZE;
+
+		/** @phpstan-var list<array{int, int}> */
+		$blank = [];
+		$eraseDistanceSquared = 0;
+		foreach($this->chunkEraseQueue as $hash => $_){
+			World::getXZ($hash, $chunkX, $chunkZ);
+			if($player->isChunkOrdered($chunkX, $chunkZ)){
+				continue;
+			}
+			unset($this->chunkEraseQueue[$hash]);
+			$blank[] = [$chunkX, $chunkZ];
+			$eraseDistanceSquared = max($eraseDistanceSquared, ($chunkX - $centerChunkX) ** 2 + ($chunkZ - $centerChunkZ) ** 2);
+			if(count($blank) >= self::CHUNK_ERASE_PER_TICK){
+				break;
+			}
+		}
+		if(count($blank) === 0){
+			return;
+		}
+
+		//the client discards chunks outside the published view area, so it has to be widened to cover this slice
+		$this->syncViewAreaCenterPoint($loc, max($player->getViewDistance(), (int) ceil(sqrt($eraseDistanceSquared)) + 1));
+		$payload = self::$emptyChunkPayload ??= ChunkSerializer::serializeFullChunk(new Chunk([], false), DimensionIds::OVERWORLD, $this->typeConverter->getBlockTranslator());
+		foreach($blank as [$chunkX, $chunkZ]){
+			$this->sendDataPacket(LevelChunkPacket::create(new ChunkPosition($chunkX, $chunkZ), DimensionIds::OVERWORLD, 0, false, null, $payload));
+		}
+		//narrow again in the same batch, otherwise the widened area makes the client render every other stale chunk it still has cached
+		$player->syncViewArea();
+	}
+
 	public function onEnterWorld() : void{
 		if($this->player !== null){
 			$world = $this->player->getWorld();
@@ -1539,38 +1589,11 @@ class NetworkSession{
 
 		if($this->player !== null){
 			$player = $this->player;
-			if(count($this->chunkEraseQueue) > 0){
-				/**
-				 * [BetterPMMP-PATCH] Blank stale cached chunks in per-tick slices; the widened publisher radius makes the
-				 * client accept and re-mesh positions beyond the server view distance. Chunks within view distance are
-				 * skipped: the new world re-sends real terrain for them, and blanking a coordinate immediately before its
-				 * real chunk arrives leaves a near-player ghost the client only re-meshes on a later block update.
-				 */
-				$loc = $player->getLocation();
-				$viewDistance = $player->getViewDistance();
-				$centerChunkX = $loc->getFloorX() >> Chunk::COORD_BIT_SIZE;
-				$centerChunkZ = $loc->getFloorZ() >> Chunk::COORD_BIT_SIZE;
-				$keepRadius = max($viewDistance, 0) + 2;
-				$this->syncViewAreaCenterPoint($loc, max($viewDistance, 96));
-				$payload = self::$emptyChunkPayload ??= ChunkSerializer::serializeFullChunk(new Chunk([], false), DimensionIds::OVERWORLD, $this->typeConverter->getBlockTranslator());
-				$count = 0;
-				foreach($this->chunkEraseQueue as $hash => $_){
-					World::getXZ($hash, $chunkX, $chunkZ);
-					if(($chunkX - $centerChunkX) >= -$keepRadius && ($chunkX - $centerChunkX) <= $keepRadius && ($chunkZ - $centerChunkZ) >= -$keepRadius && ($chunkZ - $centerChunkZ) <= $keepRadius){
-						unset($this->chunkEraseQueue[$hash]);
-						continue;
-					}
-					unset($this->chunkEraseQueue[$hash]);
-					$this->sendDataPacket(LevelChunkPacket::create(new ChunkPosition($chunkX, $chunkZ), DimensionIds::OVERWORLD, 0, false, null, $payload));
-					if(++$count >= 512){
-						break;
-					}
-				}
-				if(count($this->chunkEraseQueue) === 0){
-					$this->syncViewAreaCenterPoint($loc, $viewDistance);
-				}
-			}
 			$player->doChunkRequests();
+			if(count($this->chunkEraseQueue) > 0){
+				/** [BetterPMMP-PATCH] Drained after doChunkRequests() so the new world's chunk order is already built and can be tested exactly. */
+				$this->flushChunkEraseQueue($player);
+			}
 
 			$dirtyAttributes = $player->getAttributeMap()->needSend();
 			$this->entityEventBroadcaster->syncAttributes([$this], $player, $dirtyAttributes);
