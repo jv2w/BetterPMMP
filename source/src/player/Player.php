@@ -264,27 +264,6 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	private ?int $lastChunkOrderX = null;
 	private ?int $lastChunkOrderZ = null;
 
-	/** [BetterPMMP-PATCH] Progressive publisher-radius clamp: hides stale old-world chunks after a world switch until new terrain fills each ring. */
-	private bool $chunkPublisherClampArmed = false;
-	/**
-	 * [BetterPMMP-PATCH] chunkHash => ring index, only for chunks counted as unsent at the last rebuild.
-	 * @var int[]
-	 * @phpstan-var array<int, int>
-	 */
-	private array $clampRingByHash = [];
-	/**
-	 * [BetterPMMP-PATCH] ring index => count of chunks not yet sent in that ring.
-	 * @var int[]
-	 * @phpstan-var array<int, int>
-	 */
-	private array $clampUnsentPerRing = [];
-	/** [BetterPMMP-PATCH] */
-	private int $clampFirstIncompleteRing = 0;
-	/** [BetterPMMP-PATCH] Server tick of the last clamp progress (arm or ring-chunk sent); drives the stall safety valve. */
-	private int $clampLastProgressTick = 0;
-	/** [BetterPMMP-PATCH] Center the current ring counters were computed around; used for advance packets while movement lags orderChunks. */
-	private ?Vector3 $clampCenter = null;
-
 	/** @var true[] */
 	private array $tickingChunks = [];
 
@@ -855,14 +834,11 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 				$this->usedChunks = [];
 				$this->loadQueue = [];
 				if($oldWorld !== null){
-					/** [BetterPMMP-PATCH] Arm the publisher clamp and collapse the client view to radius 0 so stale old-world chunks are hidden immediately. */
-					$this->chunkPublisherClampArmed = true;
-					$this->clampRingByHash = [];
-					$this->clampUnsentPerRing = [];
-					$this->clampFirstIncompleteRing = 0;
-					$this->clampLastProgressTick = $this->server->getTick();
-					$this->clampCenter = $this->location->asVector3();
-					$this->getNetworkSession()->syncViewAreaCenterPoint($this->location, 0);
+					/** [BetterPMMP-PATCH] Re-centre the published view area on the new world before any of its terrain is
+					 * sent. The client rejects chunk data for positions outside that area, so the radius must already
+					 * cover the whole render distance here - stale terrain is removed by overwriting it (see
+					 * NetworkSession::flushChunkEraseQueue()), never by shrinking the publisher. */
+					$this->getNetworkSession()->syncViewAreaCenterPoint($this->location, $this->viewDistance);
 				}
 				$this->getNetworkSession()->onEnterWorld();
 			}
@@ -902,28 +878,12 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		return isset($this->usedChunks[$index]) || isset($this->loadQueue[$index]);
 	}
 
-	/** [BetterPMMP-PATCH] Re-publish the view area the current chunk order expects: the clamped ring frontier while new terrain is still streaming in, the full render radius otherwise. */
+	/** [BetterPMMP-PATCH] Re-publish the view area the current chunk order expects: the full render radius around the player. */
 	public function syncViewArea() : void{
 		if(!$this->isConnected()){
 			return;
 		}
-		if($this->chunkPublisherClampArmed){
-			$this->getNetworkSession()->syncViewAreaCenterPoint($this->clampCenter ?? $this->location, $this->clampFirstIncompleteRing);
-		}else{
-			$this->getNetworkSession()->syncViewAreaCenterPoint($this->location, $this->viewDistance);
-		}
-	}
-
-	/** [BetterPMMP-PATCH] Disarm the publisher clamp. When $sendFullRadius, restore the client view to the full render radius so it never stays stuck at a partial ring. */
-	private function disarmChunkPublisherClamp(bool $sendFullRadius) : void{
-		$this->chunkPublisherClampArmed = false;
-		$this->clampRingByHash = [];
-		$this->clampUnsentPerRing = [];
-		$this->clampFirstIncompleteRing = 0;
-		$this->clampCenter = null;
-		if($sendFullRadius && $this->isConnected()){
-			$this->getNetworkSession()->syncViewAreaCenterPoint($this->location, $this->viewDistance);
-		}
+		$this->getNetworkSession()->syncViewAreaCenterPoint($this->location, $this->viewDistance);
 	}
 
 	protected function spawnEntitiesOnAllChunks() : void{
@@ -994,24 +954,6 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 					$this->getNetworkSession()->startUsingChunk($X, $Z, function() use ($X, $Z, $index) : void{
 						$this->usedChunks[$index] = UsedChunkStatus::SENT;
-						if($this->chunkPublisherClampArmed && isset($this->clampRingByHash[$index])){
-							/** [BetterPMMP-PATCH] Ring bookkeeping: a counted chunk was sent; advance the publisher radius once its ring completes. */
-							$ring = $this->clampRingByHash[$index];
-							unset($this->clampRingByHash[$index]);
-							$this->clampLastProgressTick = $this->server->getTick();
-							if(($this->clampUnsentPerRing[$ring] ?? 0) > 0 && --$this->clampUnsentPerRing[$ring] === 0 && $ring === $this->clampFirstIncompleteRing){
-								$first = $ring;
-								while($first < $this->viewDistance && ($this->clampUnsentPerRing[$first] ?? 0) === 0){
-									++$first;
-								}
-								$this->clampFirstIncompleteRing = $first;
-								if($first >= $this->viewDistance){
-									$this->disarmChunkPublisherClamp(true);
-								}else{
-									$this->getNetworkSession()->syncViewAreaCenterPoint($this->clampCenter ?? $this->location, $first);
-								}
-							}
-						}
 						if($this->spawnChunkLoadCount === -1){
 							$this->spawnEntitiesOnChunk($X, $Z);
 						}elseif($this->spawnChunkLoadCount++ === $this->spawnThreshold){
@@ -1123,12 +1065,6 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		$world = $this->getWorld();
 		$tickingChunkRadius = $world->getChunkTickRadius();
 
-		$clampArmed = $this->chunkPublisherClampArmed;
-		if($clampArmed){
-			$this->clampRingByHash = [];
-			$this->clampUnsentPerRing = [];
-		}
-
 		/** [BetterPMMP-PATCH] PvP optimization: remember the centre this run was computed for, so
 		 * handleMovement() can skip re-arming while the player stays inside the same chunk. */
 		$centerChunkX = $this->location->getFloorX() >> Chunk::COORD_BIT_SIZE;
@@ -1141,14 +1077,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			$centerChunkX,
 			$centerChunkZ
 		) as $radius => $hash){
-			$status = $this->usedChunks[$hash] ?? null;
-			if($status === null || $status === UsedChunkStatus::NEEDED){
+			if(!isset($this->usedChunks[$hash]) || $this->usedChunks[$hash] === UsedChunkStatus::NEEDED){
 				$newOrder[$hash] = true;
-			}
-			if($clampArmed && ($status === null || $status === UsedChunkStatus::REQUESTED_GENERATION || $status === UsedChunkStatus::REQUESTED_SENDING)){
-				/** [BetterPMMP-PATCH] Count only genuinely-unsent chunks; NEEDED means already displayed with fresh data (resend flag), so it must not gate the radius. */
-				$this->clampUnsentPerRing[$radius] = ($this->clampUnsentPerRing[$radius] ?? 0) + 1;
-				$this->clampRingByHash[$hash] = $radius;
 			}
 			if($radius < $tickingChunkRadius){
 				$tickingChunks[$hash] = true;
@@ -1166,20 +1096,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		$this->updateTickingChunkRegistrations($this->tickingChunks, $tickingChunks);
 		$this->tickingChunks = $tickingChunks;
 
-		if($clampArmed){
-			/** [BetterPMMP-PATCH] Recompute the first incomplete ring from current state and either advance the clamped radius or disarm once every ring is sent. */
-			$first = 0;
-			while($first < $this->viewDistance && ($this->clampUnsentPerRing[$first] ?? 0) === 0){
-				++$first;
-			}
-			if($first >= $this->viewDistance){
-				$this->disarmChunkPublisherClamp(true);
-			}else{
-				$this->clampFirstIncompleteRing = $first;
-				$this->clampCenter = $this->location->asVector3();
-				$this->getNetworkSession()->syncViewAreaCenterPoint($this->location, $first);
-			}
-		}elseif(count($this->loadQueue) > 0 || count($unloadChunks) > 0){
+		if(count($this->loadQueue) > 0 || count($unloadChunks) > 0){
 			$this->getNetworkSession()->syncViewAreaCenterPoint($this->location, $this->viewDistance);
 		}
 
@@ -1221,10 +1138,6 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	 * Ticks the chunk-requesting mechanism.
 	 */
 	public function doChunkRequests() : void{
-		if($this->chunkPublisherClampArmed && $this->server->getTick() - $this->clampLastProgressTick > 200){
-			/** [BetterPMMP-PATCH] Stall safety valve: if no ring has made progress for ~10s (e.g. forced chunk unload on a stationary player), fall back to the full radius instead of freezing a void ring. */
-			$this->disarmChunkPublisherClamp(true);
-		}
 		if($this->nextChunkOrderRun !== PHP_INT_MAX && $this->nextChunkOrderRun-- <= 0){
 			$this->nextChunkOrderRun = PHP_INT_MAX;
 			$this->orderChunks();
@@ -1646,10 +1559,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 				/** [BetterPMMP-PATCH] PvP optimization: orderChunks() is idempotent while the player stays
 				 * inside the same chunk - selectChunks() yields the identical ring set, loadQueue drains
 				 * itself in requestChunks(), and the syncViewAreaCenterPoint() send is already gated on the
-				 * queues being non-empty. Re-arm only on an actual chunk crossing, or while the publisher
-				 * clamp is armed (its ring counters are rebuilt from scratch on every run). */
-				if($this->chunkPublisherClampArmed
-					|| ($to->getFloorX() >> Chunk::COORD_BIT_SIZE) !== $this->lastChunkOrderX
+				 * queues being non-empty. Re-arm only on an actual chunk crossing. */
+				if(($to->getFloorX() >> Chunk::COORD_BIT_SIZE) !== $this->lastChunkOrderX
 					|| ($to->getFloorZ() >> Chunk::COORD_BIT_SIZE) !== $this->lastChunkOrderZ
 				){
 					if($this->nextChunkOrderRun > 20){
@@ -2640,8 +2551,6 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			throw new AssumptionFailedError("Previous loop should have cleared this array");
 		}
 		$this->loadQueue = [];
-		/** [BetterPMMP-PATCH] Clear clamp state without emitting packets on a dying session. */
-		$this->disarmChunkPublisherClamp(false);
 
 		$this->removeCurrentWindow();
 		$this->removePermanentInventories();
@@ -3133,7 +3042,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		if($this->isUsingChunk($chunkX, $chunkZ)){
 			$this->logger->debug("Detected forced unload of chunk " . $chunkX . " " . $chunkZ);
 			$this->unloadChunk($chunkX, $chunkZ);
-			/** [BetterPMMP-PATCH] Re-order promptly so the forcibly-unloaded chunk is re-requested even for a stationary player (also unblocks the publisher clamp). */
+			/** [BetterPMMP-PATCH] Re-order promptly so the forcibly-unloaded chunk is re-requested even for a stationary player. */
 			$this->nextChunkOrderRun = 0;
 		}
 	}
