@@ -69,10 +69,10 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 		 * writes per recipient per broadcast; the vanilla grouping below still runs when they differ. */
 		//TODO: different compressors might be compatible, it might not be necessary to split them up by object
 		$firstCompressor = reset($recipients)->getCompressor();
-		$uniformCompressor = true;
+		$uniform = true;
 		foreach($recipients as $recipient){
 			if($recipient->getCompressor() !== $firstCompressor){
-				$uniformCompressor = false;
+				$uniform = false;
 				break;
 			}
 		}
@@ -93,7 +93,7 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 			$packetBuffers[] = $buffer;
 		}
 
-		if($uniformCompressor){
+		if($uniform){
 			$this->sendToCompressorGroup($firstCompressor, $recipients, $packetBuffers, $totalLength);
 			return;
 		}
