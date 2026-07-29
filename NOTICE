@@ -32,10 +32,19 @@ Notice of modifications (LGPL-3.0 / GPL-3.0 section 5a)
 ------------------------------------------------------
 
 This is a modified version of PocketMine-MP. It has been changed from the
-original PocketMine-MP 5.44.3 source by the BetterPMMP project in 2026. Source
-files modified or added by BetterPMMP are marked in-line with the tag
-[BetterPMMP-PATCH]. The complete corresponding source code is included in the
-source/ directory of this distribution.
+original PocketMine-MP 5.44.3 source by the BetterPMMP project in 2026.
+
+Every source file, launcher script and vendored library file that BetterPMMP
+modified carries a one-line notice near its license header stating that it was
+modified by the BetterPMMP project, together with the year of modification.
+Files added by BetterPMMP name the BetterPMMP Team as their author in their own
+header. Machine-managed data files - among them source/resources/pocketmine.yml,
+source/resources/resource_packs.yml, the translation files under
+source/resources/translations/ and source/composer.json - are modified without
+an in-line notice and are covered by this file instead.
+
+The complete corresponding source code is included in the source/ directory of
+this distribution.
 
 
 Third-party components
@@ -51,9 +60,10 @@ One of those libraries is modified by BetterPMMP:
 
 It is changed to slice the inter-tick sleep of the RakLib thread so that
 outbound packet batches are picked up within about a millisecond instead of up
-to a full 10 ms tick. The change is marked in-line with [BetterPMMP-PATCH], and
-the same diff is kept in source/build/betterpmmp-vendor-patches/ because a
-composer install or update overwrites the vendor tree and reverts it. RakLib is
+to a full 10 ms tick. The file carries the same one-line modification notice
+near its license header, and the diff is kept in
+source/build/betterpmmp-vendor-patches/ because a composer install or update
+overwrites the vendor tree and reverts it. RakLib is
 distributed under the GPL-3.0 with the exception stated in its own LICENSE.md,
 which is retained unmodified.
 
