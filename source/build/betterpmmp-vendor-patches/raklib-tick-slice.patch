@@ -1,8 +1,17 @@
 diff --git a/source/vendor/pocketmine/raklib/src/server/Server.php b/source/vendor/pocketmine/raklib/src/server/Server.php
-index f9c3fb5..30ebac1 100644
+index f9c3fb5..2342549 100644
 --- a/source/vendor/pocketmine/raklib/src/server/Server.php
 +++ b/source/vendor/pocketmine/raklib/src/server/Server.php
-@@ -35,6 +35,7 @@ use function bin2hex;
+@@ -12,6 +12,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace raklib\server;
+@@ -35,6 +37,7 @@
  use function count;
  use function get_class;
  use function microtime;
@@ -10,33 +19,30 @@ index f9c3fb5..30ebac1 100644
  use function ord;
  use function preg_match;
  use function strlen;
-@@ -47,6 +48,9 @@ class Server implements ServerInterface{
+@@ -47,6 +50,9 @@
  
  	private const RAKLIB_TPS = 100;
  	private const RAKLIB_TIME_PER_TICK = 1 / self::RAKLIB_TPS;
-+	/** [BetterPMMP-PATCH] hit-latency: inter-tick sleep is sliced at this granularity so outbound batches queued
-+	 * by the main thread are picked up within ~1ms instead of up to a full RAKLIB_TIME_PER_TICK (10ms). */
++	/** Granularity of the sliced inter-tick sleep, so outbound batches queued by the main thread are picked up
++	 * within about a millisecond instead of up to a full RAKLIB_TIME_PER_TICK. */
 +	private const RAKLIB_SLEEP_SLICE = 0.001;
  	private const BLOCK_MESSAGE_SUPPRESSION_THRESHOLD = 2;
  	private const PACKET_ERROR_SUPPRESSION_THRESHOLD = 2;
  
-@@ -126,10 +130,28 @@ class Server implements ServerInterface{
+@@ -126,10 +132,24 @@
  	public function tickProcessor() : void{
  		$start = microtime(true);
  
+-		/*
+-		 * The below code is designed to allow co-op between sending and receiving to avoid slowing down either one
+-		 * when high traffic is coming either way. Yielding will occur after 100 messages.
+-		 */
 +		$this->processEventsAndSocket();
 +		$this->tick();
 +
--		/*
-+		/**
--		 * The below code is designed to allow co-op between sending and receiving to avoid slowing down either one
--		 * when high traffic is coming either way. Yielding will occur after 100 messages.
-+		 * [BetterPMMP-PATCH] hit-latency: slice the inter-tick sleep and re-poll the main-thread event source
-+		 * and socket between ~1ms slices, so outbound batches (and inbound datagrams) are picked up in ~1ms
-+		 * instead of up to 10ms. The session update cadence (ACK/resend timers in tick()) is unchanged -
-+		 * tick() still runs exactly once per RAKLIB_TIME_PER_TICK window, and an overlong tick still skips
-+		 * the sleep entirely (loop condition false), matching the original guard.
- 		 */
++		//Re-poll the event source and socket between sleep slices so outbound batches and inbound datagrams are
++		//picked up promptly. tick() still runs exactly once per RAKLIB_TIME_PER_TICK window, and an overlong
++		//tick still skips the sleep entirely, matching the original guard.
 +		$end = $start + self::RAKLIB_TIME_PER_TICK;
 +		while(($now = microtime(true)) < $end){
 +			@time_sleep_until(min($end, $now + self::RAKLIB_SLEEP_SLICE));
@@ -52,7 +58,7 @@ index f9c3fb5..30ebac1 100644
  		do{
  			$stream = !$this->shutdown;
  			for($i = 0; $i < 100 && $stream && !$this->shutdown; ++$i){ //if we received a shutdown event, we don't care about any more messages from the event source
-@@ -141,13 +163,6 @@ class Server implements ServerInterface{
+@@ -141,13 +161,6 @@
  				$socket = $this->receivePacket();
  			}
  		}while($stream || $socket);
