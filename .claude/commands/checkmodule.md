@@ -4,17 +4,17 @@ A module edits the server core: one defect hits every world and every player, al
 
 ## Gather
 
-Open all wiring before judging: the constant in `source/src/betterpmmp/BetterPMMPProperties.php`; the yml key, default and `#!` marker in `source/resources/pocketmine.yml`; the translation key in all 14 `source/resources/translations/*.ini`; every call site (`grep -rn "BetterPMMPProperties::<CONST>" source/src`) plus its cache fields.
+Open all wiring before judging: the property and its `init()` line in `source/src/betterpmmp/BetterPMMPConfig.php`; the yml key, default and `#!` marker in `source/resources/pocketmine.yml`; the translation key in all 14 `source/resources/translations/*.ini`; every call site (`grep -rn 'BetterPMMPConfig::\$<property>' source/src`).
 
 ## Checks — all must pass
 
 1. **Off = vanilla (top priority).** With the default value the execution path must equal PocketMine-MP 5.44.3 line for line: zero extra ops, allocations or event calls when off; the branch sits outside loops; the vanilla path after `if($enabled)` is intact; event-skipping modules preserve vanilla event order, args and cancellation when off.
-2. **Default agreement.** Call-site default argument = yml = both README tables (4 places). Multiple call sites → identical default arguments. Getter type matches the yml value type.
-3. **Wiring completeness.** No dead key (constant never read) or ghost key (read but absent from yml). `#!` marker present; translation key in all 14 .ini with equal per-file key counts, actually translated per language, CRLF/no-BOM intact; a row in both READMEs.
-4. **Cache lifetime.** State explicitly when each `??=` cache dies. `static` = process lifetime — correct iff the read-once-at-startup contract holds, a defect if the code assumes refresh. Instance caches on reused objects must not carry values across players/worlds. A `?T` cache whose value can legitimately be null = permanent cache miss.
+2. **Default agreement.** The `init()` default = yml = both README tables (3 places). The property type matches the yml value type, and the getter used in `init()` matches it too.
+3. **Wiring completeness.** No dead key (property never read) or ghost key (read but absent from yml). `#!` marker present; translation key in all 14 .ini with equal per-file key counts, actually translated per language, CRLF/no-BOM intact; a row in both READMEs.
+4. **Single source.** The value lives only in its `BetterPMMPConfig` static, written once by `init()`; any other copy, cache or re-read of the same key is a defect. Clamping, unit conversion and implied-by relationships belong in `init()`, not at the call site. The statics are per-thread: a read from an AsyncTask, a worker or a child process is a defect.
 5. **Interactions.** Event-skipping modules: which plugin API contract breaks, and does the .ini/README description state that cost? Module pairs that break each other's assumptions when both are on. Per-world maps: unknown world names, fallback values. Held caches/queues/history released on player quit and world unload.
 6. **Value bounds.** 0 / negative / 1 / huge / wrong yml type — each path's behavior. Does `0` mean unlimited or disabled, consistently in code and docs? Periods used in division/modulo guarded with `max(1, …)`. What does an unbounded size/limit value break?
-7. **CLAUDE.md compliance.** Every vanilla deviation carries its `[BetterPMMP-PATCH]` marker; CRITICAL violations are defects — fix them too.
+7. **CLAUDE.md compliance.** Every modified upstream file carries the one-line modification notice; comments follow the 3 allowed kinds; CRITICAL violations are defects — fix them too.
 
 ## Loop
 

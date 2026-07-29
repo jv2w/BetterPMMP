@@ -9,21 +9,21 @@ Determine 4 things from "$ARGUMENTS"; if any is unclear, ask one question (≤20
 - **Default** — the value that produces vanilla behavior; new modules default to off. Enabling-by-default needs justification in the report.
 - **Behavior** — what changes where. Read the target sources before editing.
 
-Reject: key already exists → ask whether this extends the existing module. Change that cannot be toggled → not a module; ask whether to apply it as a plain `[BetterPMMP-PATCH]` edit instead.
+Reject: key already exists → ask whether this extends the existing module. Change that cannot be toggled → not a module; ask whether to apply it as a plain source edit instead.
 
 ## 7 wiring points, in order
 
-1. **`source/src/betterpmmp/BetterPMMPProperties.php`** — constant named from the key path (`network.foo-bar` → `NETWORK_FOO_BAR`), placed in its section group, same order as the yml.
+1. **`source/src/betterpmmp/BetterPMMPConfig.php`** — a typed `public static` property named from the key path (`network.foo-bar` → `$networkFooBar`, dropping the section prefix where it reads better), plus one line in `init()` that reads it. Declare and initialize it in its section group, same order as the yml. Default, clamping and any out-of-range warning live in that one line — nowhere else. Maps get a normalizer plus a lookup method.
 
 2. **`source/resources/pocketmine.yml`** — under `better-pmmp:` in the matching section, two lines: `#! pocketmine.betterpmmp.yml.<key path>` then `<last-segment>: <default>`. 2-space indent; nesting mirrors the key path 1:1. A new section gets its own `#!` line too.
 
 3. **`source/resources/translations/*.ini` — all 14** — `pocketmine.betterpmmp.yml.<key path>=<description>`, inside the existing betterpmmp block, same position as yml order. Translate into each language — all 45 existing keys are fully translated in all 14 files (bul.ini included); English copy-paste is a regression. Description = what it does + why that default + cost of enabling, 1–3 sentences. Newlines as literal `\n`; never a raw `;` inside a value (the parser truncates the rest). Batch-insert with a bundled-php script, then confirm every file reports the same `grep -c 'pocketmine.betterpmmp'` count.
 
-4. **Call sites** — `Server::getInstance()->getConfigGroup()->getPropertyBool|Int|String(BetterPMMPProperties::X, <default>)`; maps use `getProperty(..., [])`. Values are read once at startup (README contract); on hot paths cache with `??=` — instance field for per-entity/session state, `private static ?T $x = null` for global. **The disabled path must be identical to vanilla**: branch once, as far out as possible, zero extra work when off — if that is impossible, redesign instead of implementing. No new files; only logic independent of vanilla classes may go in `source/src/betterpmmp/`.
+4. **Call sites** — read the static directly: `BetterPMMPConfig::$networkFooBar`. No default argument, no local cache, no `Server::getInstance()`, no `??=`. `init()` runs once in `Server::__construct` and the statics are main-thread only, so never read them from an AsyncTask or a child process. **The disabled path must be identical to vanilla**: branch once, as far out as possible, zero extra work when off — if that is impossible, redesign instead of implementing. No new files; only logic independent of vanilla classes may go in `source/src/betterpmmp/`.
 
 5. **`README.md`** and 6. **`README.ko.md`** — add a row to the `| Key | Default | ... |` table in yml order, key and default in backticks, description matching the .ini text in each README's language.
 
-7. **Verify** — phpstan per CLAUDE.md §Verification (full tree, EXIT 0). Confirm the default is identical in all 4 places: call-site argument / yml / both READMEs. Headless-boot (command in CLAUDE.md §Verification) a temp data dir whose `pocketmine.yml` lacks the new key; confirm the key is spliced in with its comment and no `#!` marker remains.
+7. **Verify** — phpstan per CLAUDE.md §Verification (full tree, EXIT 0). Confirm the default is identical in all 3 places: the `init()` line / yml / both READMEs. Headless-boot (command in CLAUDE.md §Verification) a temp data dir whose `pocketmine.yml` lacks the new key; confirm the key is spliced in with its comment and no `#!` marker remains.
 
 ## Done
 
