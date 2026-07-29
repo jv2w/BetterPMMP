@@ -23,7 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\entity;
 
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\block\Block;
 use pocketmine\block\BlockTypeIds;
 use pocketmine\block\VanillaBlocks;
@@ -147,8 +147,6 @@ abstract class Living extends Entity{
 	 * @phpstan-var array<class-string<Item>, bool>
 	 */
 	private static array $onTickWornOverrideCache = [];
-	/** [BetterPMMP-PATCH] gameplay toggle: cached fall-damage flag */
-	private ?bool $fallDamageEnabled = null;
 
 	protected function getInitialDragMultiplier() : float{ return 0.02; }
 
@@ -402,7 +400,7 @@ abstract class Living extends Entity{
 	protected function calculateFallDamage(float $fallDistance) : float{
 		/** [BetterPMMP-PATCH] gameplay toggle: no fall damage - returning 0.0 here skips the jump boost
 		 * effect lookup, the damage event/attack and both fall sounds in onHitGround() */
-		if(!($this->fallDamageEnabled ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::GAMEPLAY_FALL_DAMAGE, true))){
+		if(!BetterPMMPConfig::$fallDamage){
 			return 0.0;
 		}
 		return ceil($fallDistance - 3 - (($jumpBoost = $this->effectManager->get(VanillaEffects::JUMP_BOOST())) !== null ? $jumpBoost->getEffectLevel() : 0));

@@ -23,7 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\entity\object;
 
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\entity\animation\ItemEntityStackSizeChangeAnimation;
 use pocketmine\entity\Entity;
 use pocketmine\entity\EntitySizeInfo;
@@ -41,7 +41,6 @@ use pocketmine\network\mcpe\protocol\AddItemActorPacket;
 use pocketmine\network\mcpe\protocol\types\entity\EntityIds;
 use pocketmine\network\mcpe\protocol\types\inventory\ItemStackWrapper;
 use pocketmine\player\Player;
-use pocketmine\Server;
 use pocketmine\timings\Timings;
 use function max;
 use function min;
@@ -67,10 +66,6 @@ class ItemEntity extends Entity{
 	protected int $pickupDelay = 0;
 	protected int $despawnDelay = self::DEFAULT_DESPAWN_DELAY;
 	protected Item $item;
-
-	/** [BetterPMMP-PATCH] Cached better-pmmp.entities.item-merging - the config is immutable for the
-	 * process lifetime, and reading it per merge-candidate check paid a lookup every 2 ticks per item. */
-	private static ?bool $mergingEnabled = null;
 
 	public function __construct(Location $location, Item $item, ?CompoundTag $nbt = null){
 		if($item->isNull()){
@@ -101,7 +96,7 @@ class ItemEntity extends Entity{
 		/** [BetterPMMP-PATCH] Apply the configured despawn policy to items restored from chunk NBT too. Only
 		 * World::dropItem() used to consult it, so everything already lying on the ground kept the hardcoded
 		 * vanilla lifetime and "-1: items never despawn" did not actually hold for them. */
-		$configured = self::configuredDespawnDelay($this->server);
+		$configured = BetterPMMPConfig::$itemDespawnDelay;
 		if($configured === self::NEVER_DESPAWN){
 			$this->despawnDelay = self::NEVER_DESPAWN;
 		}elseif($configured !== null && $this->despawnDelay !== self::NEVER_DESPAWN){
@@ -146,7 +141,7 @@ class ItemEntity extends Entity{
 			 * - the exact opposite of what the option is for. */
 			if($this->hasMovementUpdate() && $this->isMergeCandidate()
 				&& ($this->despawnDelay === self::NEVER_DESPAWN || $this->despawnDelay % self::MERGE_CHECK_PERIOD === 0)
-				&& (self::$mergingEnabled ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::ENTITIES_ITEM_MERGING, true))){
+				&& BetterPMMPConfig::$itemMerging){
 				$mergeable = [$this]; //in case the merge target ends up not being this
 				$mergeTarget = $this;
 				foreach($this->getWorld()->getNearbyEntities($this->boundingBox->expandedCopy(0.5, 0.5, 0.5), $this) as $entity){
@@ -224,22 +219,6 @@ class ItemEntity extends Entity{
 		$consumer->despawnDelay = self::longerDelay($consumer->despawnDelay, $this->despawnDelay);
 
 		return true;
-	}
-
-	/**
-	 * [BetterPMMP-PATCH] The despawn delay better-pmmp.entities.item-despawn-ticks asks for, or null when the
-	 * setting leaves vanilla behaviour alone. One place decides it so that every item obeys the same rule,
-	 * however it came into the world.
-	 */
-	public static function configuredDespawnDelay(Server $server) : ?int{
-		$ticks = $server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::ENTITIES_ITEM_DESPAWN_TICKS, self::DEFAULT_DESPAWN_DELAY);
-		if($ticks === self::NEVER_DESPAWN){
-			return self::NEVER_DESPAWN;
-		}
-		if($ticks <= 0 || $ticks === self::DEFAULT_DESPAWN_DELAY){
-			return null;
-		}
-		return min($ticks, self::MAX_DESPAWN_DELAY);
 	}
 
 	/**

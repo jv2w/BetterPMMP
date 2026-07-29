@@ -26,7 +26,7 @@ declare(strict_types=1);
  */
 namespace pocketmine\entity;
 
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\block\Block;
 use pocketmine\block\Water;
 use pocketmine\entity\animation\Animation;
@@ -134,8 +134,6 @@ abstract class Entity{
 	protected Vector3 $motion;
 	protected Vector3 $lastMotion;
 	protected bool $forceMovementUpdate = false;
-	/** [BetterPMMP-PATCH] PvP optimization: cached movement broadcast period. protected so Player, whose updateMovement() is a no-op, reuses the same cache/flush pair instead of declaring its own. */
-	protected ?int $movementBroadcastPeriod = null;
 	/** [BetterPMMP-PATCH] Set when a movement broadcast was skipped by the period, so the resting position can be flushed. */
 	protected bool $movementBroadcastPending = false;
 	private bool $checkBlockIntersectionsNextTick = true;
@@ -798,7 +796,7 @@ abstract class Entity{
 			 * `!$wasStill && $still` (the entity just came to rest) always sends: that is the tick after
 			 * which World::tickEntities() may drop the entity from the update list, so a skip there would
 			 * leave viewers frozen at a position up to (period - 1) ticks stale, permanently. */
-			$movementPeriod = $this->movementBroadcastPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1));
+			$movementPeriod = BetterPMMPConfig::$movementBroadcastPeriod;
 			if($teleport || (!$wasStill && $still) || $movementPeriod <= 1 || (($this->server->getTick() + $this->id) % $movementPeriod) === 0){
 				$this->movementBroadcastPending = false;
 				$this->lastLocation = $this->location->asLocation();
