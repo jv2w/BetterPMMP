@@ -110,7 +110,7 @@ final class BetterPMMPConfigFormat{
 			return BetterPMMPConfigComments::render(self::rebuild($template, $data), $lang);
 		}
 		$result = BetterPMMPConfigComments::retranslate($content, $template, $lang);
-		$root = explode('.', BetterPMMPProperties::CONFIG_ENFORCE_FORMAT)[0];
+		$root = explode('.', BetterPMMPConfig::CONFIG_ENFORCE_FORMAT)[0];
 		if(!array_key_exists($root, $data)){
 			return self::appendMissingRoot($result, $template, $root, $lang);
 		}
@@ -313,7 +313,7 @@ final class BetterPMMPConfigFormat{
 	 */
 	private static function enforceEnabled(array $data) : bool{
 		$node = $data;
-		foreach(explode('.', BetterPMMPProperties::CONFIG_ENFORCE_FORMAT) as $part){
+		foreach(explode('.', BetterPMMPConfig::CONFIG_ENFORCE_FORMAT) as $part){
 			if(!is_array($node) || !array_key_exists($part, $node)){
 				return false;
 			}
