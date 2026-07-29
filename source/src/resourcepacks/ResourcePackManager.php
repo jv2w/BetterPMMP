@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\resourcepacks;
@@ -81,7 +83,7 @@ class ResourcePackManager{
 		}
 
 		$resourcePacksYml = Path::join($this->path, "resource_packs.yml");
-		/** [BetterPMMP-PATCH] Localize resource_packs.yml comments to the wizard-selected language, and re-localize on language change */
+		//Localize resource_packs.yml comments to the wizard-selected language, and re-localize on language change
 		$template = Filesystem::fileGetContents(Path::join(\pocketmine\RESOURCE_PATH, "resource_packs.yml"));
 		if(!file_exists($resourcePacksYml)){
 			Filesystem::safeFilePutContents($resourcePacksYml, BetterPMMPConfigComments::render($template, $lang));
@@ -96,8 +98,6 @@ class ResourcePackManager{
 		$resourcePacksConfig = new Config($resourcePacksYml, Config::YAML, []);
 
 		$this->serverForceResources = (bool) $resourcePacksConfig->get("force_resources", false);
-
-		/** [BetterPMMP-PATCH] "Loading resource packs..." log removed */
 
 		$resourceStack = $resourcePacksConfig->get("resource_stack", []);
 		if(!is_array($resourceStack)){
