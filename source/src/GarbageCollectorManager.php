@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine;
@@ -50,9 +52,6 @@ final class GarbageCollectorManager{
 
 	private TimingsHandler $timings;
 
-	/** [BetterPMMP-PATCH] The $runs counter, the $logger field and the $logger parameter were orphaned when
-	 * the per-GC debug log line was removed - nothing read the counter (there is no getter) and nothing
-	 * wrote to the logger. */
 	public function __construct(
 		?TimingsHandler $parentTimings,
 	){
@@ -95,7 +94,6 @@ final class GarbageCollectorManager{
 
 		$time = $end - $start;
 		$this->collectionTimeTotalNs += $time;
-		/** [BetterPMMP-PATCH] GC log output removed */
 
 		return $cycles;
 	}

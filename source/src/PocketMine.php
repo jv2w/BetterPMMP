@@ -19,6 +19,8 @@
  *
 */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine {
@@ -188,7 +190,6 @@ namespace pocketmine {
 			$logger->warning("Debugging assertions are enabled. This may degrade performance. To disable them, set `zend.assertions = -1` in php.ini.");
 		}
 		if(\Phar::running(true) === ""){
-			/** [BetterPMMP-PATCH] Start warning replaced */
 			$logger->info(TextFormat::GREEN . VersionInfo::DISTRO_NAME . " By UserX0001");
 		}
 		if(function_exists('opcache_get_status') && ($opcacheStatus = opcache_get_status(false)) !== false){
@@ -270,8 +271,6 @@ JIT_WARNING
 		}
 		require_once($bootstrap);
 
-		/** [BetterPMMP-PATCH] Composer sync check bypassed for source folder execution */
-
 		ErrorToExceptionHandler::set();
 
 		if(count(getopt("", [BootstrapOptions::VERSION])) > 0){
@@ -296,8 +295,8 @@ JIT_WARNING
 		//this has to be done after we're sure the data path exists
 		$dataPath = realpath($dataPath) . DIRECTORY_SEPARATOR;
 
-		/** [BetterPMMP-PATCH] Server files other than the world data live in a system subdirectory. Created
-		 * after the data directory itself, so a data path that cannot be created is still reported. */
+		//Server files other than the world data live in a system subdirectory. Created after the data directory itself,
+		//so a data path that cannot be created is still reported.
 		@mkdir(Path::join($dataPath, "system"), 0777, true);
 
 		$lockFilePath = Path::join($dataPath, "system", 'server.lock');

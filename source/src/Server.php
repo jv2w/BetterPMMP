@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 /**
@@ -328,7 +330,7 @@ class Server{
 		return ProtocolInfo::MINECRAFT_VERSION;
 	}
 
-	/** [BetterPMMP-PATCH] Report the upstream PMMP API version instead of the BetterPMMP display version */
+	/** Report the upstream PMMP API version instead of the BetterPMMP display version */
 	public function getApiVersion() : string{
 		return VersionInfo::API_VERSION;
 	}
@@ -349,7 +351,6 @@ class Server{
 		return $this->pluginPath;
 	}
 
-	/** [BetterPMMP-PATCH] timings reports now live under system/ alongside other server files */
 	public function getTimingsReportPath() : string{
 		return Path::join($this->dataPath, "system", "timings");
 	}
@@ -819,9 +820,7 @@ class Server{
 			$this->dataPath = realpath($dataPath) . DIRECTORY_SEPARATOR;
 			$this->pluginPath = realpath($pluginPath) . DIRECTORY_SEPARATOR;
 
-			/** [BetterPMMP-PATCH] "Loading server configuration" startup log removed */
 			$pocketmineYmlPath = Path::join($this->dataPath, "pocketmine.yml");
-			/** [BetterPMMP-PATCH] Resolve the selected language, then localize pocketmine.yml comments to it */
 			$serverPropertiesPath = Path::join($this->dataPath, "server.properties");
 			$commentLangCode = Language::FALLBACK_LANGUAGE;
 			if(file_exists($serverPropertiesPath)){
@@ -844,7 +843,7 @@ class Server{
 				@file_put_contents($pocketmineYmlPath, BetterPMMPConfigComments::render($content, $commentLang));
 			}else{
 				$existingYml = Filesystem::fileGetContents($pocketmineYmlPath);
-				/** [BetterPMMP-PATCH] Re-localize the comments, or regenerate the whole layout when better-pmmp.config.enforce-format is on */
+				//Re-localize the comments, or regenerate the whole layout when better-pmmp.config.enforce-format is on
 				$normalizedYml = BetterPMMPConfigFormat::apply($existingYml, $pocketmineYmlTemplate, $commentLang);
 				if($normalizedYml !== $existingYml){
 					@file_put_contents($pocketmineYmlPath, $normalizedYml);
@@ -895,8 +894,6 @@ class Server{
 					return;
 				}
 			}
-
-			/** [BetterPMMP-PATCH] language.selected startup log removed */
 
 			if(VersionInfo::IS_DEVELOPMENT_BUILD){
 				if(!$this->configGroup->getPropertyBool(Yml::SETTINGS_ENABLE_DEV_BUILDS, false)){
@@ -972,20 +969,16 @@ class Server{
 				$netCompressionThreshold = null;
 			}
 
-			/** [BetterPMMP-PATCH] PvP optimization: default zlib level 6 -> 1. With async-compression off
-			 * (or batches under the async threshold) every session's per-tick batch is compressed inline on
-			 * the main thread, so the level is paid straight out of MSPT. Level 1 is several times faster
-			 * for roughly 10-15% larger payloads - a trade that favours tick time on a PvP server. */
+			//Small batches are compressed inline on the main thread, so the zlib level is paid straight out of MSPT.
+			//Level 1 is several times faster than the upstream 6 for roughly 10-15% larger payloads.
 			$netCompressionLevel = $this->configGroup->getPropertyInt(Yml::NETWORK_COMPRESSION_LEVEL, 1);
 			if($netCompressionLevel < 1 || $netCompressionLevel > 9){
 				$this->logger->warning("Invalid network compression level $netCompressionLevel set, setting to default 1");
 				$netCompressionLevel = 1;
 			}
 			ZlibCompressor::setInstance(new ZlibCompressor($netCompressionLevel, $netCompressionThreshold, ZlibCompressor::DEFAULT_MAX_DECOMPRESSION_SIZE));
-			/** [BetterPMMP-PATCH] Honour network.batch-threshold for Snappy too - without this the Snappy
-			 * singleton keeps its hardcoded default and the configured threshold is silently ignored
-			 * whenever better-pmmp.network.snappy-compression selects it. Snappy has no level parameter,
-			 * so network.compression-level remains zlib-only. */
+			//Snappy honours network.batch-threshold too, otherwise its singleton keeps a hardcoded default and the
+			//configured threshold is silently ignored. It has no level parameter, so compression-level stays zlib-only.
 			SnappyCompressor::setInstance(new SnappyCompressor($netCompressionThreshold, SnappyCompressor::DEFAULT_MAX_DECOMPRESSION_SIZE));
 
 			BetterPMMPConfig::init($this->configGroup, $this->logger);
@@ -1033,7 +1026,6 @@ class Server{
 				$this->configGroup->setConfigInt(ServerProperties::DIFFICULTY, World::DIFFICULTY_HARD);
 			}
 
-			/** [BetterPMMP-PATCH] Console title brand */
 			@cli_set_process_title(VersionInfo::DISTRO_NAME . " " . $this->getPocketMineVersion());
 
 			$this->serverID = Utils::getMachineUniqueId($this->getIp() . $this->getPort());
@@ -1044,18 +1036,14 @@ class Server{
 			$this->network = new Network($this->logger);
 			$this->network->setName($this->getMotd());
 
-			/** [BetterPMMP-PATCH] pocketmine.server.info startup log removed */
 			$this->logger->info($this->language->translate(KnownTranslationFactory::pocketmine_server_license($this->getName())));
 
 			DefaultPermissions::registerCorePermissions();
 
 			$this->commandMap = new SimpleCommandMap($this);
 
-			/** [BetterPMMP-PATCH] vanilla-recipe-skip: gate the one-time recipe JSON deserialization behind a
-			 * config toggle. Default true reproduces vanilla byte-for-byte (a missing key returns true). When
-			 * false, skip the JsonMapper pass plus per-recipe base64+NBT decode and construct an empty
-			 * CraftingManager - it still seeds empty per-type furnace managers, so getCraftingManager() and
-			 * CraftingDataCache stay valid and every recipe lookup simply matches nothing. */
+			//An empty CraftingManager still seeds empty per-type furnace managers, so getCraftingManager() and
+			//CraftingDataCache stay valid and every recipe lookup simply matches nothing.
 			if(BetterPMMPConfig::$loadVanillaRecipes){
 				$this->craftingManager = CraftingManagerFromDataHelper::make(BedrockDataFiles::RECIPES);
 			}else{
@@ -1135,16 +1123,14 @@ class Server{
 				return;
 			}
 
-			/** [BetterPMMP-PATCH] The shipped pocketmine.yml has this off, but the code default said on, so
-			 * deleting the key turned usage reporting back on behind the operator's back. Both say off now. */
+			//The shipped pocketmine.yml has this off, but the code default said on, so deleting the key turned usage
+			//reporting back on behind the operator's back. Both say off now.
 			if($this->configGroup->getPropertyBool(Yml::ANONYMOUS_STATISTICS_ENABLED, false)){
 				$this->sendUsageTicker = self::TICKS_PER_STATS_REPORT;
 				$this->sendUsage(SendUsageTask::TYPE_OPEN);
 			}
 
 			$this->configGroup->save();
-			/** [BetterPMMP-PATCH] Default game mode log removed */
-			/** [BetterPMMP-PATCH] Start link logs removed */
 			$this->logger->info($this->language->translate(KnownTranslationFactory::pocketmine_server_startFinished(strval(round(microtime(true) - $this->startTime, 3)))));
 
 			$forwarder = new BroadcastLoggerForwarder($this, $this->logger, $this->language);
@@ -1295,14 +1281,12 @@ class Server{
 			)));
 			return false;
 		}
-		/** [BetterPMMP-PATCH] pocketmine.server.networkStart log removed */
 		if($useQuery){
 			if(!$rakLibRegistered){
 				//RakLib would normally handle the transport for Query packets
 				//if it's not registered we need to make sure Query still works
 				$this->network->registerInterface(new DedicatedQueryNetworkInterface($ip, $port, $ipV6, new \PrefixedLogger($this->logger, "Dedicated Query Interface")));
 			}
-			/** [BetterPMMP-PATCH] pocketmine.server.query.running log removed */
 		}
 		return true;
 	}
@@ -1714,15 +1698,13 @@ class Server{
 
 			$this->logger->emergency($this->language->translate(KnownTranslationFactory::pocketmine_crash_submit($crashDumpPath)));
 
-			/** [BetterPMMP-PATCH] Off by default. The stock host is the archived upstream project's crash
-			 * archive, and a clean checkout has an undirty git hash, so the "locally modified" guard above
-			 * does not fire - BetterPMMP dumps were being filed against PocketMine-MP under its name. */
+			//Off by default: a clean checkout has an undirty git hash, so the "locally modified" guard above does not fire
+			//and BetterPMMP dumps were filed against the archived upstream project under its name.
 			if($this->configGroup->getPropertyBool(Yml::AUTO_REPORT_ENABLED, false)){
 				$report = true;
 
-				/** [BetterPMMP-PATCH] Keep the rate-limit stamp beside the dumps in system/crashdumps. The
-				 * dumps moved there but this path did not, so the directory never existed, touch()/filemtime()
-				 * always failed and the 2-minute auto-report interval was permanently disabled. */
+				//The stamp lives beside the dumps. It used to point at a directory that never existed, so touch()/filemtime()
+				//always failed and the auto-report interval was permanently disabled.
 				$stamp = Path::join($this->dataPath, "system", "crashdumps", ".last_crash");
 				$crashInterval = 120; //2 minutes
 				if(($lastReportTime = @filemtime($stamp)) !== false && $lastReportTime + $crashInterval >= time()){
@@ -1893,7 +1875,6 @@ class Server{
 		$connecting = $this->network->getConnectionCount() - $online;
 		$bandwidthStats = $this->network->getBandwidthTracker();
 
-		/** [BetterPMMP-PATCH] Console title brand */
 		echo "\x1b]0;" . VersionInfo::DISTRO_NAME . " " .
 			$this->getPocketMineVersion() .
 			" | Online $online/" . $this->maxPlayers .
