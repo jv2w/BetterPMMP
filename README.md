@@ -65,7 +65,7 @@ Two settings outside that section are also changed from upstream: `network.compr
 | `combat.critical-hit-min-fall-distance` | `0.0` | Minimum fall distance for a crit. |
 | `combat.explosion-block-destruction` | `true` | Explosions break blocks. Disabling also stops TNT chaining. |
 | `combat.instant-hit-feedback` | `true` | Send hit feedback immediately instead of at end of tick. |
-| `network.snappy-compression` | `false` | Snappy instead of zlib (needs `ext-snappy`). |
+| `network.snappy-compression` | `false` | Snappy instead of zlib, included in the bundled PHP. |
 | `network.movement-broadcast-period` | `1` | Send movement packets every N ticks. |
 | `network.rotation-broadcast-period` | `1` | Send view rotation every N ticks while the player stands still. |
 | `network.skip-movement-send-event` | `false` | Skip `DataPacketSendEvent` for movement/motion packets. |

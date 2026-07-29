@@ -58,7 +58,7 @@
       "phpunit/phpunit": "^10.5.24"
    },
    "suggest": {
-      "ext-snappy": "Required by better-pmmp.network.snappy-compression; without it the server logs a warning and falls back to zlib"
+      "ext-snappy": "Used by better-pmmp.network.snappy-compression. The bundled PHP binary already has it; on a custom PHP build without it the server logs a warning and falls back to zlib"
    },
    "replace": {
       "symfony/polyfill-ctype": "*",

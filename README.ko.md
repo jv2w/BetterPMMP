@@ -66,7 +66,7 @@ BetterPMMP는 마인크래프트 제작사 Mojang 및 원 PocketMine 팀과 무�
 | `combat.critical-hit-min-fall-distance` | `0.0` | 치명타에 필요한 최소 낙하 거리. |
 | `combat.explosion-block-destruction` | `true` | 폭발이 블록을 파괴합니다. 끄면 TNT 연쇄 폭발도 멈춥니다. |
 | `combat.instant-hit-feedback` | `true` | 타격 반응을 틱 종료 대신 즉시 전송합니다. |
-| `network.snappy-compression` | `false` | zlib 대신 Snappy를 사용합니다(`ext-snappy` 필요). |
+| `network.snappy-compression` | `false` | zlib 대신 Snappy를 사용합니다. 동봉된 PHP에 포함되어 있습니다. |
 | `network.movement-broadcast-period` | `1` | N틱마다 이동 패킷을 전송합니다. |
 | `network.rotation-broadcast-period` | `1` | 제자리에서 시선만 돌릴 때 N틱마다 회전을 전송합니다. |
 | `network.skip-movement-send-event` | `false` | 이동·모션 패킷의 `DataPacketSendEvent`를 생략합니다. |
