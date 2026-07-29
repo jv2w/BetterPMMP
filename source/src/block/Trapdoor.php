@@ -23,7 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\block;
 
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\block\utils\HorizontalFacing;
 use pocketmine\block\utils\HorizontalFacingTrait;
 use pocketmine\block\utils\SupportType;
@@ -33,7 +33,6 @@ use pocketmine\math\AxisAlignedBB;
 use pocketmine\math\Facing;
 use pocketmine\math\Vector3;
 use pocketmine\player\Player;
-use pocketmine\Server;
 use pocketmine\world\BlockTransaction;
 use pocketmine\world\sound\DoorSound;
 
@@ -88,14 +87,8 @@ class Trapdoor extends Transparent implements HorizontalFacing{
 	/** [BetterPMMP-PATCH] Iron trapdoors do not open by hand in vanilla; PocketMine toggles them like any
 	 * other trapdoor. Shares better-pmmp.gameplay.iron-door-hand-interaction with Door, and returns false so
 	 * a block held in hand is still placed against it exactly as vanilla does. */
-	private static ?bool $handInteractionCache = null;
-
-	private static function isHandInteractionEnabled() : bool{
-		return self::$handInteractionCache ??= Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::GAMEPLAY_IRON_DOOR_HAND_INTERACTION, false);
-	}
-
 	public function onInteract(Item $item, int $face, Vector3 $clickVector, ?Player $player = null, array &$returnedItems = []) : bool{
-		if($this->getTypeId() === BlockTypeIds::IRON_TRAPDOOR && !self::isHandInteractionEnabled()){
+		if($this->getTypeId() === BlockTypeIds::IRON_TRAPDOOR && !BetterPMMPConfig::$ironDoorHandInteraction){
 			return false;
 		}
 		$this->open = !$this->open;
