@@ -44,7 +44,6 @@ use function str_starts_with;
 use function yaml_parse;
 
 /**
- * [BetterPMMP-PATCH]
  * Covers the config format engine, which rewrites the operator's live pocketmine.yml on every startup. Each
  * case here is a defect that shipped at some point: a value or a comment silently disappearing, a file that
  * never converged, or a setting that never reached an existing config.
