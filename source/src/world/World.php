@@ -26,7 +26,7 @@ declare(strict_types=1);
  */
 namespace pocketmine\world;
 
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\block\Air;
 use pocketmine\block\Block;
 use pocketmine\block\BlockTypeIds;
@@ -209,20 +209,6 @@ class World implements ChunkManager{
 	 */
 	private array $blockCache = [];
 	private int $blockCacheSize = 0;
-	/** [BetterPMMP-PATCH] Configurable block cache cap */
-	private int $blockCacheSizeCap = 2048;
-
-	/** [BetterPMMP-PATCH] PvP optimization: cached skip-light-updates flag */
-	private ?bool $skipLightUpdates = null;
-	/** [BetterPMMP-PATCH] PvP optimization: cached empty-world freeze toggle */
-	private ?bool $freezeEmptyWorlds = null;
-	/** [BetterPMMP-PATCH] PvP optimization: cached neighbour-update throttle */
-	private ?int $neighbourUpdateLimit = null;
-	/** [BetterPMMP-PATCH] PvP optimization: cached chunk-tick batch recheck limit */
-	private ?int $chunkTickBatchLimit = null;
-	/** [BetterPMMP-PATCH] Fixed light values bypass: cached toggle and level */
-	private ?bool $fixedLightEnabled = null;
-	private ?int $fixedLightLevel = null;
 
 	/**
 	 * @var AxisAlignedBB[][][] chunkHash => [relativeBlockHash => AxisAlignedBB[]]
@@ -564,29 +550,16 @@ class World implements ChunkManager{
 		/** [BetterPMMP-PATCH] Per-world chunk ticking override.
 		 * tick-radius is clamped to this world's effective view-distance (per-world override if set, else server.properties),
 		 * NOT to the global server view-distance, so a world configured with a larger view-distance can also tick farther. */
-		$perWorldChunkTicking = $cfg->getProperty(BetterPMMPProperties::WORLD_CHUNK_TICKING_PER_WORLD, []);
-		if(is_array($perWorldChunkTicking) && isset($perWorldChunkTicking[$this->folderName])){
-			$worldTickCfg = $perWorldChunkTicking[$this->folderName];
-			if(is_array($worldTickCfg)){
-				if(isset($worldTickCfg['tick-radius'])){
-					$perWorldViewDistanceMap = $cfg->getProperty(BetterPMMPProperties::WORLD_VIEW_DISTANCE_PER_WORLD, []);
-					$worldViewDistance = $this->server->getViewDistance();
-					if(is_array($perWorldViewDistanceMap) && isset($perWorldViewDistanceMap[$this->folderName])){
-						$worldViewDistance = max(2, (int) $perWorldViewDistanceMap[$this->folderName]);
-					}
-					$this->chunkTickRadius = min($worldViewDistance, max(0, (int) $worldTickCfg['tick-radius']));
-				}
-				if(isset($worldTickCfg['blocks-per-subchunk-per-tick'])){
-					$this->tickedBlocksPerSubchunkPerTick = max(0, (int) $worldTickCfg['blocks-per-subchunk-per-tick']);
-				}
-			}
+		$tickRadius = BetterPMMPConfig::chunkTickRadius($this->folderName);
+		if($tickRadius !== null){
+			$this->chunkTickRadius = min(BetterPMMPConfig::viewDistance($this->folderName, $this->server->getViewDistance()), $tickRadius);
+		}
+		$tickedBlocks = BetterPMMPConfig::chunkTickBlocksPerSubchunk($this->folderName);
+		if($tickedBlocks !== null){
+			$this->tickedBlocksPerSubchunkPerTick = $tickedBlocks;
 		}
 		$this->maxConcurrentChunkPopulationTasks = $cfg->getPropertyInt(YmlServerProperties::CHUNK_GENERATION_POPULATION_QUEUE_SIZE, 2);
 
-		/** [BetterPMMP-PATCH] Block cache size from config */
-		/** [BetterPMMP-PATCH] Configurable block cache cap. Defaults to the upstream 2048 so memory use out
-		 * of the box matches vanilla; raising it trades RAM for a higher getBlockAt() hit rate. */
-		$this->blockCacheSizeCap = max(512, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_BLOCK_CACHE_SIZE, 2048));
 		$this->initRandomTickBlocksFromConfig($cfg);
 
 		$this->timings = new WorldTimings($this);
@@ -959,7 +932,7 @@ class World implements ChunkManager{
 		 * only 1 tick in 100 so chunk unloading and provider GC still happen eventually */
 		if(count($this->players) === 0
 			&& ($currentTick % 100) !== 0
-			&& ($this->freezeEmptyWorlds ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::WORLD_FREEZE_EMPTY_WORLDS, false))){
+			&& BetterPMMPConfig::$freezeEmptyWorlds){
 			return;
 		}
 
@@ -1015,7 +988,7 @@ class World implements ChunkManager{
 		/** [BetterPMMP-PATCH] Neighbour block update throttle. Defaults to 0 (unlimited) because vanilla
 		 * drains this queue unconditionally - any positive limit defers overflow to the next tick and
 		 * visibly slows water/lava spread and sand/gravel collapses, so it must be opt-in. */
-		$neighbourUpdateLimit = $this->neighbourUpdateLimit ??= max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_NEIGHBOUR_UPDATE_LIMIT, 0));
+		$neighbourUpdateLimit = BetterPMMPConfig::$neighbourUpdateLimit;
 		$neighbourUpdateCount = 0;
 		while($this->neighbourBlockUpdateQueue->count() > 0){
 			if($neighbourUpdateLimit > 0 && $neighbourUpdateCount >= $neighbourUpdateLimit){
@@ -1201,7 +1174,7 @@ class World implements ChunkManager{
 			$this->blockCacheSize = 0;
 			foreach($this->blockCache as $list){
 				$this->blockCacheSize += count($list);
-				if($this->blockCacheSize > $this->blockCacheSizeCap){
+				if($this->blockCacheSize > BetterPMMPConfig::$blockCacheSize){
 					$this->blockCache = [];
 					$this->blockCacheSize = 0;
 					break;
@@ -1211,7 +1184,7 @@ class World implements ChunkManager{
 			$count = 0;
 			foreach($this->blockCollisionBoxCache as $list){
 				$count += count($list);
-				if($count > $this->blockCacheSizeCap){
+				if($count > BetterPMMPConfig::$blockCacheSize){
 					//TODO: Is this really the best logic?
 					$this->blockCollisionBoxCache = [];
 					break;
@@ -1226,7 +1199,7 @@ class World implements ChunkManager{
 		foreach($this->blockCache as $chunkHash => $blocks){
 			unset($this->blockCache[$chunkHash]);
 			$this->blockCacheSize -= count($blocks);
-			if($this->blockCacheSize < $this->blockCacheSizeCap){
+			if($this->blockCacheSize < BetterPMMPConfig::$blockCacheSize){
 				break;
 			}
 		}
@@ -1318,7 +1291,7 @@ class World implements ChunkManager{
 			$this->timings->randomChunkUpdatesChunkSelection->startTiming();
 
 			$chunkTickableCache = [];
-			$batchLimit = $this->chunkTickBatchLimit ??= max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::WORLD_CHUNK_TICKING_BATCH_RECHECK_LIMIT, 64));
+			$batchLimit = BetterPMMPConfig::$chunkTickBatchRecheckLimit;
 			$processed = 0;
 
 			foreach($this->recheckTickingChunks as $hash => $_){
@@ -1425,10 +1398,10 @@ class World implements ChunkManager{
 	 * getBlockLightAt() outside it still read 0.
 	 */
 	private function applyFixedLight(Chunk $chunk) : bool{
-		if(!($this->fixedLightEnabled ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false))){
+		if(!BetterPMMPConfig::$fixedLight){
 			return false;
 		}
-		$fixedLevel = $this->fixedLightLevel ??= min(15, max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::LIGHTING_FIXED_LIGHT_LEVEL, 15)));
+		$fixedLevel = BetterPMMPConfig::$fixedLightLevel;
 		for($y = Chunk::MIN_SUBCHUNK_INDEX; $y <= Chunk::MAX_SUBCHUNK_INDEX; $y++){
 			$subChunk = $chunk->getSubChunk($y);
 			$subChunk->setBlockSkyLightArray(LightArray::fill($fixedLevel));
@@ -1964,10 +1937,7 @@ class World implements ChunkManager{
 		 * letting SkyLightUpdate/BlockLightUpdate run against it would progressively overwrite it with
 		 * real values and defeat the whole option. Requiring the operator to remember to set both was a
 		 * silent footgun. */
-		if($this->skipLightUpdates ??= (
-			$this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_SKIP_RUNTIME_UPDATES, false)
-			|| $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::LIGHTING_FIXED_LIGHT, false)
-		)){
+		if(BetterPMMPConfig::$skipRuntimeLightUpdates){
 			return;
 		}
 		if(($chunk = $this->getChunk($x >> Chunk::COORD_BIT_SIZE, $z >> Chunk::COORD_BIT_SIZE)) === null || $chunk->isLightPopulated() !== true){
@@ -2122,7 +2092,7 @@ class World implements ChunkManager{
 		if($addToCache && $relativeBlockHash !== null){
 			$this->blockCache[$chunkHash][$relativeBlockHash] = $block;
 
-			if(++$this->blockCacheSize >= $this->blockCacheSizeCap){
+			if(++$this->blockCacheSize >= BetterPMMPConfig::$blockCacheSize){
 				$this->trimBlockCache();
 			}
 		}
@@ -2221,7 +2191,7 @@ class World implements ChunkManager{
 		$itemEntity->setPickupDelay($delay);
 		/** [BetterPMMP-PATCH] PvP optimization: configurable item despawn time (-1 = never despawn). ItemEntity
 		 * resolves the setting so drops made here and items restored from chunk NBT follow the same rule. */
-		$configuredDespawn = ItemEntity::configuredDespawnDelay($this->server);
+		$configuredDespawn = BetterPMMPConfig::$itemDespawnDelay;
 		if($configuredDespawn !== null){
 			$itemEntity->setDespawnDelay($configuredDespawn);
 		}
@@ -2239,7 +2209,7 @@ class World implements ChunkManager{
 	 */
 	public function dropExperience(Vector3 $pos, int $amount) : array{
 		/** [BetterPMMP-PATCH] PvP optimization: XP orb spawn toggle */
-		if(!$this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::ENTITIES_XP_ORBS, true)){
+		if(!BetterPMMPConfig::$xpOrbs){
 			return [];
 		}
 		$orbs = [];
