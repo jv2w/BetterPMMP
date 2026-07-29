@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\plugin;
@@ -136,8 +138,8 @@ class PluginManager{
 
 	private function internalLoadPlugin(string $path, PluginLoader $loader, PluginDescription $description) : ?Plugin{
 		$language = $this->server->getLanguage();
-		/** [BetterPMMP-PATCH] Plugin lifecycle logs (load/enable/disable) gated behind a single
-		 * better-pmmp.plugins.lifecycle-log; default true reproduces vanilla. */
+		//Plugin lifecycle logs (load/enable/disable) gated behind a single better-pmmp.plugins.lifecycle-log; default
+		//true reproduces vanilla.
 		if(BetterPMMPConfig::$pluginLifecycleLog){
 			$this->server->getLogger()->info($language->translate(KnownTranslationFactory::pocketmine_plugin_load($description->getFullName())));
 		}
@@ -459,7 +461,6 @@ class PluginManager{
 
 	public function enablePlugin(Plugin $plugin) : bool{
 		if(!$plugin->isEnabled()){
-			/** [BetterPMMP-PATCH] see better-pmmp.plugins.lifecycle-log */
 			if(BetterPMMPConfig::$pluginLifecycleLog){
 				$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_enable($plugin->getDescription()->getFullName())));
 			}
@@ -520,7 +521,6 @@ class PluginManager{
 
 	public function disablePlugin(Plugin $plugin) : void{
 		if($plugin->isEnabled()){
-			/** [BetterPMMP-PATCH] see better-pmmp.plugins.lifecycle-log */
 			if(BetterPMMPConfig::$pluginLifecycleLog){
 				$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_disable($plugin->getDescription()->getFullName())));
 			}
