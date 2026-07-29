@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\handler;
@@ -139,7 +141,7 @@ class InGamePacketHandler extends PacketHandler{
 	//prevent rejected edits while still mitigating book-bomb attacks
 	private const PAGE_LENGTH_SOFT_LIMIT_CHARS = 512;
 
-	/** [BetterPMMP-PATCH] Beyond this, syncBlocksNearby() bails out, so capturing a snapshot for it is wasted work. */
+	/** Beyond this, syncBlocksNearby() bails out, so capturing a snapshot for it is wasted work. */
 	private const BLOCK_SYNC_MAX_DISTANCE_SQUARED = 10000;
 
 	protected float $lastRightClickTime = 0.0;
@@ -466,11 +468,8 @@ class InGamePacketHandler extends PacketHandler{
 		switch($data->getActionType()){
 			case UseItemTransactionData::ACTION_CLICK_BLOCK:
 				//TODO: start hack for client spam bug
-				/** [BetterPMMP-PATCH] Interaction delay fix - the client's duplicate UseItem packets arrive within the
-				 * same batch (sub-ms apart), so a 20ms window still swallows them, while the upstream 100ms window also
-				 * ate legitimate fast/held clicks and capped interaction at 10 CPS. Configurable via
-				 * better-pmmp.network.interaction-spam-window: raise it back towards 100 if a client build turns
-				 * out to send its duplicate in the following tick's batch rather than the same one. */
+				//The client's duplicate UseItem packets arrive in the same batch, so a short window still swallows them while
+				//the upstream 100ms one also ate legitimate fast clicks and capped interaction at 10 CPS.
 				$clickPos = $data->getClickPosition();
 								$spamBug = ($this->lastRightClickData !== null &&
 					microtime(true) - $this->lastRightClickTime < BetterPMMPConfig::$interactionSpamWindowSeconds &&
@@ -492,9 +491,8 @@ class InGamePacketHandler extends PacketHandler{
 				$blockPos = $data->getBlockPosition();
 				$vBlockPos = new Vector3($blockPos->getX(), $blockPos->getY(), $blockPos->getZ());
 
-				/** [BetterPMMP-PATCH] Block lag fix - capture snapshot before interaction. Gated behind
-				 * better-pmmp.network.block-sync-snapshot, and skipped when syncBlocksNearby() would bail on
-				 * the distance check anyway - capturing the block state for a click 100+ blocks away was pure waste. */
+				//Capture the block state before the interaction resolves it. Skipped when syncBlocksNearby() would bail on the
+				//distance check anyway.
 				$clickedStateBefore = BetterPMMPConfig::$blockSyncSnapshot && $vBlockPos->distanceSquared($this->player->getLocation()) < self::BLOCK_SYNC_MAX_DISTANCE_SQUARED
 					? $this->captureClickedBlockState($vBlockPos)
 					: null;
@@ -536,7 +534,7 @@ class InGamePacketHandler extends PacketHandler{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Block lag fix - re-send the clicked block only when the interaction actually changed
+	 * Block lag fix - re-send the clicked block only when the interaction actually changed
 	 * it, given its state from before as $clickedStateIdBefore (null to send it unconditionally, as vanilla
 	 * does). Suppression stops at the clicked block on purpose: vanilla sends the surrounding neighbours
 	 * precisely to overwrite the client's optimistic prediction, so dropping an unchanged neighbour left a
@@ -570,7 +568,7 @@ class InGamePacketHandler extends PacketHandler{
 		}
 	}
 
-	/** [BetterPMMP-PATCH] Block lag fix - the state of the clicked block from before the interaction resolves it. */
+	/** Block lag fix - the state of the clicked block from before the interaction resolves it. */
 	private function captureClickedBlockState(Vector3 $blockPos) : int{
 		return $this->player->getWorld()->getBlockAt((int) $blockPos->x, (int) $blockPos->y, (int) $blockPos->z)->getStateId();
 	}
@@ -592,7 +590,7 @@ class InGamePacketHandler extends PacketHandler{
 			case UseItemOnEntityTransactionData::ACTION_ATTACK:
 				$this->player->attackEntity($target);
 				/*
-				 * [BetterPMMP-PATCH] hit-latency: all melee feedback is buffered by the time attackEntity
+				 * hit-latency: all melee feedback is buffered by the time attackEntity
 				 * returns (event dispatch incl. plugin packets, arm swing, sounds, hurt animation, knockback
 				 * motion) - flush it now instead of waiting for the end-of-tick NetworkSession::tick() flush.
 				 */

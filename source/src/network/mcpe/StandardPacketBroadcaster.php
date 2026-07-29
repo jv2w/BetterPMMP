@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe;
@@ -45,8 +47,8 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 	public function broadcastPackets(array $recipients, array $packets) : void{
 		//TODO: this shouldn't really be called here, since the broadcaster might be replaced by an alternative
 		//implementation that doesn't fire events
-		/** [BetterPMMP-PATCH] event engine: optionally skip DataPacketSendEvent for movement broadcasts -
-		 * the largest outbound packet stream (moving entities x viewers x 20/s) */
+		//event engine: optionally skip DataPacketSendEvent for movement broadcasts - the largest outbound packet stream
+		//(moving entities x viewers x 20/s)
 		if(DataPacketSendEvent::hasHandlers()
 			&& !(count($packets) === 1
 				&& ($packets[0] instanceof MoveActorAbsolutePacket || $packets[0] instanceof SetActorMotionPacket)
@@ -63,10 +65,9 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 			return;
 		}
 
-		/** [BetterPMMP-PATCH] PvP optimization: one Compressor is resolved at startup and shared by every
-		 * session (see RakLibInterface), so probe for uniformity with a single identity compare per
-		 * recipient instead of building two spl_object_id-keyed grouping maps. Saves 2 id calls + 2 hash
-		 * writes per recipient per broadcast; the vanilla grouping below still runs when they differ. */
+		//One Compressor is resolved at startup and shared by every session (see RakLibInterface), so probe for
+		//uniformity with a single identity compare per recipient instead of building two spl_object_id-keyed grouping
+		//maps. The vanilla grouping below still runs when they differ.
 		//TODO: different compressors might be compatible, it might not be necessary to split them up by object
 		$firstCompressor = reset($recipients)->getCompressor();
 		$uniform = true;
@@ -84,10 +85,8 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 			$writer->clear(); //memory reuse let's gooooo
 			$buffer = NetworkSession::encodePacketTimed($writer, $packet);
 			//varint length prefix + packet buffer
-			/** [BetterPMMP-PATCH] inline varint length: replace libm log() with a branch-predicted bit-range
-			 * lookup. This is the exact byte count; vanilla's ((int) log($len, 128)) + 1 can be one short at
-			 * exact powers of 128 when log() returns just under the integer. Either way $totalLength only
-			 * feeds the >= threshold test below, so nothing on the wire depends on the difference. */
+			//Bit-range lookup instead of libm log(). This is the exact byte count; vanilla's ((int) log($len, 128)) + 1
+			//can be one short at exact powers of 128. $totalLength only feeds the threshold test below either way.
 			$len = strlen($buffer);
 			$totalLength += ($len <= 0x7F ? 1 : ($len <= 0x3FFF ? 2 : ($len <= 0x1FFFFF ? 3 : ($len <= 0xFFFFFFF ? 4 : 5)))) + $len;
 			$packetBuffers[] = $buffer;
@@ -113,7 +112,7 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Extracted from broadcastPackets() so the uniform-compressor fast path and the
+	 * Extracted from broadcastPackets() so the uniform-compressor fast path and the
 	 * vanilla per-compressor grouping share one implementation. Behaviour is byte-identical to vanilla.
 	 *
 	 * @param NetworkSession[] $compressorTargets

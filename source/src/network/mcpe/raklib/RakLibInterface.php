@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\raklib;
@@ -87,7 +89,7 @@ class RakLibInterface implements ServerEventListener, AdvancedNetworkInterface{
 	private PacketBroadcaster $packetBroadcaster;
 	private EntityEventBroadcaster $entityEventBroadcaster;
 	private TypeConverter $typeConverter;
-	/** [BetterPMMP-PATCH] Compressor shared by every session on this interface, resolved once at startup. */
+	/** Compressor shared by every session on this interface, resolved once at startup. */
 	private Compressor $compressor;
 
 	public function __construct(
@@ -103,8 +105,8 @@ class RakLibInterface implements ServerEventListener, AdvancedNetworkInterface{
 		$this->packetBroadcaster = $packetBroadcaster;
 		$this->entityEventBroadcaster = $entityEventBroadcaster;
 		$this->typeConverter = $typeConverter;
-		/** [BetterPMMP-PATCH] Prefer Snappy (cheaper CPU, lower MSPT on the sync compress path) when enabled and ext-snappy is present; otherwise zlib.
-		 * Warn on the fallback - silently running zlib while the config says Snappy makes the setting look broken. */
+		//Snappy costs less CPU than zlib on the sync compress path. Warn on the fallback: silently running zlib while
+		//the config asks for Snappy makes the setting look broken.
 		$snappyRequested = BetterPMMPConfig::$snappyCompression;
 		if($snappyRequested && !SnappyCompressor::isAvailable()){
 			$server->getLogger()->warning("better-pmmp.network.snappy-compression is enabled, but the 'snappy' PHP extension is not loaded. Falling back to zlib.");
@@ -205,7 +207,7 @@ class RakLibInterface implements ServerEventListener, AdvancedNetworkInterface{
 			new RakLibPacketSender($sessionId, $this),
 			$this->packetBroadcaster,
 			$this->entityEventBroadcaster,
-			$this->compressor, /** [BetterPMMP-PATCH] config-selected compressor (snappy/zlib) instead of hardcoded zlib */
+			$this->compressor,
 			$this->typeConverter,
 			$address,
 			$port

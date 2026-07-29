@@ -33,7 +33,6 @@ use function snappy_uncompress;
 use function strlen;
 
 /**
- * [BetterPMMP-PATCH]
  * Snappy packet compression. Trades a lower compression ratio (more bandwidth) for much cheaper CPU
  * compression than zlib, lowering the MSPT cost of the synchronous compression path.
  *
@@ -70,10 +69,9 @@ final class SnappyCompressor implements Compressor{
 	 * @throws DecompressionException
 	 */
 	public function decompress(string $payload) : string{
-		/** [BetterPMMP-PATCH] Cap the decompressed size like ZlibCompressor does. Inbound payloads are
-		 * attacker-controlled, and a Snappy stream declares its uncompressed length in a leading base-128
-		 * varint, so a few bytes can otherwise ask for an arbitrarily large allocation. Read that varint
-		 * and reject before expanding, then re-check the real result in case the header lied. */
+		//Cap the decompressed size like ZlibCompressor does. A Snappy stream declares its uncompressed length in a
+		//leading base-128 varint, so a few attacker-controlled bytes could otherwise ask for an arbitrarily large
+		//allocation. The real result is re-checked in case the header lied.
 		$declaredLength = 0;
 		$shift = 0;
 		$size = strlen($payload);

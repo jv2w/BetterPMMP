@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe;
@@ -224,24 +226,23 @@ class NetworkSession{
 	private int $noisyPacketsDropped = 0;
 
 	/**
-	 * [BetterPMMP-PATCH] Chunk positions sent since the last world switch. The client caches every received chunk by
+	 * Chunk positions sent since the last world switch. The client caches every received chunk by
 	 * coordinate for the whole session and keeps rendering it until overwritten, so these must be blanked on world change.
 	 * @var true[]
 	 * @phpstan-var array<int, true>
 	 */
 	private array $sentChunkHistory = [];
 	/**
-	 * [BetterPMMP-PATCH] Chunk positions pending an empty-chunk overwrite after a world switch.
+	 * Chunk positions pending an empty-chunk overwrite after a world switch.
 	 * @var true[]
 	 * @phpstan-var array<int, true>
 	 */
 	private array $chunkEraseQueue = [];
 	/**
-	 * [BetterPMMP-PATCH] Blank chunks sent per tick. One tick of sends is flushed as a single batch and the client
+	 * Blank chunks sent per tick. One tick of sends is flushed as a single batch and the client
 	 * hard-drops any batch above 300 packets, so this has to leave room for the tick's regular traffic.
 	 */
 	private const CHUNK_ERASE_PER_TICK = 128;
-	/** [BetterPMMP-PATCH] */
 	private static ?string $emptyChunkPayload = null;
 
 	public function __construct(
@@ -528,9 +529,8 @@ class NetworkSession{
 			throw new PacketHandlingException("Unexpected non-serverbound packet");
 		}
 
-		/** [BetterPMMP-PATCH] packet timings fast-path: skip the per-packet timings map lookups and
-		 * no-op start/stop calls while timings are disabled (the normal production state). With timings
-		 * enabled the vanilla timed path runs unchanged, so /timings reports stay complete. */
+		//Skip the per-packet timings map lookups and no-op start/stop calls while timings are disabled. The vanilla
+		//timed path runs unchanged when they are enabled, so /timings reports stay complete.
 		$timingsEnabled = TimingsHandler::isEnabled();
 		$timings = $timingsEnabled ? Timings::getReceiveDataPacketTimings($packet) : null;
 		$timings?->startTiming();
@@ -565,7 +565,6 @@ class NetworkSession{
 				return;
 			}
 
-			/** [BetterPMMP-PATCH] packet timings fast-path */
 			$decodeTimings = $timingsEnabled ? Timings::getDecodeDataPacketTimings($packet) : null;
 			$decodeTimings?->startTiming();
 			try{
@@ -583,8 +582,8 @@ class NetworkSession{
 				$decodeTimings?->stopTiming();
 			}
 
-			/** [BetterPMMP-PATCH] event engine: optionally skip DataPacketReceiveEvent for
-			 * PlayerAuthInputPacket - it arrives 20/s per player and dominates inbound event dispatches */
+			//event engine: optionally skip DataPacketReceiveEvent for PlayerAuthInputPacket - it arrives 20/s per player and
+			//dominates inbound event dispatches
 			if(DataPacketReceiveEvent::hasHandlers()
 				&& !($packet instanceof PlayerAuthInputPacket
 					&& BetterPMMPConfig::$skipAuthInputReceiveEvent)){
@@ -594,7 +593,6 @@ class NetworkSession{
 					return;
 				}
 			}
-			/** [BetterPMMP-PATCH] packet timings fast-path */
 			$handlerTimings = $timingsEnabled ? Timings::getHandleDataPacketTimings($packet) : null;
 			$handlerTimings?->startTiming();
 			try{
@@ -634,12 +632,11 @@ class NetworkSession{
 			throw new \InvalidArgumentException("Attempted to send " . get_class($packet) . " to " . $this->getDisplayName() . " too early");
 		}
 
-		/** [BetterPMMP-PATCH] packet timings fast-path (see handleDataPacket) */
 		$timings = TimingsHandler::isEnabled() ? Timings::getSendDataPacketTimings($packet) : null;
 		$timings?->startTiming();
 		try{
-			/** [BetterPMMP-PATCH] event engine: optionally skip DataPacketSendEvent for movement packets -
-			 * the largest outbound packet stream (moving entities x viewers x 20/s) */
+			//event engine: optionally skip DataPacketSendEvent for movement packets - the largest outbound packet stream
+			//(moving entities x viewers x 20/s)
 			if(DataPacketSendEvent::hasHandlers()
 				&& !(($packet instanceof MoveActorAbsolutePacket || $packet instanceof SetActorMotionPacket)
 					&& BetterPMMPConfig::$skipMovementSendEvent)){
@@ -693,9 +690,8 @@ class NetworkSession{
 	 * @internal
 	 */
 	public static function encodePacketTimed(ByteBufferWriter $serializer, ClientboundPacket $packet) : string{
-		/** [BetterPMMP-PATCH] packet timings fast-path: hottest encode path (also used by
-		 * StandardPacketBroadcaster) - skip the map lookup, no-op timer calls and try/finally
-		 * while timings are disabled; the timed path below is verbatim vanilla when enabled */
+		//Hottest encode path, also used by StandardPacketBroadcaster: skip the map lookup, no-op timer calls and
+		//try/finally while timings are disabled. The timed path below is verbatim vanilla.
 		if(!TimingsHandler::isEnabled()){
 			$packet->encode($serializer);
 			return $serializer->getData();
@@ -748,7 +744,7 @@ class NetworkSession{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] hit-latency: eager flush of buffered hit feedback (hurt animation, knockback
+	 * hit-latency: eager flush of buffered hit feedback (hurt animation, knockback
 	 * motion, sounds, plugin packets) instead of waiting for the end-of-tick NetworkSession::tick() flush.
 	 * $syncOwnAttributes replicates the tick() dirty-attribute sync so the victim's client-side red flash
 	 * (driven by the HEALTH attribute decrease) ships in the same batch as the rest of the feedback.
@@ -768,22 +764,18 @@ class NetworkSession{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] hit-latency: flushes buffered hit feedback for the victim (with its own attribute
+	 * hit-latency: flushes buffered hit feedback for the victim (with its own attribute
 	 * sync so its red flash lands now) and the attacker, deduped so a session that is both flushes at most
 	 * once.
 	 */
 	public static function flushHitFeedbackAll(Entity $victim, ?Player $attacker) : void{
-		/** [BetterPMMP-PATCH] Gated behind better-pmmp.combat.instant-hit-feedback - this changes packet
-		 * scheduling for every hit on the server, so it needs to be switchable like every other
-		 * behaviour-affecting option. Cached statically: this runs on every melee and projectile hit, and
-		 * the config is immutable for the process lifetime. */
+		//Gated because this changes packet scheduling for every hit on the server, like every other
+		//behaviour-affecting option.
 		if(!BetterPMMPConfig::$instantHitFeedback){
 			return;
 		}
-		/** [BetterPMMP-PATCH] Only the victim and the attacker are flushed early. The viewer fan-out that
-		 * used to be here forced an extra batch (and an extra compression pass) per viewer per hit, which
-		 * in a crowded fight multiplied outbound batches for feedback - hurt animation and sound - that is
-		 * imperceptibly different one tick later. */
+		//Only the victim and the attacker are flushed early. Fanning out to viewers forced an extra batch and
+		//compression pass per viewer per hit, for feedback that is imperceptibly different one tick later.
 		$flushed = [];
 		if($victim instanceof Player){
 			$session = $victim->getNetworkSession();
@@ -1375,11 +1367,9 @@ class NetworkSession{
 		$world->timings->syncChunkSend->startTiming();
 		try{
 			$this->queueCompressed($chunkPacket);
-			/** [BetterPMMP-PATCH] Record the position for erasure on a later world switch; fresh data supersedes any pending erase.
-			 * Bounded: this used to grow without limit for the whole session, so a player roaming a single
-			 * world accumulated tens of thousands of entries. Oldest-first eviction is correct here - the
-			 * client also drops its own oldest cached chunks, and a stale entry only costs one empty-chunk
-			 * packet on the next world switch. */
+			//Record the position for erasure on a later world switch; fresh data supersedes any pending erase. Bounded
+			//because this used to grow for the whole session. Oldest-first eviction is safe: the client drops its own
+			//oldest cached chunks, and a stale entry only costs one empty-chunk packet on the next switch.
 			$hash = World::chunkHash($chunkX, $chunkZ);
 			unset($this->sentChunkHistory[$hash]);
 			$this->sentChunkHistory[$hash] = true;
@@ -1436,7 +1426,7 @@ class NetworkSession{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Overwrites chunk positions the client still caches from a previously visited world with empty
+	 * Overwrites chunk positions the client still caches from a previously visited world with empty
 	 * chunks. The client renders a cached chunk until its coordinate is overwritten and does not drop it when the
 	 * publisher radius shrinks, so a world with a shorter view distance than the previous one leaves a permanent ring
 	 * of foreign terrain just outside the render radius unless every stale coordinate is blanked.
@@ -1488,7 +1478,8 @@ class NetworkSession{
 			$this->syncWorldSpawnPoint($world->getSpawnLocation());
 			//TODO: weather needs to be synced here (when implemented)
 			if(count($this->sentChunkHistory) > 0){
-				/** [BetterPMMP-PATCH] The client keeps rendering chunks cached from previously visited worlds at matching coordinates until overwritten; queue every previously sent position for blanking. */
+				//The client keeps rendering chunks cached from previously visited worlds at matching coordinates until
+				//overwritten; queue every previously sent position for blanking.
 				$this->chunkEraseQueue += $this->sentChunkHistory;
 				$this->sentChunkHistory = [];
 			}
@@ -1583,7 +1574,7 @@ class NetworkSession{
 			$player = $this->player;
 			$player->doChunkRequests();
 			if(count($this->chunkEraseQueue) > 0){
-				/** [BetterPMMP-PATCH] Drained after doChunkRequests() so the new world's chunk order is already built and can be tested exactly. */
+				//Drained after doChunkRequests() so the new world's chunk order is already built and can be tested exactly.
 				$this->flushChunkEraseQueue($player);
 			}
 

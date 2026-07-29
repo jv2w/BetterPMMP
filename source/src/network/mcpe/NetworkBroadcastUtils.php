@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe;
@@ -58,11 +60,9 @@ final class NetworkBroadcastUtils{
 				return false;
 			}
 
-			/** [BetterPMMP-PATCH] PvP optimization: a single PacketBroadcaster is shared server-wide in
-			 * practice, so probe for uniformity with one identity compare per session and skip building the
-			 * two spl_object_id-keyed grouping maps entirely. Saves 2 spl_object_id calls + 2 hash writes
-			 * per (moving entity x viewer) pair per tick; the vanilla grouping below still runs whenever
-			 * the broadcasters genuinely differ, so behaviour is unchanged either way. */
+			//One PacketBroadcaster is shared server-wide in practice, so probe for uniformity with a single identity
+			//compare per session instead of building two spl_object_id-keyed grouping maps. The vanilla grouping below
+			//still runs whenever they genuinely differ.
 			$firstBroadcaster = reset($sessions)->getBroadcaster();
 			$uniform = true;
 			foreach($sessions as $session){
@@ -99,9 +99,8 @@ final class NetworkBroadcastUtils{
 	 * @phpstan-param \Closure(EntityEventBroadcaster, array<int, NetworkSession>) : void $callback
 	 */
 	public static function broadcastEntityEvent(array $recipients, \Closure $callback) : void{
-		/** [BetterPMMP-PATCH] PvP optimization: same uniform-broadcaster fast path as broadcastPackets().
-		 * One EntityEventBroadcaster is shared server-wide, so the grouping maps below are pure overhead
-		 * in the common case. */
+		//PvP optimization: same uniform-broadcaster fast path as broadcastPackets(). One EntityEventBroadcaster is shared
+		//server-wide, so the grouping maps below are pure overhead in the common case.
 		$sessions = [];
 		foreach($recipients as $recipient){
 			$session = $recipient->getNetworkSession();
