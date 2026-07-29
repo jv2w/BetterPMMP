@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\world;
@@ -99,8 +101,8 @@ class Explosion{
 			return false;
 		}
 
-		/** [BetterPMMP-PATCH] PvP optimization: explosion block destruction toggle - skips the
-		 * ray-tracing block destruction pass entirely; entity damage/knockback in explodeB() still applies */
+		//PvP optimization: explosion block destruction toggle - skips the ray-tracing block destruction pass entirely;
+		//entity damage/knockback in explodeB() still applies
 		if(!BetterPMMPConfig::$explosionBlockDestruction){
 			return true;
 		}

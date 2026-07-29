@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 /**
@@ -547,9 +549,8 @@ class World implements ChunkManager{
 			$this->chunkTickRadius = 0;
 		}
 		$this->tickedBlocksPerSubchunkPerTick = $cfg->getPropertyInt(YmlServerProperties::CHUNK_TICKING_BLOCKS_PER_SUBCHUNK_PER_TICK, self::DEFAULT_TICKED_BLOCKS_PER_SUBCHUNK_PER_TICK);
-		/** [BetterPMMP-PATCH] Per-world chunk ticking override.
-		 * tick-radius is clamped to this world's effective view-distance (per-world override if set, else server.properties),
-		 * NOT to the global server view-distance, so a world configured with a larger view-distance can also tick farther. */
+		//tick-radius is clamped to this world's effective view distance rather than the global one, so a world
+		//configured with a larger view distance can also tick farther.
 		$tickRadius = BetterPMMPConfig::chunkTickRadius($this->folderName);
 		if($tickRadius !== null){
 			$this->chunkTickRadius = min(BetterPMMPConfig::viewDistance($this->folderName, $this->server->getViewDistance()), $tickRadius);
@@ -928,8 +929,8 @@ class World implements ChunkManager{
 			throw new \LogicException("Attempted to tick a world which has been closed");
 		}
 
-		/** [BetterPMMP-PATCH] PvP optimization: freeze empty worlds - with no players present, run
-		 * only 1 tick in 100 so chunk unloading and provider GC still happen eventually */
+		//PvP optimization: freeze empty worlds - with no players present, run only 1 tick in 100 so chunk unloading and
+		//provider GC still happen eventually
 		if(count($this->players) === 0
 			&& ($currentTick % 100) !== 0
 			&& BetterPMMPConfig::$freezeEmptyWorlds){
@@ -985,9 +986,8 @@ class World implements ChunkManager{
 		$this->timings->scheduledBlockUpdates->stopTiming();
 
 		$this->timings->neighbourBlockUpdates->startTiming();
-		/** [BetterPMMP-PATCH] Neighbour block update throttle. Defaults to 0 (unlimited) because vanilla
-		 * drains this queue unconditionally - any positive limit defers overflow to the next tick and
-		 * visibly slows water/lava spread and sand/gravel collapses, so it must be opt-in. */
+		//Defaults to unlimited because vanilla drains this queue unconditionally: any positive limit defers overflow
+		//to the next tick and visibly slows water/lava spread and sand/gravel collapses.
 		$neighbourUpdateLimit = BetterPMMPConfig::$neighbourUpdateLimit;
 		$neighbourUpdateCount = 0;
 		while($this->neighbourBlockUpdateQueue->count() > 0){
@@ -1000,8 +1000,8 @@ class World implements ChunkManager{
 			if(!$this->isChunkLoaded($x >> Chunk::COORD_BIT_SIZE, $z >> Chunk::COORD_BIT_SIZE)){
 				continue;
 			}
-			/** [BetterPMMP-PATCH] Count after the unloaded-chunk skip - entries in unloaded chunks do no
-			 * work, so charging them against the budget shrinks it for no reason. */
+			//Count after the unloaded-chunk skip - entries in unloaded chunks do no work, so charging them against the budget
+			//shrinks it for no reason.
 			$neighbourUpdateCount++;
 
 			$block = $this->getBlockAt($x, $y, $z);
@@ -1286,7 +1286,6 @@ class World implements ChunkManager{
 			return;
 		}
 
-		/** [BetterPMMP-PATCH] Batch recheck limit for chunk tick optimization */
 		if(count($this->recheckTickingChunks) > 0){
 			$this->timings->randomChunkUpdatesChunkSelection->startTiming();
 
@@ -1305,10 +1304,8 @@ class World implements ChunkManager{
 				unset($this->recheckTickingChunks[$hash]);
 				$processed++;
 			}
-			/** [BetterPMMP-PATCH] No blanket clear here. Each processed hash is unset above, so the only
-			 * entries a clear could still reach are the ones isChunkTickable() re-marked while the loop was
-			 * running - and dropping those left those chunks out of the ticking set until something unrelated
-			 * loaded or replaced a chunk near them. */
+			//No blanket clear: each processed hash is unset above, so a clear would only drop entries isChunkTickable()
+			//re-marked while the loop was running, leaving those chunks out of the ticking set.
 
 			$this->timings->randomChunkUpdatesChunkSelection->stopTiming();
 		}
@@ -1349,9 +1346,8 @@ class World implements ChunkManager{
 				if($lightPopulatedState !== true){
 					if($lightPopulatedState === false){
 						$this->orderLightPopulation($chunkX + $cx, $chunkZ + $cz);
-						/** [BetterPMMP-PATCH] Fixed light fills the arrays inline, so the chunk is already
-						 * populated by the time orderLightPopulation() returns. Re-read the state instead of
-						 * failing the whole 3x3 for an async result that is never coming. */
+						//Fixed light fills the arrays inline, so the chunk is already populated by the time orderLightPopulation()
+						//returns. Re-read the state instead of failing the whole 3x3 for an async result that is never coming.
 						$lightPopulatedState = $adjacentChunk->isLightPopulated();
 					}
 					if($lightPopulatedState !== true){
@@ -1391,7 +1387,7 @@ class World implements ChunkManager{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Fills a chunk's light with better-pmmp.lighting.fixed-light-level, and reports whether
+	 * Fills a chunk's light with better-pmmp.lighting.fixed-light-level, and reports whether
 	 * the setting is on at all. Called both from orderLightPopulation() and, for chunks the tick radius never
 	 * reaches, straight from the load path: orderLightPopulation() is only reachable through isChunkTickable(),
 	 * so "fill the world with a constant light level" used to stop at the edge of the ticking area and every
@@ -1407,16 +1403,14 @@ class World implements ChunkManager{
 			$subChunk->setBlockSkyLightArray(LightArray::fill($fixedLevel));
 			$subChunk->setBlockLightArray(LightArray::fill($fixedLevel));
 		}
-		/** [BetterPMMP-PATCH] The async path derives a heightmap inside LightPopulationTask; this path skips
-		 * that, so without filling it the chunk would keep whatever HeightArray it deserialized with. The
-		 * world floor - "no sky-light blockers" - is the only value consistent with a uniformly lit world,
-		 * and it is what any consumer of the heightmap has to see for the fixed light to make sense. */
+		//The async path derives a heightmap inside LightPopulationTask; this one skips it. The world floor, meaning no
+		//sky-light blockers, is the only value consistent with a uniformly lit world.
 		$chunk->setHeightMapArray(array_fill(0, 256, $this->minY));
 		$chunk->setLightPopulated(true);
 		return true;
 	}
 
-	/** [BetterPMMP-PATCH] Fixed light values bypass - skip LightPopulationTask when enabled */
+	/** Fixed light values bypass - skip LightPopulationTask when enabled */
 	private function orderLightPopulation(int $chunkX, int $chunkZ) : void{
 		$chunkHash = World::chunkHash($chunkX, $chunkZ);
 		$lightPopulatedState = $this->chunks[$chunkHash]->isLightPopulated();
@@ -1467,9 +1461,8 @@ class World implements ChunkManager{
 		}
 
 		$blockFactory = $this->blockStateRegistry;
-		/** [BetterPMMP-PATCH] random tick fast-path: iterate subchunks directly instead of
-		 * Chunk::getSubChunks(), which allocates a fresh re-keyed 24-element array for every
-		 * ticking chunk every tick. $Y is the same real subchunk Y coordinate as before. */
+		//Iterate subchunks directly instead of Chunk::getSubChunks(), which allocates a fresh re-keyed 24-element
+		//array for every ticking chunk every tick. $Y is the same real subchunk Y coordinate.
 		for($Y = Chunk::MIN_SUBCHUNK_INDEX; $Y <= Chunk::MAX_SUBCHUNK_INDEX; ++$Y){
 			$subChunk = $chunk->getSubChunk($Y);
 			if(!$subChunk->isEmptyFast()){
@@ -1932,11 +1925,8 @@ class World implements ChunkManager{
 		return 0; //TODO: this should probably throw instead (light not calculated yet)
 	}
 	public function updateAllLight(int $x, int $y, int $z) : void{
-		/** [BetterPMMP-PATCH] PvP optimization: skip runtime light recalculation entirely.
-		 * fixed-light implies this: the fabricated uniform light is not derived from the terrain, so
-		 * letting SkyLightUpdate/BlockLightUpdate run against it would progressively overwrite it with
-		 * real values and defeat the whole option. Requiring the operator to remember to set both was a
-		 * silent footgun. */
+		//fixed-light implies this: the fabricated uniform light is not derived from the terrain, so letting
+		//SkyLightUpdate/BlockLightUpdate run against it would progressively overwrite it and defeat the option.
 		if(BetterPMMPConfig::$skipRuntimeLightUpdates){
 			return;
 		}
@@ -2149,8 +2139,8 @@ class World implements ChunkManager{
 		$chunkHash = World::chunkHash($chunkX, $chunkZ);
 		$relativeBlockHash = World::chunkBlockHash($x, $y, $z);
 
-		/** [BetterPMMP-PATCH] only decrement the block cache counter when an entry actually existed,
-		 * otherwise it drifts below the real size and the block-cache-size cap is under-enforced */
+		//only decrement the block cache counter when an entry actually existed, otherwise it drifts below the real size
+		//and the block-cache-size cap is under-enforced
 		if(isset($this->blockCache[$chunkHash][$relativeBlockHash])){
 			unset($this->blockCache[$chunkHash][$relativeBlockHash]);
 			$this->blockCacheSize--;
@@ -2189,8 +2179,7 @@ class World implements ChunkManager{
 		$itemEntity = new ItemEntity(Location::fromObject($source, $this, Utils::getRandomFloat() * 360, 0), $item);
 
 		$itemEntity->setPickupDelay($delay);
-		/** [BetterPMMP-PATCH] PvP optimization: configurable item despawn time (-1 = never despawn). ItemEntity
-		 * resolves the setting so drops made here and items restored from chunk NBT follow the same rule. */
+		//null leaves the vanilla lifetime alone; ItemEntity applies the same setting to items restored from chunk NBT.
 		$configuredDespawn = BetterPMMPConfig::$itemDespawnDelay;
 		if($configuredDespawn !== null){
 			$itemEntity->setDespawnDelay($configuredDespawn);
@@ -2208,7 +2197,6 @@ class World implements ChunkManager{
 	 * @phpstan-return list<ExperienceOrb>
 	 */
 	public function dropExperience(Vector3 $pos, int $amount) : array{
-		/** [BetterPMMP-PATCH] PvP optimization: XP orb spawn toggle */
 		if(!BetterPMMPConfig::$xpOrbs){
 			return [];
 		}
@@ -2773,9 +2761,8 @@ class World implements ChunkManager{
 		$this->chunks[$chunkHash] = $chunk;
 		unset($this->knownUngeneratedChunks[$chunkHash]);
 
-		/** [BetterPMMP-PATCH] Newly generated and replaced chunks arrive here rather than through loadChunk(),
-		 * so they need the fixed light fill too - otherwise it would only ever reach chunks read back from
-		 * disk. */
+		//Newly generated and replaced chunks arrive here rather than through loadChunk(), so they need the fixed light
+		//fill too - otherwise it would only ever reach chunks read back from disk.
 		if($chunk->isLightPopulated() === false){
 			$this->applyFixedLight($chunk);
 		}
@@ -3084,8 +3071,8 @@ class World implements ChunkManager{
 
 		$this->initChunk($x, $z, $chunkData, $chunk);
 
-		/** [BetterPMMP-PATCH] Light every chunk as it loads, not just the ones the tick radius happens to
-		 * reach, so getBlockLightAt() outside the ticking area returns the configured level too. */
+		//Light every chunk as it loads, not just the ones the tick radius happens to reach, so getBlockLightAt() outside
+		//the ticking area returns the configured level too.
 		if($chunk->isLightPopulated() === false){
 			$this->applyFixedLight($chunk);
 		}
