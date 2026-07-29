@@ -139,6 +139,9 @@ class InGamePacketHandler extends PacketHandler{
 	//prevent rejected edits while still mitigating book-bomb attacks
 	private const PAGE_LENGTH_SOFT_LIMIT_CHARS = 512;
 
+	/** [BetterPMMP-PATCH] Beyond this, syncBlocksNearby() bails out, so capturing a snapshot for it is wasted work. */
+	private const BLOCK_SYNC_MAX_DISTANCE_SQUARED = 10000;
+
 	protected float $lastRightClickTime = 0.0;
 	protected ?UseItemTransactionData $lastRightClickData = null;
 
@@ -492,7 +495,7 @@ class InGamePacketHandler extends PacketHandler{
 				/** [BetterPMMP-PATCH] Block lag fix - capture snapshot before interaction. Gated behind
 				 * better-pmmp.network.block-sync-snapshot, and skipped when syncBlocksNearby() would bail on
 				 * the distance check anyway - capturing the block state for a click 100+ blocks away was pure waste. */
-				$clickedStateBefore = BetterPMMPConfig::$blockSyncSnapshot && $vBlockPos->distanceSquared($this->player->getLocation()) < 10000
+				$clickedStateBefore = BetterPMMPConfig::$blockSyncSnapshot && $vBlockPos->distanceSquared($this->player->getLocation()) < self::BLOCK_SYNC_MAX_DISTANCE_SQUARED
 					? $this->captureClickedBlockState($vBlockPos)
 					: null;
 				$interactResult = $this->player->interactBlock($vBlockPos, $data->getFace(), $clickPos);
@@ -541,7 +544,7 @@ class InGamePacketHandler extends PacketHandler{
 	 * position the server authoritatively just resolved, so it is the only one that is safe to skip.
 	 */
 	private function syncBlocksNearby(Vector3 $blockPos, ?int $face, ?int $clickedStateIdBefore = null) : void{
-		if($blockPos->distanceSquared($this->player->getLocation()) >= 10000){
+		if($blockPos->distanceSquared($this->player->getLocation()) >= self::BLOCK_SYNC_MAX_DISTANCE_SQUARED){
 			return;
 		}
 		$blocks = $blockPos->sidesArray();
