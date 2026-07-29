@@ -41,7 +41,7 @@ The performance improvements are on from the start and leave gameplay untouched.
 
 ## Configuration
 
-Every option lives under the `better-pmmp:` section of `pocketmine.yml`, and each one carries a comment in your server language explaining what it does. Options added by a later version are written into your existing file on the next startup, comments and all. **All of them require a server restart** — values are read once at startup.
+Every option lives under the `better-pmmp:` section of `pocketmine.yml`, and each one carries a comment in your server language explaining what it does. Options added by a later version are written into your existing file on the next startup, comments and all. **All of them require a server restart** — values are read, validated and clamped once at startup.
 
 Two settings outside that section are also changed from upstream: `network.compression-level` ships at `1` instead of `6` (much cheaper to compress, 10–15 % larger payloads, a trade that favours tick time), and `auto-report`, `auto-updater` and `anonymous-statistics` all default to off.
 
