@@ -26,7 +26,7 @@ namespace pocketmine\network\mcpe;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\DataDecodeException;
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\entity\Entity;
 use pocketmine\entity\effect\EffectInstance;
 use pocketmine\event\player\PlayerDuplicateLoginEvent;
@@ -230,14 +230,6 @@ class NetworkSession{
 	 * @phpstan-var array<int, true>
 	 */
 	private array $sentChunkHistory = [];
-	/** [BetterPMMP-PATCH] Cached better-pmmp.network.chunk-history-limit */
-	private ?int $chunkHistoryLimit = null;
-	/** [BetterPMMP-PATCH] Cached better-pmmp.network.skip-auth-input-receive-event, tested on every inbound packet */
-	private ?bool $skipAuthInputReceiveEvent = null;
-	/** [BetterPMMP-PATCH] Cached better-pmmp.network.skip-movement-send-event, tested on every outbound packet */
-	private ?bool $skipMovementSendEvent = null;
-	/** [BetterPMMP-PATCH] Cached better-pmmp.combat.instant-hit-feedback, read on every hit */
-	private static ?bool $instantHitFeedback = null;
 	/**
 	 * [BetterPMMP-PATCH] Chunk positions pending an empty-chunk overwrite after a world switch.
 	 * @var true[]
@@ -595,7 +587,7 @@ class NetworkSession{
 			 * PlayerAuthInputPacket - it arrives 20/s per player and dominates inbound event dispatches */
 			if(DataPacketReceiveEvent::hasHandlers()
 				&& !($packet instanceof PlayerAuthInputPacket
-					&& ($this->skipAuthInputReceiveEvent ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_AUTH_INPUT_RECEIVE_EVENT, false)))){
+					&& BetterPMMPConfig::$skipAuthInputReceiveEvent)){
 				$ev = new DataPacketReceiveEvent($this, $packet);
 				$ev->call();
 				if($ev->isCancelled()){
@@ -650,7 +642,7 @@ class NetworkSession{
 			 * the largest outbound packet stream (moving entities x viewers x 20/s) */
 			if(DataPacketSendEvent::hasHandlers()
 				&& !(($packet instanceof MoveActorAbsolutePacket || $packet instanceof SetActorMotionPacket)
-					&& ($this->skipMovementSendEvent ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_MOVEMENT_SEND_EVENT, false)))){
+					&& BetterPMMPConfig::$skipMovementSendEvent)){
 				$ev = new DataPacketSendEvent([$this], [$packet]);
 				$ev->call();
 				if($ev->isCancelled()){
@@ -785,7 +777,7 @@ class NetworkSession{
 		 * scheduling for every hit on the server, so it needs to be switchable like every other
 		 * behaviour-affecting option. Cached statically: this runs on every melee and projectile hit, and
 		 * the config is immutable for the process lifetime. */
-		if(!(self::$instantHitFeedback ??= Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::COMBAT_INSTANT_HIT_FEEDBACK, true))){
+		if(!BetterPMMPConfig::$instantHitFeedback){
 			return;
 		}
 		/** [BetterPMMP-PATCH] Only the victim and the attacker are flushed early. The viewer fan-out that
@@ -1392,7 +1384,7 @@ class NetworkSession{
 			unset($this->sentChunkHistory[$hash]);
 			$this->sentChunkHistory[$hash] = true;
 			unset($this->chunkEraseQueue[$hash]);
-			$historyLimit = $this->chunkHistoryLimit ??= max(0, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_CHUNK_HISTORY_LIMIT, 8192));
+			$historyLimit = BetterPMMPConfig::$chunkHistoryLimit;
 			if($historyLimit > 0){
 				while(count($this->sentChunkHistory) > $historyLimit){
 					unset($this->sentChunkHistory[array_key_first($this->sentChunkHistory)]);

@@ -23,7 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\handler;
 
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\block\BaseSign;
 use pocketmine\block\Lectern;
 use pocketmine\block\tile\Sign;
@@ -96,7 +96,6 @@ use pocketmine\network\mcpe\protocol\types\PlayerBlockActionWithBlockInfo;
 use pocketmine\network\mcpe\protocol\UpdateBlockPacket;
 use pocketmine\network\PacketHandlingException;
 use pocketmine\player\Player;
-use pocketmine\Server;
 use pocketmine\utils\AssumptionFailedError;
 use pocketmine\utils\Limits;
 use pocketmine\utils\TextFormat;
@@ -142,10 +141,6 @@ class InGamePacketHandler extends PacketHandler{
 
 	protected float $lastRightClickTime = 0.0;
 	protected ?UseItemTransactionData $lastRightClickData = null;
-	/** [BetterPMMP-PATCH] Cached better-pmmp.network.interaction-spam-window, in seconds */
-	private ?float $spamWindowSeconds = null;
-	/** [BetterPMMP-PATCH] Cached better-pmmp.network.block-sync-snapshot */
-	private ?bool $blockSyncSnapshot = null;
 
 	protected ?Vector3 $lastPlayerAuthInputPosition = null;
 	protected ?float $lastPlayerAuthInputYaw = null;
@@ -474,10 +469,8 @@ class InGamePacketHandler extends PacketHandler{
 				 * better-pmmp.network.interaction-spam-window: raise it back towards 100 if a client build turns
 				 * out to send its duplicate in the following tick's batch rather than the same one. */
 				$clickPos = $data->getClickPosition();
-				$this->spamWindowSeconds ??= max(0, Server::getInstance()->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_INTERACTION_SPAM_WINDOW, 20)) / 1000.0;
-				$spamWindow = $this->spamWindowSeconds;
-				$spamBug = ($this->lastRightClickData !== null &&
-					microtime(true) - $this->lastRightClickTime < $spamWindow &&
+								$spamBug = ($this->lastRightClickData !== null &&
+					microtime(true) - $this->lastRightClickTime < BetterPMMPConfig::$interactionSpamWindowSeconds &&
 					$this->lastRightClickData->getFace() === $data->getFace() &&
 					$this->lastRightClickData->getPlayerPosition()->distanceSquared($data->getPlayerPosition()) < 0.00001 &&
 					$this->lastRightClickData->getBlockPosition()->equals($data->getBlockPosition()) &&
@@ -499,8 +492,7 @@ class InGamePacketHandler extends PacketHandler{
 				/** [BetterPMMP-PATCH] Block lag fix - capture snapshot before interaction. Gated behind
 				 * better-pmmp.network.block-sync-snapshot, and skipped when syncBlocksNearby() would bail on
 				 * the distance check anyway - capturing the block state for a click 100+ blocks away was pure waste. */
-				$this->blockSyncSnapshot ??= Server::getInstance()->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_BLOCK_SYNC_SNAPSHOT, true);
-				$clickedStateBefore = $this->blockSyncSnapshot && $vBlockPos->distanceSquared($this->player->getLocation()) < 10000
+				$clickedStateBefore = BetterPMMPConfig::$blockSyncSnapshot && $vBlockPos->distanceSquared($this->player->getLocation()) < 10000
 					? $this->captureClickedBlockState($vBlockPos)
 					: null;
 				$interactResult = $this->player->interactBlock($vBlockPos, $data->getFace(), $clickPos);

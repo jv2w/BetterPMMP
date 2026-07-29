@@ -24,7 +24,7 @@ declare(strict_types=1);
 namespace pocketmine\network\mcpe\raklib;
 
 use pmmp\thread\ThreadSafeArray;
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\lang\KnownTranslationFactory;
 use pocketmine\network\AdvancedNetworkInterface;
 use pocketmine\network\mcpe\compression\Compressor;
@@ -105,7 +105,7 @@ class RakLibInterface implements ServerEventListener, AdvancedNetworkInterface{
 		$this->typeConverter = $typeConverter;
 		/** [BetterPMMP-PATCH] Prefer Snappy (cheaper CPU, lower MSPT on the sync compress path) when enabled and ext-snappy is present; otherwise zlib.
 		 * Warn on the fallback - silently running zlib while the config says Snappy makes the setting look broken. */
-		$snappyRequested = $server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SNAPPY_COMPRESSION, false);
+		$snappyRequested = BetterPMMPConfig::$snappyCompression;
 		if($snappyRequested && !SnappyCompressor::isAvailable()){
 			$server->getLogger()->warning("better-pmmp.network.snappy-compression is enabled, but the 'snappy' PHP extension is not loaded. Falling back to zlib.");
 		}

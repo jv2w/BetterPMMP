@@ -24,7 +24,7 @@ declare(strict_types=1);
 namespace pocketmine\network\mcpe;
 
 use pmmp\encoding\ByteBufferWriter;
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\event\server\DataPacketSendEvent;
 use pocketmine\network\mcpe\compression\Compressor;
 use pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket;
@@ -38,9 +38,6 @@ use function spl_object_id;
 use function strlen;
 
 final class StandardPacketBroadcaster implements PacketBroadcaster{
-	/** [BetterPMMP-PATCH] Cached better-pmmp.network.skip-movement-send-event, tested on every broadcast */
-	private ?bool $skipMovementSendEvent = null;
-
 	public function __construct(
 		private Server $server
 	){}
@@ -53,7 +50,7 @@ final class StandardPacketBroadcaster implements PacketBroadcaster{
 		if(DataPacketSendEvent::hasHandlers()
 			&& !(count($packets) === 1
 				&& ($packets[0] instanceof MoveActorAbsolutePacket || $packets[0] instanceof SetActorMotionPacket)
-				&& ($this->skipMovementSendEvent ??= $this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::NETWORK_SKIP_MOVEMENT_SEND_EVENT, false)))){
+				&& BetterPMMPConfig::$skipMovementSendEvent)){
 			$ev = new DataPacketSendEvent($recipients, $packets);
 			$ev->call();
 			if($ev->isCancelled()){
