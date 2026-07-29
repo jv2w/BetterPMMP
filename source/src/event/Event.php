@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 /**
@@ -53,9 +55,8 @@ abstract class Event{
 			throw new \RuntimeException("Recursive event call detected (reached max depth of " . self::MAX_EVENT_CALL_DEPTH . " calls)");
 		}
 
-		/** [BetterPMMP-PATCH] event engine fast-path: while timings are disabled (the normal production
-		 * state), skip the per-call timings lookup/start/stop and the per-listener timing wrappers.
-		 * With timings enabled the vanilla timed path below runs unchanged, so reports stay complete. */
+		//While timings are disabled - the normal production state - skip the per-call timings lookup and the
+		//per-listener wrappers. The vanilla timed path below runs unchanged when they are enabled.
 		if(!TimingsHandler::isEnabled()){
 			$handlers = HandlerListManager::global()->getHandlersFor(static::class);
 			if(count($handlers) === 0){

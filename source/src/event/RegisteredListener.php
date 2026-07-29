@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\event;
@@ -76,7 +78,7 @@ class RegisteredListener{
 		}
 	}
 
-	/** [BetterPMMP-PATCH] event engine fast-path: untimed dispatch used by Event::call() while
+	/** event engine fast-path: untimed dispatch used by Event::call() while
 	 * timings are disabled - drops two timing wrappers and one method call per listener per event
 	 * @phpstan-param TEvent $event
 	 */
