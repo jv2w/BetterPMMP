@@ -22,7 +22,6 @@ if "%PHP_BINARY%"=="" (
 	exit 1
 )
 
-REM [BetterPMMP-PATCH]
 if exist source\src\PocketMine.php (
 	set POCKETMINE_FILE=source\src\PocketMine.php
 ) else (
@@ -44,7 +43,7 @@ if exist system\restart.flag (
 	del system\restart.flag
 	goto :betterpmmp_start
 )
-REM [BetterPMMP-PATCH] Keep the server's exit code. pause ran last and overwrote it with its own 0, so a
+REM Keep the server's exit code. pause ran last and overwrote it with its own 0, so a
 REM crashed server reported success to whatever launched this script, and start.sh already did this right.
 if not "%BETTERPMMP_EXIT%"=="0" pause
 exit /b %BETTERPMMP_EXIT%

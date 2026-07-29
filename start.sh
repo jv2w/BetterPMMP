@@ -8,7 +8,7 @@ printf '\033]0;BetterPMMP By UserX0001\007'
 
 PHP_BINARY=""
 
-# [BetterPMMP-PATCH] The bundled binary lives in source/bin/php, matching start.cmd. This probed
+# The bundled binary lives in source/bin/php, matching start.cmd. This probed
 # source/bin/php7/bin/php, a PHP 7 era path that no build of this repository has ever shipped, so the
 # branch could never be taken and Linux always fell through to whatever php was on PATH.
 if [ -x "$DIR/source/bin/php/bin/php" ]; then
@@ -25,7 +25,6 @@ if [ "$PHP_BINARY" = "" ]; then
 	exit 1
 fi
 
-# [BetterPMMP-PATCH]
 if [ -f "$DIR/source/src/PocketMine.php" ]; then
 	POCKETMINE_FILE="$DIR/source/src/PocketMine.php"
 else
