@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\updater;
@@ -44,9 +46,8 @@ class UpdateChecker{
 		$this->logger = new \PrefixedLogger($server->getLogger(), "Update Checker");
 		$this->endpoint = "http://$endpoint/api/";
 
-		/** [BetterPMMP-PATCH] Off by default. The stock host publishes PocketMine-MP releases, which say
-		 * nothing about whether this fork is up to date, and running from source leaves the build number at
-		 * 0 so the result could never be shown anyway - the request was pure traffic to a dead project. */
+		//Off by default: the stock host publishes PocketMine-MP releases, which say nothing about this fork, and
+		//running from source leaves the build number at 0 so the result could never be shown anyway.
 		if($server->getConfigGroup()->getPropertyBool(YmlServerProperties::AUTO_UPDATER_ENABLED, false)){
 			$this->doCheck();
 		}
