@@ -23,7 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\plugin;
 
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\event\Cancellable;
 use pocketmine\event\Event;
 use pocketmine\event\EventPriority;
@@ -138,7 +138,7 @@ class PluginManager{
 		$language = $this->server->getLanguage();
 		/** [BetterPMMP-PATCH] Plugin lifecycle logs (load/enable/disable) gated behind a single
 		 * better-pmmp.plugins.lifecycle-log; default true reproduces vanilla. */
-		if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_LIFECYCLE_LOG, true)){
+		if(BetterPMMPConfig::$pluginLifecycleLog){
 			$this->server->getLogger()->info($language->translate(KnownTranslationFactory::pocketmine_plugin_load($description->getFullName())));
 		}
 
@@ -460,7 +460,7 @@ class PluginManager{
 	public function enablePlugin(Plugin $plugin) : bool{
 		if(!$plugin->isEnabled()){
 			/** [BetterPMMP-PATCH] see better-pmmp.plugins.lifecycle-log */
-			if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_LIFECYCLE_LOG, true)){
+			if(BetterPMMPConfig::$pluginLifecycleLog){
 				$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_enable($plugin->getDescription()->getFullName())));
 			}
 
@@ -521,7 +521,7 @@ class PluginManager{
 	public function disablePlugin(Plugin $plugin) : void{
 		if($plugin->isEnabled()){
 			/** [BetterPMMP-PATCH] see better-pmmp.plugins.lifecycle-log */
-			if($this->server->getConfigGroup()->getPropertyBool(BetterPMMPProperties::PLUGINS_LIFECYCLE_LOG, true)){
+			if(BetterPMMPConfig::$pluginLifecycleLog){
 				$this->server->getLogger()->info($this->server->getLanguage()->translate(KnownTranslationFactory::pocketmine_plugin_disable($plugin->getDescription()->getFullName())));
 			}
 			(new PluginDisableEvent($plugin))->call();
