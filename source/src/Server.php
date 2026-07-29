@@ -349,6 +349,11 @@ class Server{
 		return $this->pluginPath;
 	}
 
+	/** [BetterPMMP-PATCH] timings reports now live under system/ alongside other server files */
+	public function getTimingsReportPath() : string{
+		return Path::join($this->dataPath, "system", "timings");
+	}
+
 	public function getMaxPlayers() : int{
 		return $this->maxPlayers;
 	}
@@ -1029,7 +1034,7 @@ class Server{
 			}
 
 			/** [BetterPMMP-PATCH] Console title brand */
-			@cli_set_process_title("BetterPMMP {$this->getPocketMineVersion()}");
+			@cli_set_process_title(VersionInfo::DISTRO_NAME . " " . $this->getPocketMineVersion());
 
 			$this->serverID = Utils::getMachineUniqueId($this->getIp() . $this->getPort());
 
@@ -1529,8 +1534,7 @@ class Server{
 			$this->signalHandler->unregister();
 
 			if(TimingsHandler::isEnabled()){
-				/** [BetterPMMP-PATCH] timings reports now live under system/ alongside other server files */
-				TimingsHandler::createReportFile(Path::join($this->getDataPath(), "system", "timings"))->onCompletion(
+				TimingsHandler::createReportFile($this->getTimingsReportPath())->onCompletion(
 					function(string $timingsFile) : void{
 						$this->logger->info($this->language->translate(KnownTranslationFactory::pocketmine_command_timings_timingsWrite($timingsFile)));
 						TimingsHandler::setEnabled(false);
@@ -1890,7 +1894,7 @@ class Server{
 		$bandwidthStats = $this->network->getBandwidthTracker();
 
 		/** [BetterPMMP-PATCH] Console title brand */
-		echo "\x1b]0;BetterPMMP " .
+		echo "\x1b]0;" . VersionInfo::DISTRO_NAME . " " .
 			$this->getPocketMineVersion() .
 			" | Online $online/" . $this->maxPlayers .
 			($connecting > 0 ? " (+$connecting connecting)" : "") .

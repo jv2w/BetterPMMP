@@ -26,6 +26,7 @@ namespace pocketmine\console;
 use pmmp\thread\Thread as NativeThread;
 use pmmp\thread\ThreadSafeArray;
 use pocketmine\utils\Process;
+use pocketmine\VersionInfo;
 use function cli_set_process_title;
 use function count;
 use function dirname;
@@ -44,7 +45,7 @@ $commandTokenSeed = (int) $argv[1];
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 /** [BetterPMMP-PATCH] Console title brand */
-@cli_set_process_title('BetterPMMP Console Reader');
+@cli_set_process_title(VersionInfo::DISTRO_NAME . " Console Reader");
 
 /** @phpstan-var ThreadSafeArray<int, string> $channel */
 $channel = new ThreadSafeArray();

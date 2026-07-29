@@ -36,7 +36,6 @@ use pocketmine\utils\AssumptionFailedError;
 use pocketmine\utils\InternetException;
 use pocketmine\utils\InternetRequestResult;
 use pocketmine\YmlServerProperties;
-use Symfony\Component\Filesystem\Path;
 use function count;
 use function http_build_query;
 use function implode;
@@ -104,8 +103,7 @@ class TimingsCommand extends VanillaCommand{
 					fn() => throw new AssumptionFailedError("This promise is not expected to be rejected")
 				);
 			}else{
-				/** [BetterPMMP-PATCH] timings reports now live under system/ alongside other server files */
-				TimingsHandler::createReportFile(Path::join($sender->getServer()->getDataPath(), "system", "timings"))->onCompletion(
+				TimingsHandler::createReportFile($sender->getServer()->getTimingsReportPath())->onCompletion(
 					function(string $timingsFile) use ($sender) : void{
 						Command::broadcastCommandMessage($sender, KnownTranslationFactory::pocketmine_command_timings_timingsWrite($timingsFile));
 					},

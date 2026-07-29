@@ -31,6 +31,8 @@ use function str_repeat;
 
 final class VersionInfo{
 	public const NAME = "PocketMine-MP";
+	/** [BetterPMMP-PATCH] Distribution name shown to operators. NAME stays as upstream because plugins and crash reports key off it. */
+	public const DISTRO_NAME = "BetterPMMP";
 	/** [BetterPMMP-PATCH] BetterPMMP version identity; upstream base remains PocketMine-MP 5.44.3 (see NOTICE) */
 	public const BASE_VERSION = "1.0.0";
 	/** [BetterPMMP-PATCH] Plugin API version reported to plugins; kept at the upstream PocketMine-MP base so existing API 5.x plugins stay loadable */

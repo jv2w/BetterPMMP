@@ -189,7 +189,7 @@ namespace pocketmine {
 		}
 		if(\Phar::running(true) === ""){
 			/** [BetterPMMP-PATCH] Start warning replaced */
-			$logger->info(TextFormat::GREEN . "BetterPMMP By UserX0001");
+			$logger->info(TextFormat::GREEN . VersionInfo::DISTRO_NAME . " By UserX0001");
 		}
 		if(function_exists('opcache_get_status') && ($opcacheStatus = opcache_get_status(false)) !== false){
 			$jitEnabled = $opcacheStatus["jit"]["on"] ?? false;
@@ -289,14 +289,16 @@ JIT_WARNING
 		$pluginPath = getopt_string(BootstrapOptions::PLUGINS) ?? $cwd . DIRECTORY_SEPARATOR . "plugins";
 		Filesystem::addCleanedPath($pluginPath, Filesystem::CLEAN_PATH_PLUGINS_PREFIX);
 
-		/** [BetterPMMP-PATCH] Create system subdirectory */
-		@mkdir($dataPath . DIRECTORY_SEPARATOR . "system", 0777, true);
 		if(!@mkdir($dataPath, 0777, true) && !is_dir($dataPath)){
 			critical_error("Unable to create/access data directory at $dataPath. Check that the target location is accessible by the current user.");
 			exit(1);
 		}
 		//this has to be done after we're sure the data path exists
 		$dataPath = realpath($dataPath) . DIRECTORY_SEPARATOR;
+
+		/** [BetterPMMP-PATCH] Server files other than the world data live in a system subdirectory. Created
+		 * after the data directory itself, so a data path that cannot be created is still reported. */
+		@mkdir(Path::join($dataPath, "system"), 0777, true);
 
 		$lockFilePath = Path::join($dataPath, "system", 'server.lock');
 		try{
