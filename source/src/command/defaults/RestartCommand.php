@@ -34,7 +34,6 @@ use function is_dir;
 use function mkdir;
 
 /**
- * [BetterPMMP-PATCH]
  * Asks the launcher script to start the server again once it has shut down, by leaving a flag file in the
  * data directory for start.cmd / start.sh to find.
  */
@@ -50,14 +49,12 @@ class RestartCommand extends VanillaCommand{
 
 	public function execute(CommandSender $sender, string $commandLabel, array $args) : bool{
 		$server = $sender->getServer();
-		/** [BetterPMMP-PATCH] The flag belongs in the server's data directory, which is what the launcher
-		 * scripts watch. dirname(__FILE__, 5) hardcoded the source tree instead, so --data, a panel or a
-		 * .phar build (where __FILE__ is a phar:// path) all wrote it somewhere nobody reads. */
+		//The flag belongs in the data directory the launcher scripts watch. dirname(__FILE__, 5) hardcoded the source
+		//tree, so --data, a panel or a .phar build all wrote it somewhere nobody reads.
 		$restartFlag = Path::join($server->getDataPath(), "system", "restart.flag");
 		$systemDir = dirname($restartFlag);
-		/** [BetterPMMP-PATCH] Report a failure instead of shutting the server down anyway. Without the check,
-		 * a read-only or full data directory produced the "restarting" broadcast and then a server that was
-		 * simply gone, with nothing in the log to say why. */
+		//Report a failure instead of shutting down anyway: a read-only or full data directory produced the
+		//"restarting" broadcast and then a server that was simply gone.
 		if((is_dir($systemDir) || @mkdir($systemDir, 0777, true) || is_dir($systemDir)) && file_put_contents($restartFlag, '1') !== false){
 			Command::broadcastCommandMessage($sender, new Translatable("pocketmine.command.restart.start"));
 			$server->shutdown();
