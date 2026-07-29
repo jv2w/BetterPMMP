@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\utils;
@@ -189,7 +191,7 @@ class MainLogger extends AttachableThreadSafeLogger implements \BufferedLogger{
 			$threadName = (new \ReflectionClass($thread))->getShortName() . " thread";
 		}
 
-		/** [BetterPMMP-PATCH] INFO prefix removed for cleaner output */
+		//INFO prefix removed for cleaner output
 		if($prefix === "INFO"){
 			$message = sprintf(
 				TextFormat::AQUA . "[%s] " . TextFormat::RESET . "%s%s" . TextFormat::RESET,
