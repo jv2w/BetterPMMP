@@ -23,7 +23,7 @@ declare(strict_types=1);
 
 namespace pocketmine\player;
 
-use pocketmine\betterpmmp\BetterPMMPProperties;
+use pocketmine\betterpmmp\BetterPMMPConfig;
 use pocketmine\block\BaseSign;
 use pocketmine\block\Bed;
 use pocketmine\block\BlockTypeTags;
@@ -269,17 +269,6 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 	/** [BetterPMMP-PATCH] event engine: last position fired in a PlayerMoveEvent (for period accumulation) */
 	private ?Location $moveEventFrom = null;
-	/**
-	 * [BetterPMMP-PATCH] Config values resolved once per player instead of on every movement and every swing.
-	 * These are read once at startup and never change, so re-reading them through the config group on paths
-	 * that run 20 times a second per player was pure overhead - and the periods right beside them were
-	 * already cached this way, so the split was arbitrary as well as wasteful.
-	 */
-	private ?int $moveEventPeriod = null;
-	private ?int $rotationBroadcastPeriod = null;
-	private ?bool $criticalHitIgnoreSprint = null;
-	private ?float $criticalHitMinFallDistance = null;
-
 	protected int $viewDistance = -1;
 	/** [BetterPMMP-PATCH] Original view-distance requested by client (pre-clamp, pre-override). Used to re-apply per-world override on world change. */
 	protected int $requestedViewDistance = -1;
@@ -661,13 +650,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		$newViewDistance = $this->server->getAllowedViewDistance($distance);
 
 		/** [BetterPMMP-PATCH] Per-world view distance override */
-		$perWorldViewDistance = $this->server->getConfigGroup()->getProperty(BetterPMMPProperties::WORLD_VIEW_DISTANCE_PER_WORLD, []);
-		if(is_array($perWorldViewDistance)){
-			$worldFolder = $this->getWorld()->getFolderName();
-			if(isset($perWorldViewDistance[$worldFolder])){
-				$newViewDistance = max(2, (int) $perWorldViewDistance[$worldFolder]);
-			}
-		}
+		$newViewDistance = BetterPMMPConfig::viewDistance($this->getWorld()->getFolderName(), $newViewDistance);
 
 		if($newViewDistance !== $this->viewDistance){
 			$ev = new PlayerViewDistanceChangeEvent($this, $this->viewDistance, $newViewDistance);
@@ -1499,7 +1482,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			 * accumulated from, so listeners still see a gapless movement chain. Cancelling reverts
 			 * the whole accumulated span. */
 			if(PlayerMoveEvent::hasHandlers()){
-				$moveEventPeriod = $this->moveEventPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::EVENTS_MOVE_EVENT_PERIOD, 1));
+				$moveEventPeriod = BetterPMMPConfig::$moveEventPeriod;
 				$this->moveEventFrom ??= $from;
 				if($moveEventPeriod <= 1 || (($this->server->getTick() + $this->id) % $moveEventPeriod) === 0){
 					$evFrom = $moveEventPeriod <= 1 ? $from : $this->moveEventFrom;
@@ -1532,9 +1515,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			 * head gets its own period: viewers extrapolate position, so a skipped position desyncs where the
 			 * body is, while a skipped rotation only delays where it looks. Rotation rides along for free on
 			 * any tick the position moved, because MoveActorAbsolutePacket carries both. */
-			$broadcastPeriod = $moved
-				? ($this->movementBroadcastPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_MOVEMENT_BROADCAST_PERIOD, 1)))
-				: ($this->rotationBroadcastPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::NETWORK_ROTATION_BROADCAST_PERIOD, 1)));
+			$broadcastPeriod = $moved ? BetterPMMPConfig::$movementBroadcastPeriod : BetterPMMPConfig::$rotationBroadcastPeriod;
 			if($broadcastPeriod <= 1 || (($this->server->getTick() + $this->id) % $broadcastPeriod) === 0){
 				$this->movementBroadcastPending = false;
 				$this->broadcastMovement();
@@ -1547,7 +1528,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			 * since the walking branch never uses the distance */
 			$horizontalDistanceSquared = (($from->x - $to->x) ** 2) + (($from->z - $to->z) ** 2);
 			if($horizontalDistanceSquared > 0){
-				if($this->hungerManager->isExhaustionEnabled()){
+				if(BetterPMMPConfig::$hungerExhaustion){
 					//TODO: check for swimming
 					if($this->isSprinting()){
 						$this->hungerManager->exhaust(0.01 * sqrt($horizontalDistanceSquared), PlayerExhaustEvent::CAUSE_SPRINTING);
@@ -1613,9 +1594,6 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 	}
 
-	/** [BetterPMMP-PATCH] PvP optimization: cached pickup scan period */
-	private ?int $pickupScanPeriod = null;
-
 	public function onUpdate(int $currentTick) : bool{
 		$tickDiff = $currentTick - $this->lastUpdate;
 
@@ -1659,7 +1637,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 			/** [BetterPMMP-PATCH] PvP optimization: pickup scan period - the nearby-entity sweep is
 			 * O(entities around each player) every tick; vanilla pickup delay is 10 ticks anyway */
-			$scanPeriod = $this->pickupScanPeriod ??= max(1, $this->server->getConfigGroup()->getPropertyInt(BetterPMMPProperties::ENTITIES_PICKUP_SCAN_PERIOD, 1));
+			$scanPeriod = BetterPMMPConfig::$pickupScanPeriod;
 			if(!$this->isSpectator() && $this->isAlive() && ($scanPeriod <= 1 || (($currentTick + $this->id) % $scanPeriod) === 0)){
 				Timings::$playerCheckNearEntities->startTiming();
 				$this->checkNearEntities();
@@ -2121,10 +2099,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		$ev->setModifier($meleeEnchantmentDamage, EntityDamageEvent::MODIFIER_WEAPON_ENCHANTMENTS);
 
 		/** [BetterPMMP-PATCH] Configurable critical hit logic */
-		$config = $this->server->getConfigGroup();
-		$critMinFall = $this->criticalHitMinFallDistance ??= max(0.0, (float) $config->getProperty(BetterPMMPProperties::COMBAT_CRITICAL_HIT_MIN_FALL_DISTANCE, 0.0));
-		$critIgnoreSprint = $this->criticalHitIgnoreSprint ??= $config->getPropertyBool(BetterPMMPProperties::COMBAT_CRITICAL_HIT_IGNORE_SPRINT, false);
-		if(($critIgnoreSprint || !$this->isSprinting()) && !$this->isFlying() && $this->fallDistance > $critMinFall && !$this->effectManager->has(VanillaEffects::BLINDNESS()) && !$this->isUnderwater()){
+		if((BetterPMMPConfig::$criticalHitIgnoreSprint || !$this->isSprinting()) && !$this->isFlying() && $this->fallDistance > BetterPMMPConfig::$criticalHitMinFallDistance && !$this->effectManager->has(VanillaEffects::BLINDNESS()) && !$this->isUnderwater()){
 			$ev->setModifier($ev->getFinalDamage() / 2, EntityDamageEvent::MODIFIER_CRITICAL);
 		}
 
