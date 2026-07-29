@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\console;
@@ -44,7 +46,6 @@ $commandTokenSeed = (int) $argv[1];
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
-/** [BetterPMMP-PATCH] Console title brand */
 @cli_set_process_title(VersionInfo::DISTRO_NAME . " Console Reader");
 
 /** @phpstan-var ThreadSafeArray<int, string> $channel */
