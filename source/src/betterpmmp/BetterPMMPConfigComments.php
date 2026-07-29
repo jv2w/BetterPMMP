@@ -38,7 +38,6 @@ use function strtr;
 use const PREG_SET_ORDER;
 
 /**
- * [BetterPMMP-PATCH]
  * Localizes the documentation comments of the server config files (pocketmine.yml, resource_packs.yml) to
  * the language chosen in the setup wizard, and re-localizes them when that language is changed in server.properties.
  *
@@ -53,13 +52,13 @@ use const PREG_SET_ORDER;
 final class BetterPMMPConfigComments{
 
 	/**
-	 * [BetterPMMP-PATCH] The separator is `[ \t]*`, not `\s*`: `\s` matches newlines too, so a lone `#!` line
+	 * The separator is `[ \t]*`, not `\s*`: `\s` matches newlines too, so a lone `#!` line
 	 * used to swallow the config line that followed it and delete it from the file.
 	 */
 	private const MARKER_PATTERN = '/^([ \t]*)#![ \t]*(\S+)[ \t]*$/m';
 
 	/**
-	 * [BetterPMMP-PATCH] Records which language the comments in a rendered file are written in, so
+	 * Records which language the comments in a rendered file are written in, so
 	 * {@link retranslate()} can answer "is this already current?" without loading every shipped language.
 	 * Used for stripping, so it deliberately matches a stamp on any line - a file that somehow collected
 	 * more than one must come back out with exactly one.
@@ -67,7 +66,7 @@ final class BetterPMMPConfigComments{
 	private const LANGUAGE_STAMP_PATTERN = '/^#@ betterpmmp-lang: (\S+)[ \t]*\n?/m';
 
 	/**
-	 * [BetterPMMP-PATCH] Reading the stamp is anchored to the first line instead. stamp() always writes it
+	 * Reading the stamp is anchored to the first line instead. stamp() always writes it
 	 * there, so a stamp found anywhere else was not written by us and must not be allowed to decide which
 	 * language the file is in.
 	 */
@@ -77,12 +76,12 @@ final class BetterPMMPConfigComments{
 		//NOOP
 	}
 
-	/** [BetterPMMP-PATCH] Expands `#! <key>` markers without stamping, for fragments spliced into an already-stamped file. */
+	/** Expands `#! <key>` markers without stamping, for fragments spliced into an already-stamped file. */
 	public static function expand(string $template, Language $lang) : string{
 		$template = str_replace("\r\n", "\n", $template);
 		$result = preg_replace_callback(
 			self::MARKER_PATTERN,
-			/** [BetterPMMP-PATCH] A marker whose key we do not know is not one of ours - `#!todo` in a user's
+			/** A marker whose key we do not know is not one of ours - `#!todo` in a user's
 			 * file is an ordinary YAML comment. Leave it exactly as it is; replacing it with the empty block
 			 * deleted it silently, and expand() runs over the user's own file on every startup. */
 			static function(array $m) use ($lang) : string{
@@ -101,13 +100,9 @@ final class BetterPMMPConfigComments{
 	public static function retranslate(string $content, string $template, Language $current) : string{
 		$content = str_replace("\r\n", "\n", $content);
 
-		/** [BetterPMMP-PATCH] Decide by evidence, not by the stamp alone. Counting how many of the current
-		 * language's comment blocks are actually in the file separates the two cases the stamp cannot:
-		 * a user who deleted a comment line (nearly all blocks still present - skip the 13-language load in
-		 * convert(), because render() only expands `#!` markers and could never restore that line anyway)
-		 * from a file whose stamp does not describe its contents at all (no blocks present - a hand-edited
-		 * stamp, or a file written by a build whose conversion missed). The latter has to be converted, and
-		 * trusting the stamp there left the file stuck in the wrong language forever. */
+		//Decide by evidence rather than the stamp alone: count how many of the current language's comment blocks are
+		//actually present. Nearly all present means the user deleted a line, which render() could never restore
+		//anyway; none present means the stamp does not describe the file and it has to be converted.
 		$map = self::markers($template);
 		$found = 0;
 		$total = 0;
@@ -142,9 +137,8 @@ final class BetterPMMPConfigComments{
 	 */
 	private static function convert(string $content, array $map, Language $current) : string{
 		$pairs = [];
-		/** [BetterPMMP-PATCH] The current language is no longer skipped: upstream PocketMine-MP writes the
-		 * very same text as `#text`, so a config carried over from a vanilla build still needs the
-		 * `#text` -> `# text` normalization even when its comments are already in the right language. */
+		//The current language is not skipped: upstream PocketMine-MP writes the same text as `#text`, so a migrated
+		//config still needs the `#text` -> `# text` normalization.
 		foreach(Language::getLanguageList() as $code => $name){
 			try{
 				$other = new Language($code);
@@ -184,7 +178,7 @@ final class BetterPMMPConfigComments{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Every spelling of one key's comment block that may already be sitting in a config
+	 * Every spelling of one key's comment block that may already be sitting in a config
 	 * file. render() always writes `# text`, but upstream PocketMine-MP ships `#text`; both have to be
 	 * recognized or a migrated config is never converted.
 	 *

@@ -63,7 +63,6 @@ use const JSON_UNESCAPED_UNICODE;
 use const YAML_UTF8_ENCODING;
 
 /**
- * [BetterPMMP-PATCH]
  * Enforces the canonical BetterPMMP pocketmine.yml layout on servers whose file came from another build.
  *
  * When `better-pmmp.config.enforce-format` is true, {@link apply()} regenerates the whole file from the
@@ -86,19 +85,16 @@ final class BetterPMMPConfigFormat{
 	public static function apply(string $content, string $template, Language $lang) : string{
 		$content = str_replace("\r\n", "\n", $content);
 		$template = str_replace("\r\n", "\n", $template);
-		/** [BetterPMMP-PATCH] A truncated-to-empty file (crash mid-write, full disk) parses to null, which
-		 * used to take the retranslate path and emit "" - leaving the server permanently running on
-		 * defaults with a blank config. Regenerate from the template instead. */
+		//A truncated-to-empty file (crash mid-write, full disk) parses to null and used to emit "", leaving the server
+		//permanently running on defaults with a blank config.
 		if(trim($content) === ""){
 			return BetterPMMPConfigComments::render($template, $lang);
 		}
 		$data = self::parse($content);
 		if($data === null){
-			/** [BetterPMMP-PATCH] "Valid YAML that declares nothing" and "YAML we cannot read" both parse to
-			 * null but need opposite treatment. A file whose keys are all commented out leaves the server
-			 * running entirely on defaults with a config that documents none of them, so regenerate it as the
-			 * class docblock promises; a file we genuinely failed to parse is the user's, and only its
-			 * comments are retranslated so nothing of theirs is thrown away. */
+			//"Valid YAML that declares nothing" and "YAML we cannot read" both parse to null but need opposite treatment:
+			//the first leaves the server on undocumented defaults and is regenerated, the second is the user's file and
+			//only its comments are retranslated.
 			return self::declaresNothing($content)
 				? BetterPMMPConfigComments::render($template, $lang)
 				: BetterPMMPConfigComments::retranslate($content, $template, $lang);
@@ -118,7 +114,7 @@ final class BetterPMMPConfigFormat{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Adds the template keys the file does not carry yet, in place, leaving every existing
+	 * Adds the template keys the file does not carry yet, in place, leaving every existing
 	 * line - values, key order and the user's own comments - untouched. Without this, a `better-pmmp` section
 	 * written by an older build never gained the options a later build added: apply() only appended when the
 	 * whole root was missing, so those servers silently ran on the inline defaults and never saw the new key
@@ -140,18 +136,16 @@ final class BetterPMMPConfigFormat{
 			}
 			$inserts[] = [$at, $ordinal, $fragment];
 		}
-		/** Apply back to front so the earlier insertion points stay valid; ties keep template order because
-		 * the later fragment is spliced in first. */
+		//Apply back to front so the earlier insertion points stay valid; ties keep template order because the later
+		//fragment is spliced in first.
 		usort($inserts, static fn(array $a, array $b) : int => [$b[0], $b[1]] <=> [$a[0], $a[1]]);
 		foreach($inserts as [$at, $ordinal, $fragment]){
 			array_splice($lines, $at, 0, $fragment);
 		}
 		$result = BetterPMMPConfigComments::expand(implode("\n", $lines), $lang);
 		$parsed = self::parse($result);
-		/** [BetterPMMP-PATCH] Only keep the rewrite if it actually did what it set out to do. A file that
-		 * declares the same root twice parses to the last one while the insertion point is found in the
-		 * first, so the keys stay missing and every startup appends them again - the file grows without
-		 * bound. Checking the result converges instead: a shape we cannot repair is left exactly as it is. */
+		//Only keep the rewrite if it converged. A file declaring the same root twice parses to the last one while the
+		//insertion point is found in the first, so the keys stay missing and every startup appends them again.
 		if($parsed === null || self::missingFragments($template, $parsed, $root) !== []){
 			return $content;
 		}
@@ -159,7 +153,7 @@ final class BetterPMMPConfigFormat{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Every template subtree under $root that $data does not have, paired with the path of
+	 * Every template subtree under $root that $data does not have, paired with the path of
 	 * the parent it belongs under. Only subtrees whose parent exists are reported, so the insertion point is
 	 * always findable.
 	 *
@@ -218,7 +212,7 @@ final class BetterPMMPConfigFormat{
 				}
 				$body[] = $next;
 			}
-			/** Cut the run of blank and comment lines that trails the subtree: those introduce the next key. */
+			//Cut the run of blank and comment lines that trails the subtree: those introduce the next key.
 			$tail = array_slice($body, $last + 1);
 			$fragment = array_merge($pending, array_slice($body, 0, $last + 1));
 			$missing[] = [array_merge([$root], $parent), $fragment];
@@ -229,7 +223,7 @@ final class BetterPMMPConfigFormat{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Index of the line just past the block $path names, i.e. where a new child of it goes.
+	 * Index of the line just past the block $path names, i.e. where a new child of it goes.
 	 *
 	 * @param list<string> $lines
 	 * @param list<string> $path
@@ -278,8 +272,8 @@ final class BetterPMMPConfigFormat{
 		while($start > 0 && ($lines[$start - 1][0] ?? '') === '#'){
 			$start--;
 		}
-		/** [BetterPMMP-PATCH] expand(), not render() - this fragment is spliced into a file that already
-		 * carries the language stamp at the top, and a second stamp mid-file would be misread. */
+		//expand(), not render() - this fragment is spliced into a file that already carries the language stamp at the
+		//top, and a second stamp mid-file would be misread.
 		$section = BetterPMMPConfigComments::expand(implode("\n", array_slice($lines, $start)), $lang);
 		$body = rtrim($content, "\n");
 		$section = rtrim($section, "\n");
@@ -287,7 +281,7 @@ final class BetterPMMPConfigFormat{
 		return self::parse($result) === null ? $content : $result;
 	}
 
-	/** [BetterPMMP-PATCH] Whether the content is readable YAML that simply carries no keys. */
+	/** Whether the content is readable YAML that simply carries no keys. */
 	private static function declaresNothing(string $content) : bool{
 		try{
 			return ErrorToExceptionHandler::trap(static fn() : mixed => yaml_parse($content)) === null;
@@ -331,8 +325,8 @@ final class BetterPMMPConfigFormat{
 		$stack = [];
 		/** @phpstan-var array<string, array<string, true>> $seen */
 		$seen = [];
-		/** [BetterPMMP-PATCH] The template's own values, used for keys the file does not carry - see the leaf
-		 * branch below for why copying the template line verbatim is not good enough. */
+		//The template's own values, used for keys the file does not carry - see the leaf branch below for why copying the
+		//template line verbatim is not good enough.
 		$templateData = self::parse($template) ?? [];
 		$lines = explode("\n", str_replace("\r\n", "\n", $template));
 		$count = count($lines);
@@ -354,12 +348,9 @@ final class BetterPMMPConfigFormat{
 			$found = false;
 			$value = self::lookup($data, $path, $found);
 			if($valuePart === ''){
-				/** [BetterPMMP-PATCH] A template container the file fills with something that is not a map -
-				 * a scalar, a list, or an empty collection - used to be dropped on the floor: the template's
-				 * own child lines were emitted with their defaults and the value in the file was lost. Emit
-				 * what the file says and skip the children the template would otherwise have supplied.
-				 * null is not such a value: `key:` with nothing under it parses to null, so treating it as one
-				 * would rewrite every childless container as `key: null` on the second pass. */
+				//A template container the file fills with a scalar, a list or an empty collection used to be dropped and the
+				//template's defaults emitted instead. null is not such a value: `key:` with nothing under it parses to null,
+				//and treating it as one would rewrite every childless container as `key: null`.
 				if($found && $value !== null && !self::isMap($value)){
 					$stack[] = [$indent, $key, false];
 					self::emitValue($out, $m[1], $key, $value, $valuePart, $comment);
@@ -372,10 +363,8 @@ final class BetterPMMPConfigFormat{
 			}
 			$stack[] = [$indent, $key, false];
 			if(!$found){
-				/** [BetterPMMP-PATCH] Emit the template's parsed value instead of copying its line verbatim.
-				 * The verbatim copy kept the template's own quoting, and the next startup - by which time the
-				 * key does exist in the file - re-emitted the same value through scalar() in an equivalent but
-				 * differently spelled form, so an untouched server rewrote its config one extra time. */
+				//Emit the template's parsed value rather than copying its line verbatim: the verbatim copy kept the template's
+				//quoting, so the next startup re-emitted the same value differently spelled and rewrote the config again.
 				$value = self::lookup($templateData, $path, $found);
 			}
 			if(!$found){
@@ -391,13 +380,13 @@ final class BetterPMMPConfigFormat{
 		return implode("\n", $out);
 	}
 
-	/** [BetterPMMP-PATCH] Whether a value is a YAML mapping, i.e. the only shape a template container can keep. */
+	/** Whether a value is a YAML mapping, i.e. the only shape a template container can keep. */
 	private static function isMap(mixed $value) : bool{
 		return is_array($value) && $value !== [] && !array_is_list($value);
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Index of the last line of the subtree introduced at $i, so the caller can drop the
+	 * Index of the last line of the subtree introduced at $i, so the caller can drop the
 	 * template's children. Trailing blank and comment lines are left behind: they introduce the next key.
 	 *
 	 * @param list<string> $lines
@@ -418,7 +407,7 @@ final class BetterPMMPConfigFormat{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Writes one key with the value the file holds for it, in the shape that value needs.
+	 * Writes one key with the value the file holds for it, in the shape that value needs.
 	 *
 	 * @param list<string> $out
 	 */
@@ -433,8 +422,8 @@ final class BetterPMMPConfigFormat{
 			$out[] = "{$indent}{$key}: {$empty}{$comment}";
 			return;
 		}
-		/** [BetterPMMP-PATCH] The trailing template comment is carried over here as well; the block form used
-		 * to be the one branch of the three that silently dropped it. */
+		//The trailing template comment is carried over here as well; the block form used to be the one branch of the
+		//three that silently dropped it.
 		$out[] = "{$indent}{$key}:{$comment}";
 		foreach(self::emitBlock($value, "{$indent}  ") as $blockLine){
 			$out[] = $blockLine;
@@ -456,8 +445,8 @@ final class BetterPMMPConfigFormat{
 		$path[] = $entry[1];
 		$found = false;
 		$value = self::lookup($data, $path, $found);
-		/** [BetterPMMP-PATCH] rebuild() only marks a container as open when the file has a mapping there or
-		 * nothing at all, so the one case left is a mapping carrying keys the template does not know. */
+		//rebuild() only marks a container as open when the file has a mapping there or nothing at all, so the one case
+		//left is a mapping carrying keys the template does not know.
 		if(!$found || !self::isMap($value)){
 			return;
 		}
@@ -576,7 +565,7 @@ final class BetterPMMPConfigFormat{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Index just past a leading quoted scalar, or 0 when the value is not quoted. The old
+	 * Index just past a leading quoted scalar, or 0 when the value is not quoted. The old
 	 * scan stopped at the first repeat of the opening quote, so a YAML-escaped value like 'it''s # here' cut
 	 * off inside the string and the rest of it was split away as a comment.
 	 */
@@ -612,8 +601,8 @@ final class BetterPMMPConfigFormat{
 			return (string) $value;
 		}
 		if(is_float($value)){
-			/** [BetterPMMP-PATCH] var_export() writes INF, -INF and NAN, which YAML reads back as the strings
-			 * "INF", "-INF" and "NAN" - the value silently changes type on the next startup. */
+			//var_export() writes INF, -INF and NAN, which YAML reads back as the strings "INF", "-INF" and "NAN" - the value
+			//silently changes type on the next startup.
 			if(is_nan($value)){
 				return '.nan';
 			}
