@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\block;
@@ -140,7 +142,7 @@ class Door extends Transparent implements HorizontalFacing{
 		return false;
 	}
 
-	/** [BetterPMMP-PATCH] Iron doors do not open by hand in vanilla; PocketMine toggles them like any other
+	/** Iron doors do not open by hand in vanilla; PocketMine toggles them like any other
 	 * door. Gated behind better-pmmp.gameplay.iron-door-hand-interaction so the upstream behaviour can be
 	 * put back. Returning false rather than true leaves the interaction unhandled, so a block held in hand
 	 * is still placed against the door exactly as vanilla does - returning true also swallowed that. */
