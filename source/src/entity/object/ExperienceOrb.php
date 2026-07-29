@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\entity\object;
@@ -115,10 +117,8 @@ class ExperienceOrb extends Entity{
 		}else{
 			$this->despawnDelay = max(0, self::DEFAULT_DESPAWN_DELAY - $age);
 		}
-		/** [BetterPMMP-PATCH] entities.xp-orbs has to hold for orbs that did not come from
-		 * World::dropExperience() as well - ones restored from chunk NBT that were saved before the toggle
-		 * was turned off, and ones a plugin constructs directly. Those used to come back on every chunk load
-		 * and keep running the per-tick player scan the toggle exists to avoid. */
+		//The toggle has to hold for orbs that did not come from dropExperience() either - ones restored from chunk NBT
+		//and ones a plugin constructs - or they return on every chunk load and keep running the per-tick player scan.
 		if(!BetterPMMPConfig::$xpOrbs){
 			$this->flagForDespawn();
 		}

@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\entity;
@@ -137,12 +139,12 @@ abstract class Living extends Entity{
 
 	private ?int $frostWalkerLevel = null;
 
-	/** [BetterPMMP-PATCH] armor tick fast-path: null = unknown (recompute lazily), false = no worn item
+	/** armor tick fast-path: null = unknown (recompute lazily), false = no worn item
 	 * overrides Item::onTickWorn(), true = run the vanilla armor tick loop */
 	private ?bool $hasTickingArmor = null;
 
 	/**
-	 * [BetterPMMP-PATCH] armor tick fast-path: per-class cache of whether onTickWorn() is overridden
+	 * armor tick fast-path: per-class cache of whether onTickWorn() is overridden
 	 * @var bool[]
 	 * @phpstan-var array<class-string<Item>, bool>
 	 */
@@ -176,12 +178,10 @@ abstract class Living extends Entity{
 				if($slot === ArmorInventory::SLOT_FEET){
 					$this->frostWalkerLevel = null;
 				}
-				/** [BetterPMMP-PATCH] armor tick fast-path invalidation */
 				$this->hasTickingArmor = null;
 			},
 			onContentChange: function() : void{
 				$this->frostWalkerLevel = null;
-				/** [BetterPMMP-PATCH] armor tick fast-path invalidation */
 				$this->hasTickingArmor = null;
 			}
 		));
@@ -398,8 +398,8 @@ abstract class Living extends Entity{
 	}
 
 	protected function calculateFallDamage(float $fallDistance) : float{
-		/** [BetterPMMP-PATCH] gameplay toggle: no fall damage - returning 0.0 here skips the jump boost
-		 * effect lookup, the damage event/attack and both fall sounds in onHitGround() */
+		//gameplay toggle: no fall damage - returning 0.0 here skips the jump boost effect lookup, the damage event/attack
+		//and both fall sounds in onHitGround()
 		if(!BetterPMMPConfig::$fallDamage){
 			return 0.0;
 		}
@@ -711,12 +711,9 @@ abstract class Living extends Entity{
 				$hasUpdate = true;
 			}
 
-			/** [BetterPMMP-PATCH] armor tick fast-path: almost all armor uses the no-op Item::onTickWorn().
-			 * Skip the per-tick getContents() (which clones every occupied slot) plus the extra clone per item
-			 * unless a worn item's class actually overrides onTickWorn(). The flag is invalidated by the armor
-			 * inventory listener in initEntity() and recomputed lazily, which also covers NBT restore (listeners
-			 * are suppressed during Human::populateInventoryFromListTag()). When true, the vanilla loop runs
-			 * verbatim so plugin onTickWorn() overrides keep exact semantics. */
+			//Almost all armor uses the no-op Item::onTickWorn(), so skip the per-tick getContents() clone unless a worn
+			//item's class actually overrides it. The flag is invalidated by the armor inventory listener and recomputed
+			//lazily, which also covers NBT restore. When true the vanilla loop runs verbatim.
 			if($this->hasTickingArmor ??= $this->computeHasTickingArmor()){
 				foreach($this->armorInventory->getContents() as $index => $item){
 					$oldItem = clone $item;
@@ -791,13 +788,12 @@ abstract class Living extends Entity{
 		return $this->frostWalkerLevel ??= $this->armorInventory->getBoots()->getEnchantmentLevel(VanillaEnchantments::FROST_WALKER());
 	}
 
-	/** [BetterPMMP-PATCH] armor tick fast-path: whether the item's class overrides the no-op Item::onTickWorn() */
+	/** armor tick fast-path: whether the item's class overrides the no-op Item::onTickWorn() */
 	private static function itemOverridesOnTickWorn(Item $item) : bool{
 		return self::$onTickWornOverrideCache[$item::class] ??=
 			(new \ReflectionMethod($item, "onTickWorn"))->getDeclaringClass()->getName() !== Item::class;
 	}
 
-	/** [BetterPMMP-PATCH] armor tick fast-path */
 	private function computeHasTickingArmor() : bool{
 		foreach($this->armorInventory->getContents() as $item){
 			if(self::itemOverridesOnTickWorn($item)){

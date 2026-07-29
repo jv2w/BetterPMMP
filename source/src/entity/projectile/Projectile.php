@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\entity\projectile;
@@ -233,7 +235,7 @@ abstract class Projectile extends Entity{
 			$specificHitFunc();
 
 			/*
-			 * [BetterPMMP-PATCH] hit-latency: projectile hits happen mid world-tick - flush the buffered hit
+			 * hit-latency: projectile hits happen mid world-tick - flush the buffered hit
 			 * feedback now instead of at end-of-tick. Placed after $specificHitFunc so the full onHitEntity
 			 * override chain (e.g. Arrow punch knockback, applied after parent::onHitEntity) is already buffered.
 			 */

@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\entity;
@@ -172,9 +174,6 @@ class Human extends Living implements ProjectileSource, InventoryHolder{
 
 	public function jump() : void{
 		parent::jump();
-		/** [BetterPMMP-PATCH] The hunger-exhaustion gate that used to sit here was removed as dead:
-		 * HungerManager::exhaust() already returns 0 for every cause when the toggle is off, so this only
-		 * duplicated the check and added a second source of truth for the same flag. */
 		if($this->isSprinting()){
 			$this->hungerManager->exhaust(0.2, PlayerExhaustEvent::CAUSE_SPRINT_JUMPING);
 		}else{

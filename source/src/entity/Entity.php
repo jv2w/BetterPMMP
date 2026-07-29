@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 /**
@@ -121,7 +123,7 @@ abstract class Entity{
 
 	/** @var Block[]|null */
 	protected ?array $blocksAround = null;
-	/** [BetterPMMP-PATCH] Smart blocksAround cache tracking - the block cell range getBlocksIntersected() last spanned */
+	/** Smart blocksAround cache tracking - the block cell range getBlocksIntersected() last spanned */
 	private int $lastBlockCellMinX = PHP_INT_MIN;
 	private int $lastBlockCellMinY = PHP_INT_MIN;
 	private int $lastBlockCellMinZ = PHP_INT_MIN;
@@ -134,7 +136,7 @@ abstract class Entity{
 	protected Vector3 $motion;
 	protected Vector3 $lastMotion;
 	protected bool $forceMovementUpdate = false;
-	/** [BetterPMMP-PATCH] Set when a movement broadcast was skipped by the period, so the resting position can be flushed. */
+	/** Set when a movement broadcast was skipped by the period, so the resting position can be flushed. */
 	protected bool $movementBroadcastPending = false;
 	private bool $checkBlockIntersectionsNextTick = true;
 
@@ -792,10 +794,8 @@ abstract class Entity{
 		}
 
 		if($teleport || $diffPosition > 0.0001 || $diffRotation > 1.0 || (!$wasStill && $still)){
-			/** [BetterPMMP-PATCH] PvP optimization: movement broadcast period - skip off-cycle sends.
-			 * `!$wasStill && $still` (the entity just came to rest) always sends: that is the tick after
-			 * which World::tickEntities() may drop the entity from the update list, so a skip there would
-			 * leave viewers frozen at a position up to (period - 1) ticks stale, permanently. */
+			//An entity that just came to rest always sends: tickEntities() may drop it from the update list right after,
+			//so skipping there would freeze viewers at a stale position permanently.
 			$movementPeriod = BetterPMMPConfig::$movementBroadcastPeriod;
 			if($teleport || (!$wasStill && $still) || $movementPeriod <= 1 || (($this->server->getTick() + $this->id) % $movementPeriod) === 0){
 				$this->movementBroadcastPending = false;
@@ -806,11 +806,8 @@ abstract class Entity{
 				$this->movementBroadcastPending = true;
 			}
 		}elseif($this->movementBroadcastPending){
-			/** [BetterPMMP-PATCH] Flush the last skipped broadcast, mirroring Player::handleMovement(). The
-			 * skip cannot rely on "the accumulated diff re-enters this branch next tick": an entity that
-			 * comes to rest on an off-cycle tick stops producing movement updates, World::tickEntities()
-			 * drops it from the update list, and updateMovement() is never called again - so viewers would
-			 * stay frozen at a position up to (period - 1) ticks stale. */
+			//Flush the last skipped broadcast, mirroring Player::handleMovement(). An entity coming to rest on an
+			//off-cycle tick stops producing updates, so the accumulated diff would otherwise never be sent.
 			$this->movementBroadcastPending = false;
 			$this->lastLocation = $this->location->asLocation();
 
@@ -1271,15 +1268,13 @@ abstract class Entity{
 		}
 		Timings::$entityMoveCollision->stopTiming();
 
-		/** [BetterPMMP-PATCH] In-place location update - avoids new Location() allocation per move */
+		//In-place location update - avoids new Location() allocation per move
 		$this->location->x = ($this->boundingBox->minX + $this->boundingBox->maxX) / 2;
 		$this->location->y = $this->boundingBox->minY - $this->ySize;
 		$this->location->z = ($this->boundingBox->minZ + $this->boundingBox->maxZ) / 2;
 
-		/** [BetterPMMP-PATCH] Smart blocksAround cache - invalidate only when the bounding box spans a
-		 * different block cell range, which is exactly what getBlocksIntersected() iterates. Keyed on the
-		 * AABB rather than the entity centre, so a centre that stays put while an edge crosses into the
-		 * next cell still invalidates. The 0.001 inset mirrors getBlocksAroundWithEntityInsideActions(). */
+		//Invalidate only when the bounding box spans a different block cell range, which is what
+		//getBlocksIntersected() iterates. Keyed on the AABB, so an edge crossing a cell boundary still invalidates.
 		$bbInset = 0.001;
 		$newCellMinX = (int) floor($this->boundingBox->minX + $bbInset);
 		$newCellMinY = (int) floor($this->boundingBox->minY + $bbInset);

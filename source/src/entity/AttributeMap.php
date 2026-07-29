@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\entity;
@@ -46,10 +48,8 @@ class AttributeMap{
 	 * @return Attribute[]
 	 */
 	public function needSend() : array{
-		/** [BetterPMMP-PATCH] Manual needSend collect: drop the array_filter closure, which costs one call
-		 * per attribute per check, on a method that runs once per player per tick. Both consumers ignore
-		 * keys, so the re-indexed list is observably identical to the key-preserved filtered map. This is a
-		 * cheaper scan, not dirty tracking - every attribute is still examined on every call. */
+		//Collect by hand rather than array_filter(): one closure call per attribute per tick, and both consumers
+		//ignore keys. Still a full scan, not dirty tracking.
 		$dirty = [];
 		foreach($this->attributes as $attribute){
 			if($attribute->isSyncable() && $attribute->isDesynchronized()){

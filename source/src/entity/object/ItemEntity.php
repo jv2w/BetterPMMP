@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\entity\object;
@@ -93,9 +95,8 @@ class ItemEntity extends Entity{
 		}else{
 			$this->despawnDelay = max(0, self::DEFAULT_DESPAWN_DELAY - $age);
 		}
-		/** [BetterPMMP-PATCH] Apply the configured despawn policy to items restored from chunk NBT too. Only
-		 * World::dropItem() used to consult it, so everything already lying on the ground kept the hardcoded
-		 * vanilla lifetime and "-1: items never despawn" did not actually hold for them. */
+		//Items restored from chunk NBT obey the configured despawn policy too. Only World::dropItem() used to consult
+		//it, so everything already lying on the ground kept the vanilla lifetime.
 		$configured = BetterPMMPConfig::$itemDespawnDelay;
 		if($configured === self::NEVER_DESPAWN){
 			$this->despawnDelay = self::NEVER_DESPAWN;
@@ -134,11 +135,8 @@ class ItemEntity extends Entity{
 				}
 			}
 
-			/** [BetterPMMP-PATCH] PvP optimization: item merging toggle.
-			 * NEVER_DESPAWN is checked explicitly because despawnDelay is then frozen at -1, and PHP's
-			 * modulo keeps the sign: -1 % 2 === -1, never 0. Without this, better-pmmp.entities
-			 * .item-despawn-ticks: -1 silently disabled merging entirely, so permanent drops never stacked
-			 * - the exact opposite of what the option is for. */
+			//NEVER_DESPAWN is checked explicitly: despawnDelay is then frozen at -1 and PHP's modulo keeps the sign, so
+			//-1 % 2 is -1 and never 0, which silently stopped permanent drops from ever merging.
 			if($this->hasMovementUpdate() && $this->isMergeCandidate()
 				&& ($this->despawnDelay === self::NEVER_DESPAWN || $this->despawnDelay % self::MERGE_CHECK_PERIOD === 0)
 				&& BetterPMMPConfig::$itemMerging){
@@ -222,7 +220,7 @@ class ItemEntity extends Entity{
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Picks the delay that expires later, treating NEVER_DESPAWN as "never". A plain max()
+	 * Picks the delay that expires later, treating NEVER_DESPAWN as "never". A plain max()
 	 * got that backwards: NEVER_DESPAWN is -1, so max(-1, 5000) is 5000 and merging a permanent drop into any
 	 * item that still had a countdown quietly turned the permanent one into a despawning one. Reachable as
 	 * soon as better-pmmp.entities.item-despawn-ticks is -1 and items saved before that meet items dropped

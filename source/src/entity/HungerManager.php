@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\entity;
@@ -132,8 +134,8 @@ class HungerManager{
 	 * @return float the amount of exhaustion level increased
 	 */
 	public function exhaust(float $amount, int $cause = PlayerExhaustEvent::CAUSE_CUSTOM) : float{
-		/** [BetterPMMP-PATCH] gameplay toggle: hunger exhaustion - gated here so every cause
-		 * (movement, jumping, attack, mining, damage, regen, potion, plugin) is covered */
+		//gameplay toggle: hunger exhaustion - gated here so every cause (movement, jumping, attack, mining, damage,
+		//regen, potion, plugin) is covered
 		if(!$this->enabled || !BetterPMMPConfig::$hungerExhaustion){
 			return 0;
 		}
