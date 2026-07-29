@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\player;
@@ -259,7 +261,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	 */
 	protected array $loadQueue = [];
 	protected int $nextChunkOrderRun = 5;
-	/** [BetterPMMP-PATCH] PvP optimization: chunk coords the last orderChunks() run was centred on, so a
+	/** PvP optimization: chunk coords the last orderChunks() run was centred on, so a
 	 * player moving inside one chunk doesn't re-arm a recompute that provably yields the same result. */
 	private ?int $lastChunkOrderX = null;
 	private ?int $lastChunkOrderZ = null;
@@ -267,10 +269,10 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	/** @var true[] */
 	private array $tickingChunks = [];
 
-	/** [BetterPMMP-PATCH] event engine: last position fired in a PlayerMoveEvent (for period accumulation) */
+	/** event engine: last position fired in a PlayerMoveEvent (for period accumulation) */
 	private ?Location $moveEventFrom = null;
 	protected int $viewDistance = -1;
-	/** [BetterPMMP-PATCH] Original view-distance requested by client (pre-clamp, pre-override). Used to re-apply per-world override on world change. */
+	/** Original view-distance requested by client (pre-clamp, pre-override). Used to re-apply per-world override on world change. */
 	protected int $requestedViewDistance = -1;
 	protected int $spawnThreshold;
 	protected int $spawnChunkLoadCount = 0;
@@ -645,11 +647,10 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	}
 
 	public function setViewDistance(int $distance) : void{
-		/** [BetterPMMP-PATCH] Remember the original requested distance so we can re-apply per-world override on world change */
+		//Remember the original requested distance so we can re-apply per-world override on world change
 		$this->requestedViewDistance = $distance;
 		$newViewDistance = $this->server->getAllowedViewDistance($distance);
 
-		/** [BetterPMMP-PATCH] Per-world view distance override */
 		$newViewDistance = BetterPMMPConfig::viewDistance($this->getWorld()->getFolderName(), $newViewDistance);
 
 		if($newViewDistance !== $this->viewDistance){
@@ -817,10 +818,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 				$this->usedChunks = [];
 				$this->loadQueue = [];
 				if($oldWorld !== null){
-					/** [BetterPMMP-PATCH] Re-centre the published view area on the new world before any of its terrain is
-					 * sent. The client rejects chunk data for positions outside that area, so the radius must already
-					 * cover the whole render distance here - stale terrain is removed by overwriting it (see
-					 * NetworkSession::flushChunkEraseQueue()), never by shrinking the publisher. */
+					//The client rejects chunk data outside the published view area, so the radius must already cover the whole
+					//render distance here. Stale terrain is removed by overwriting it, never by shrinking the publisher.
 					$this->getNetworkSession()->syncViewAreaCenterPoint($this->location, $this->viewDistance);
 				}
 				$this->getNetworkSession()->onEnterWorld();
@@ -853,7 +852,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	}
 
 	/**
-	 * [BetterPMMP-PATCH] Whether the current chunk order covers this position - already in use, or still queued for
+	 * Whether the current chunk order covers this position - already in use, or still queued for
 	 * sending. Exactly the set of coordinates the world is going to overwrite with real terrain.
 	 */
 	public function isChunkOrdered(int $chunkX, int $chunkZ) : bool{
@@ -861,7 +860,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		return isset($this->usedChunks[$index]) || isset($this->loadQueue[$index]);
 	}
 
-	/** [BetterPMMP-PATCH] Re-publish the view area the current chunk order expects: the full render radius around the player. */
+	/** Re-publish the view area the current chunk order expects: the full render radius around the player. */
 	public function syncViewArea() : void{
 		if(!$this->isConnected()){
 			return;
@@ -1048,8 +1047,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		$world = $this->getWorld();
 		$tickingChunkRadius = $world->getChunkTickRadius();
 
-		/** [BetterPMMP-PATCH] PvP optimization: remember the centre this run was computed for, so
-		 * handleMovement() can skip re-arming while the player stays inside the same chunk. */
+		//PvP optimization: remember the centre this run was computed for, so handleMovement() can skip re-arming while
+		//the player stays inside the same chunk.
 		$centerChunkX = $this->location->getFloorX() >> Chunk::COORD_BIT_SIZE;
 		$centerChunkZ = $this->location->getFloorZ() >> Chunk::COORD_BIT_SIZE;
 		$this->lastChunkOrderX = $centerChunkX;
@@ -1478,9 +1477,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		$moved = $delta > 0.0001;
 
 		if($moved || $deltaAngle > 1.0){
-			/** [BetterPMMP-PATCH] event engine: PlayerMoveEvent period - fire every N ticks with the
-			 * accumulated from, so listeners still see a gapless movement chain. Cancelling reverts
-			 * the whole accumulated span. */
+			//event engine: PlayerMoveEvent period - fire every N ticks with the accumulated from, so listeners still see a
+			//gapless movement chain. Cancelling reverts the whole accumulated span.
 			if(PlayerMoveEvent::hasHandlers()){
 				$moveEventPeriod = BetterPMMPConfig::$moveEventPeriod;
 				$this->moveEventFrom ??= $from;
@@ -1493,8 +1491,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 
 					if($ev->isCancelled()){
 						$this->revertMovement($evFrom);
-						/** keep the vanilla position==lastLocation invariant - evFrom may be older than
-						 * lastLocation when period > 1 - and resync viewers who already saw the reverted span */
+						//keep the vanilla position==lastLocation invariant - evFrom may be older than lastLocation when period > 1 - and
+						//resync viewers who already saw the reverted span
 						$this->lastLocation = $evFrom;
 						if($moveEventPeriod > 1){
 							$this->movementBroadcastPending = true;
@@ -1510,11 +1508,9 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 			}
 
 			$this->lastLocation = $to;
-			/** [BetterPMMP-PATCH] PvP optimization: player movement broadcast period - PlayerMoveEvent and
-			 * exhaustion above stay per-tick, only the packet send is decimated. A tick that only turned the
-			 * head gets its own period: viewers extrapolate position, so a skipped position desyncs where the
-			 * body is, while a skipped rotation only delays where it looks. Rotation rides along for free on
-			 * any tick the position moved, because MoveActorAbsolutePacket carries both. */
+			//Only the packet send is decimated; PlayerMoveEvent and exhaustion above stay per-tick. A tick that only
+			//turned the head gets its own period: viewers extrapolate position, so a skipped position desyncs where the
+			//body is, while a skipped rotation only delays where it looks.
 			$broadcastPeriod = $moved ? BetterPMMPConfig::$movementBroadcastPeriod : BetterPMMPConfig::$rotationBroadcastPeriod;
 			if($broadcastPeriod <= 1 || (($this->server->getTick() + $this->id) % $broadcastPeriod) === 0){
 				$this->movementBroadcastPending = false;
@@ -1523,9 +1519,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 				$this->movementBroadcastPending = true;
 			}
 
-			/** [BetterPMMP-PATCH] gameplay toggle: hunger exhaustion - the chunk order clamp below must
-			 * survive the skip, so only the exhaust calls are gated; sqrt moved into the sprint branch
-			 * since the walking branch never uses the distance */
+			//gameplay toggle: hunger exhaustion - the chunk order clamp below must survive the skip, so only the exhaust
+			//calls are gated; sqrt moved into the sprint branch since the walking branch never uses the distance
 			$horizontalDistanceSquared = (($from->x - $to->x) ** 2) + (($from->z - $to->z) ** 2);
 			if($horizontalDistanceSquared > 0){
 				if(BetterPMMPConfig::$hungerExhaustion){
@@ -1537,10 +1532,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 					}
 				}
 
-				/** [BetterPMMP-PATCH] PvP optimization: orderChunks() is idempotent while the player stays
-				 * inside the same chunk - selectChunks() yields the identical ring set, loadQueue drains
-				 * itself in requestChunks(), and the syncViewAreaCenterPoint() send is already gated on the
-				 * queues being non-empty. Re-arm only on an actual chunk crossing. */
+				//orderChunks() is idempotent while the player stays inside the same chunk, so re-arm only on an actual chunk
+				//crossing.
 				if(($to->getFloorX() >> Chunk::COORD_BIT_SIZE) !== $this->lastChunkOrderX
 					|| ($to->getFloorZ() >> Chunk::COORD_BIT_SIZE) !== $this->lastChunkOrderZ
 				){
@@ -1550,8 +1543,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 				}
 			}
 		}elseif($this->movementBroadcastPending){
-			/** [BetterPMMP-PATCH] PvP optimization: flush the last skipped movement broadcast so the
-			 * resting position viewers see is always exact */
+			//PvP optimization: flush the last skipped movement broadcast so the resting position viewers see is always exact
 			$this->movementBroadcastPending = false;
 			$this->broadcastMovement();
 		}
@@ -1635,8 +1627,8 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 				$this->fireTicks = 1;
 			}
 
-			/** [BetterPMMP-PATCH] PvP optimization: pickup scan period - the nearby-entity sweep is
-			 * O(entities around each player) every tick; vanilla pickup delay is 10 ticks anyway */
+			//PvP optimization: pickup scan period - the nearby-entity sweep is O(entities around each player) every tick;
+			//vanilla pickup delay is 10 ticks anyway
 			$scanPeriod = BetterPMMPConfig::$pickupScanPeriod;
 			if(!$this->isSpectator() && $this->isAlive() && ($scanPeriod <= 1 || (($currentTick + $this->id) % $scanPeriod) === 0)){
 				Timings::$playerCheckNearEntities->startTiming();
@@ -2098,7 +2090,6 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		}
 		$ev->setModifier($meleeEnchantmentDamage, EntityDamageEvent::MODIFIER_WEAPON_ENCHANTMENTS);
 
-		/** [BetterPMMP-PATCH] Configurable critical hit logic */
 		if((BetterPMMPConfig::$criticalHitIgnoreSprint || !$this->isSprinting()) && !$this->isFlying() && $this->fallDistance > BetterPMMPConfig::$criticalHitMinFallDistance && !$this->effectManager->has(VanillaEffects::BLINDNESS()) && !$this->isUnderwater()){
 			$ev->setModifier($ev->getFinalDamage() / 2, EntityDamageEvent::MODIFIER_CRITICAL);
 		}
@@ -2812,17 +2803,17 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 	}
 
 	public function teleport(Vector3 $pos, ?float $yaw = null, ?float $pitch = null) : bool{
-		/** [BetterPMMP-PATCH] Capture old world before parent::teleport mutates position */
+		//Capture old world before parent::teleport mutates position
 		$oldWorld = $this->getWorld();
 		if(parent::teleport($pos, $yaw, $pitch)){
 
 			$this->removeCurrentWindow();
 			$this->stopSleep();
-			/** [BetterPMMP-PATCH] event engine: teleport breaks move-event accumulation */
+			//event engine: teleport breaks move-event accumulation
 			$this->moveEventFrom = null;
 
-			/** [BetterPMMP-PATCH] Re-evaluate per-world view distance using the original requested distance,
-			 * so a previous world's override does not leak into a world that has no override. */
+			//Re-evaluate per-world view distance using the original requested distance, so a previous world's override does
+			//not leak into a world that has no override.
 			if($oldWorld !== $this->getWorld()){
 				$baseDistance = $this->requestedViewDistance > 0 ? $this->requestedViewDistance : $this->server->getViewDistance();
 				$this->setViewDistance($baseDistance);
@@ -3017,7 +3008,7 @@ class Player extends Human implements CommandSender, ChunkListener, IPlayer, Nev
 		if($this->isUsingChunk($chunkX, $chunkZ)){
 			$this->logger->debug("Detected forced unload of chunk " . $chunkX . " " . $chunkZ);
 			$this->unloadChunk($chunkX, $chunkZ);
-			/** [BetterPMMP-PATCH] Re-order promptly so the forcibly-unloaded chunk is re-requested even for a stationary player. */
+			//Re-order promptly so the forcibly-unloaded chunk is re-requested even for a stationary player.
 			$this->nextChunkOrderRun = 0;
 		}
 	}
