@@ -230,6 +230,12 @@ class InGamePacketHandler extends PacketHandler{
 
 			$sneaking = $this->resolveOnOffInputFlags($inputFlags, PlayerAuthInputFlags::START_SNEAKING, PlayerAuthInputFlags::STOP_SNEAKING);
 			$sprinting = $this->resolveOnOffInputFlags($inputFlags, PlayerAuthInputFlags::START_SPRINTING, PlayerAuthInputFlags::STOP_SPRINTING);
+			if($sprinting === null && $inputFlags->get(PlayerAuthInputFlags::STOP_SPRINTING)){
+				//Since 1.21 the client ships START and STOP together in the frame where it cancels its own sprint
+				//while the sprint control stays held (attacking, for one). It settles on not sprinting, so reading
+				//the pair as "no change" would leave the server sprinting for the rest of the session.
+				$sprinting = false;
+			}
 			$swimming = $this->resolveOnOffInputFlags($inputFlags, PlayerAuthInputFlags::START_SWIMMING, PlayerAuthInputFlags::STOP_SWIMMING);
 			$gliding = $this->resolveOnOffInputFlags($inputFlags, PlayerAuthInputFlags::START_GLIDING, PlayerAuthInputFlags::STOP_GLIDING);
 			$flying = $this->resolveOnOffInputFlags($inputFlags, PlayerAuthInputFlags::START_FLYING, PlayerAuthInputFlags::STOP_FLYING);
