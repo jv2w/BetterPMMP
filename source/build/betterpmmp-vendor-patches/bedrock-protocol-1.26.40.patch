@@ -3086,7 +3086,7 @@ index dc78164..9707f59 100644
  	}
  }
 diff --git a/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php b/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
-index 4613c13..afb98f3 100644
+index 4613c13..6236d39 100644
 --- a/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
 +++ b/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
 @@ -10,6 +10,8 @@
@@ -3098,27 +3098,37 @@ index 4613c13..afb98f3 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types\inventory\stackresponse;
-@@ -49,7 +51,7 @@ final class ItemStackResponseSlotInfo{
+@@ -49,9 +51,9 @@ final class ItemStackResponseSlotInfo{
  		$slot = Byte::readUnsigned($in);
  		$hotbarSlot = Byte::readUnsigned($in);
  		$count = Byte::readUnsigned($in);
 -		$itemStackId = CommonTypes::readServerItemStackId($in);
+-		$customName = CommonTypes::getString($in);
+-		$filteredCustomName = CommonTypes::getString($in);
 +		$itemStackId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::readServerItemStackId(...))) ?? 0;
- 		$customName = CommonTypes::getString($in);
- 		$filteredCustomName = CommonTypes::getString($in);
++		$customName = CommonTypes::readOptional($in, CommonTypes::getString(...)) ?? "";
++		$filteredCustomName = CommonTypes::readOptional($in, CommonTypes::getString(...)) ?? "";
  		$durabilityCorrection = VarInt::readSignedInt($in);
-@@ -60,7 +62,10 @@ final class ItemStackResponseSlotInfo{
+ 		return new self($slot, $hotbarSlot, $count, $itemStackId, $customName, $filteredCustomName, $durabilityCorrection);
+ 	}
+@@ -60,9 +62,14 @@ final class ItemStackResponseSlotInfo{
  		Byte::writeUnsigned($out, $this->slot);
  		Byte::writeUnsigned($out, $this->hotbarSlot);
  		Byte::writeUnsigned($out, $this->count);
 -		CommonTypes::writeServerItemStackId($out, $this->itemStackId);
+-		CommonTypes::putString($out, $this->customName);
+-		CommonTypes::putString($out, $this->filteredCustomName);
 +		//the stack ID is nested in two optionals; the outer one is always set, and the inner one is unset
 +		//for a stack the server hasn't assigned an ID to
 +		CommonTypes::putBool($out, true);
 +		CommonTypes::writeOptional($out, $this->itemStackId > 0 ? $this->itemStackId : null, CommonTypes::writeServerItemStackId(...));
- 		CommonTypes::putString($out, $this->customName);
- 		CommonTypes::putString($out, $this->filteredCustomName);
++		//both names are optional; an absent one encodes exactly like the empty string did before, which is why
++		//only renamed items were affected by getting this wrong
++		CommonTypes::writeOptional($out, $this->customName !== "" ? $this->customName : null, CommonTypes::putString(...));
++		CommonTypes::writeOptional($out, $this->filteredCustomName !== "" ? $this->filteredCustomName : null, CommonTypes::putString(...));
  		VarInt::writeSignedInt($out, $this->durabilityCorrection);
+ 	}
+ }
 diff --git a/src/types/login/clientdata/ClientData.php b/src/types/login/clientdata/ClientData.php
 index 58875c3..cb47969 100644
 --- a/src/types/login/clientdata/ClientData.php
