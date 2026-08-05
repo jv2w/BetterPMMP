@@ -772,7 +772,7 @@ index 1d2b819..226f18f 100644
  	}
  
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php
-index 6afdc4d..30325c6 100644
+index 6afdc4d..8f6872a 100644
 --- a/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php
 +++ b/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php
 @@ -10,6 +10,8 @@
@@ -841,7 +841,7 @@ index 6afdc4d..30325c6 100644
  
  	public function getAnalogMoveVecX() : float{ return $this->analogMoveVecX; }
  
-@@ -271,34 +271,37 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+@@ -271,34 +271,38 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
  		$this->moveVecX = LE::readFloat($in);
  		$this->moveVecZ = LE::readFloat($in);
  		$this->headYaw = LE::readFloat($in);
@@ -850,10 +850,11 @@ index 6afdc4d..30325c6 100644
 +		if(CommonTypes::getBool($in)){
 +			for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
 +				$flag = VarInt::readSignedInt($in);
-+				if($flag < 0 || $flag >= PlayerAuthInputFlags::NUMBER_OF_FLAGS){
-+					throw new PacketDecodeException("Unknown input flag $flag");
++				//a newer client may set flags this version doesn't know about; ignoring them keeps such a
++				//client playable, which is what the fixed-width bitset this replaced used to do
++				if($flag >= 0 && $flag < PlayerAuthInputFlags::NUMBER_OF_FLAGS){
++					$this->inputFlags->set($flag, true);
 +				}
-+				$this->inputFlags->set($flag, true);
 +			}
 +		}
  		$this->inputMode = VarInt::readUnsignedInt($in);
@@ -896,7 +897,7 @@ index 6afdc4d..30325c6 100644
  		$this->analogMoveVecX = LE::readFloat($in);
  		$this->analogMoveVecZ = LE::readFloat($in);
  		$this->cameraOrientation = CommonTypes::getVector3($in);
-@@ -312,29 +315,34 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+@@ -312,29 +316,34 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
  		LE::writeFloat($out, $this->moveVecX);
  		LE::writeFloat($out, $this->moveVecZ);
  		LE::writeFloat($out, $this->headYaw);
@@ -1282,7 +1283,7 @@ index 11531ae..56e3d58 100644
  			$entry->write($out);
  		}
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php b/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
-index 4bac0d2..4ccfcfe 100644
+index 4bac0d2..bb97fc3 100644
 --- a/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
 +++ b/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
 @@ -10,11 +10,12 @@
@@ -1312,7 +1313,7 @@ index 4bac0d2..4ccfcfe 100644
  	/** @var ScorePacketEntry[] */
  	public array $entries = [];
  
-@@ -45,50 +50,65 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
+@@ -45,50 +50,75 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
  	}
  
  	protected function decodePayload(ByteBufferReader $in) : void{
@@ -1359,7 +1360,17 @@ index 4bac0d2..4ccfcfe 100644
  			$this->entries[] = $entry;
  		}
 +
-+		$this->type = ($this->entries[0] ?? null)?->type === ScorePacketEntry::TYPE_REMOVE ? self::TYPE_REMOVE : self::TYPE_CHANGE;
++		//the packet-wide type is retained for plugins only; it must not flatten a mixed batch, so anything
++		//other than an all-remove batch decodes as CHANGE, which makes the encoder use each entry's own type
++		$this->type = self::TYPE_CHANGE;
++		foreach($this->entries as $entry){
++			if($entry->type !== ScorePacketEntry::TYPE_REMOVE){
++				return;
++			}
++		}
++		if(count($this->entries) > 0){
++			$this->type = self::TYPE_REMOVE;
++		}
  	}
  
  	protected function encodePayload(ByteBufferWriter $out) : void{

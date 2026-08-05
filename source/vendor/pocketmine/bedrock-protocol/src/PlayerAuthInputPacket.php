@@ -275,10 +275,11 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
 		if(CommonTypes::getBool($in)){
 			for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
 				$flag = VarInt::readSignedInt($in);
-				if($flag < 0 || $flag >= PlayerAuthInputFlags::NUMBER_OF_FLAGS){
-					throw new PacketDecodeException("Unknown input flag $flag");
+				//a newer client may set flags this version doesn't know about; ignoring them keeps such a
+				//client playable, which is what the fixed-width bitset this replaced used to do
+				if($flag >= 0 && $flag < PlayerAuthInputFlags::NUMBER_OF_FLAGS){
+					$this->inputFlags->set($flag, true);
 				}
-				$this->inputFlags->set($flag, true);
 			}
 		}
 		$this->inputMode = VarInt::readUnsignedInt($in);

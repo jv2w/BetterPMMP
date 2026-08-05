@@ -77,7 +77,17 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
 			$this->entries[] = $entry;
 		}
 
-		$this->type = ($this->entries[0] ?? null)?->type === ScorePacketEntry::TYPE_REMOVE ? self::TYPE_REMOVE : self::TYPE_CHANGE;
+		//the packet-wide type is retained for plugins only; it must not flatten a mixed batch, so anything
+		//other than an all-remove batch decodes as CHANGE, which makes the encoder use each entry's own type
+		$this->type = self::TYPE_CHANGE;
+		foreach($this->entries as $entry){
+			if($entry->type !== ScorePacketEntry::TYPE_REMOVE){
+				return;
+			}
+		}
+		if(count($this->entries) > 0){
+			$this->type = self::TYPE_REMOVE;
+		}
 	}
 
 	protected function encodePayload(ByteBufferWriter $out) : void{
