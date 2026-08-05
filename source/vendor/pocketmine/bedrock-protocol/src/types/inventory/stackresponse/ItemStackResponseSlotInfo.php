@@ -19,6 +19,7 @@ namespace pocketmine\network\mcpe\protocol\types\inventory\stackresponse;
 use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
+use pmmp\encoding\DataDecodeException;
 use pmmp\encoding\VarInt;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 
@@ -47,13 +48,30 @@ final class ItemStackResponseSlotInfo{
 
 	public function getDurabilityCorrection() : int{ return $this->durabilityCorrection; }
 
+	/**
+	 * Names sit in two nested optionals. An absent name is a single unset outer bool, which is byte-identical
+	 * to the empty string the field used to be, so only renamed items were affected by getting this wrong.
+	 *
+	 * @throws DataDecodeException
+	 */
+	private static function readName(ByteBufferReader $in) : string{
+		return CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::getString(...))) ?? "";
+	}
+
+	private static function writeName(ByteBufferWriter $out, string $name) : void{
+		CommonTypes::writeOptional($out, $name !== "" ? $name : null, function(ByteBufferWriter $out, string $name) : void{
+			CommonTypes::putBool($out, true);
+			CommonTypes::putString($out, $name);
+		});
+	}
+
 	public static function read(ByteBufferReader $in) : self{
 		$slot = Byte::readUnsigned($in);
 		$hotbarSlot = Byte::readUnsigned($in);
 		$count = Byte::readUnsigned($in);
 		$itemStackId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::readServerItemStackId(...))) ?? 0;
-		$customName = CommonTypes::readOptional($in, CommonTypes::getString(...)) ?? "";
-		$filteredCustomName = CommonTypes::readOptional($in, CommonTypes::getString(...)) ?? "";
+		$customName = self::readName($in);
+		$filteredCustomName = self::readName($in);
 		$durabilityCorrection = VarInt::readSignedInt($in);
 		return new self($slot, $hotbarSlot, $count, $itemStackId, $customName, $filteredCustomName, $durabilityCorrection);
 	}
@@ -66,10 +84,8 @@ final class ItemStackResponseSlotInfo{
 		//for a stack the server hasn't assigned an ID to
 		CommonTypes::putBool($out, true);
 		CommonTypes::writeOptional($out, $this->itemStackId > 0 ? $this->itemStackId : null, CommonTypes::writeServerItemStackId(...));
-		//both names are optional; an absent one encodes exactly like the empty string did before, which is why
-		//only renamed items were affected by getting this wrong
-		CommonTypes::writeOptional($out, $this->customName !== "" ? $this->customName : null, CommonTypes::putString(...));
-		CommonTypes::writeOptional($out, $this->filteredCustomName !== "" ? $this->filteredCustomName : null, CommonTypes::putString(...));
+		self::writeName($out, $this->customName);
+		self::writeName($out, $this->filteredCustomName);
 		VarInt::writeSignedInt($out, $this->durabilityCorrection);
 	}
 }
