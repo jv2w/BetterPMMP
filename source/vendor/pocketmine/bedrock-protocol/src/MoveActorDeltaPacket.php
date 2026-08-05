@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol;
@@ -23,73 +25,74 @@ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 class MoveActorDeltaPacket extends DataPacket implements ClientboundPacket{
 	public const NETWORK_ID = ProtocolInfo::MOVE_ACTOR_DELTA_PACKET;
 
-	public const FLAG_HAS_X = 0x01;
-	public const FLAG_HAS_Y = 0x02;
-	public const FLAG_HAS_Z = 0x04;
-	public const FLAG_HAS_PITCH = 0x08;
-	public const FLAG_HAS_YAW = 0x10;
-	public const FLAG_HAS_HEAD_YAW = 0x20;
-	public const FLAG_GROUND = 0x40;
-	public const FLAG_TELEPORT = 0x80;
-	public const FLAG_FORCE_MOVE_LOCAL_ENTITY = 0x100;
-
 	public int $actorRuntimeId;
-	public int $flags;
-	public float $xPos = 0;
-	public float $yPos = 0;
-	public float $zPos = 0;
-	public float $pitch = 0.0;
-	public float $yaw = 0.0;
-	public float $headYaw = 0.0;
+	public ?float $xPos = null;
+	public ?float $yPos = null;
+	public ?float $zPos = null;
+	public ?float $pitch = null;
+	public ?float $yaw = null;
+	public ?float $headYaw = null;
+	public bool $onGround = false;
+	public bool $teleport = false;
+	public bool $forceMoveLocalEntity = false;
+	public bool $forceCompletion = false;
 
 	/** @throws DataDecodeException */
-	private function maybeReadCoord(int $flag, ByteBufferReader $in) : float{
-		if(($this->flags & $flag) !== 0){
+	private function maybeReadCoord(ByteBufferReader $in) : ?float{
+		if(CommonTypes::getBool($in)){
 			return LE::readFloat($in);
 		}
-		return 0;
+		return null;
 	}
 
 	/** @throws DataDecodeException */
-	private function maybeReadRotation(int $flag, ByteBufferReader $in) : float{
-		if(($this->flags & $flag) !== 0){
+	private function maybeReadRotation(ByteBufferReader $in) : ?float{
+		if(CommonTypes::getBool($in)){
 			return CommonTypes::getRotationByte($in);
 		}
-		return 0.0;
+		return null;
 	}
 
 	protected function decodePayload(ByteBufferReader $in) : void{
 		$this->actorRuntimeId = CommonTypes::getActorRuntimeId($in);
-		$this->flags = LE::readUnsignedShort($in);
-		$this->xPos = $this->maybeReadCoord(self::FLAG_HAS_X, $in);
-		$this->yPos = $this->maybeReadCoord(self::FLAG_HAS_Y, $in);
-		$this->zPos = $this->maybeReadCoord(self::FLAG_HAS_Z, $in);
-		$this->pitch = $this->maybeReadRotation(self::FLAG_HAS_PITCH, $in);
-		$this->yaw = $this->maybeReadRotation(self::FLAG_HAS_YAW, $in);
-		$this->headYaw = $this->maybeReadRotation(self::FLAG_HAS_HEAD_YAW, $in);
+		$this->xPos = $this->maybeReadCoord($in);
+		$this->yPos = $this->maybeReadCoord($in);
+		$this->zPos = $this->maybeReadCoord($in);
+		$this->pitch = $this->maybeReadRotation($in);
+		$this->yaw = $this->maybeReadRotation($in);
+		$this->headYaw = $this->maybeReadRotation($in);
+		$this->onGround = CommonTypes::getBool($in);
+		$this->teleport = CommonTypes::getBool($in);
+		$this->forceMoveLocalEntity = CommonTypes::getBool($in);
+		$this->forceCompletion = CommonTypes::getBool($in);
 	}
 
-	private function maybeWriteCoord(int $flag, float $val, ByteBufferWriter $out) : void{
-		if(($this->flags & $flag) !== 0){
+	private function maybeWriteCoord(?float $val, ByteBufferWriter $out) : void{
+		CommonTypes::putBool($out, $val !== null);
+		if($val !== null){
 			LE::writeFloat($out, $val);
 		}
 	}
 
-	private function maybeWriteRotation(int $flag, float $val, ByteBufferWriter $out) : void{
-		if(($this->flags & $flag) !== 0){
+	private function maybeWriteRotation(?float $val, ByteBufferWriter $out) : void{
+		CommonTypes::putBool($out, $val !== null);
+		if($val !== null){
 			CommonTypes::putRotationByte($out, $val);
 		}
 	}
 
 	protected function encodePayload(ByteBufferWriter $out) : void{
 		CommonTypes::putActorRuntimeId($out, $this->actorRuntimeId);
-		LE::writeUnsignedShort($out, $this->flags);
-		$this->maybeWriteCoord(self::FLAG_HAS_X, $this->xPos, $out);
-		$this->maybeWriteCoord(self::FLAG_HAS_Y, $this->yPos, $out);
-		$this->maybeWriteCoord(self::FLAG_HAS_Z, $this->zPos, $out);
-		$this->maybeWriteRotation(self::FLAG_HAS_PITCH, $this->pitch, $out);
-		$this->maybeWriteRotation(self::FLAG_HAS_YAW, $this->yaw, $out);
-		$this->maybeWriteRotation(self::FLAG_HAS_HEAD_YAW, $this->headYaw, $out);
+		$this->maybeWriteCoord($this->xPos, $out);
+		$this->maybeWriteCoord($this->yPos, $out);
+		$this->maybeWriteCoord($this->zPos, $out);
+		$this->maybeWriteRotation($this->pitch, $out);
+		$this->maybeWriteRotation($this->yaw, $out);
+		$this->maybeWriteRotation($this->headYaw, $out);
+		CommonTypes::putBool($out, $this->onGround);
+		CommonTypes::putBool($out, $this->teleport);
+		CommonTypes::putBool($out, $this->forceMoveLocalEntity);
+		CommonTypes::putBool($out, $this->forceCompletion);
 	}
 
 	public function handle(PacketHandlerInterface $handler) : bool{

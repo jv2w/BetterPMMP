@@ -1464,7 +1464,7 @@ class NetworkSession{
 		$this->syncViewAreaCenterPoint($loc, max($player->getViewDistance(), (int) ceil(sqrt($eraseDistanceSquared)) + 1));
 		$payload = self::$emptyChunkPayload ??= ChunkSerializer::serializeFullChunk(new Chunk([], false), DimensionIds::OVERWORLD, $this->typeConverter->getBlockTranslator());
 		foreach($blank as [$chunkX, $chunkZ]){
-			$this->sendDataPacket(LevelChunkPacket::create(new ChunkPosition($chunkX, $chunkZ), DimensionIds::OVERWORLD, 0, false, null, $payload));
+			$this->sendDataPacket(LevelChunkPacket::create(new ChunkPosition($chunkX, $chunkZ), DimensionIds::OVERWORLD, 0, null, false, [], $payload));
 		}
 		//narrow again in the same batch, otherwise the widened area makes the client render every other stale chunk it still has cached
 		$player->syncViewArea();

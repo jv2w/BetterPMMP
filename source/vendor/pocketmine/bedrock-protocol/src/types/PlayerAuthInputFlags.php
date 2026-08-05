@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
@@ -118,6 +120,7 @@ final class PlayerAuthInputFlags{
 	public const SNEAK_RELEASED_RAW = 62;
 	public const SNEAK_PRESSED_RAW = 63;
 	public const SNEAK_CURRENT_RAW = 64;
+	public const INTERNAL_UPDATE = 65;
 
-	public const NUMBER_OF_FLAGS = 65;
+	public const NUMBER_OF_FLAGS = 66;
 }

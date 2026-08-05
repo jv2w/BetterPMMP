@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol;
@@ -62,7 +64,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
 	public bool $enableClientSideChunkGeneration;
 	public bool $blockNetworkIdsAreHashes = false; //new in 1.19.80, possibly useful for multi version
 	public NetworkPermissions $networkPermissions;
-	public bool $isLoggingChat = false;
 	public ?ServerJoinInformation $serverJoinInformation;
 	public ServerTelemetryData $serverTelemetryData;
 
@@ -108,7 +109,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
 		bool $enableClientSideChunkGeneration,
 		bool $blockNetworkIdsAreHashes,
 		NetworkPermissions $networkPermissions,
-		bool $isLoggingChat,
 		?ServerJoinInformation $serverJoinInformation,
 		ServerTelemetryData $serverTelemetryData,
 		array $blockPalette,
@@ -137,7 +137,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
 		$result->enableClientSideChunkGeneration = $enableClientSideChunkGeneration;
 		$result->blockNetworkIdsAreHashes = $blockNetworkIdsAreHashes;
 		$result->networkPermissions = $networkPermissions;
-		$result->isLoggingChat = $isLoggingChat;
 		$result->serverJoinInformation = $serverJoinInformation;
 		$result->serverTelemetryData = $serverTelemetryData;
 		$result->blockPalette = $blockPalette;
@@ -182,7 +181,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
 		$this->enableClientSideChunkGeneration = CommonTypes::getBool($in);
 		$this->blockNetworkIdsAreHashes = CommonTypes::getBool($in);
 		$this->networkPermissions = NetworkPermissions::decode($in);
-		$this->isLoggingChat = CommonTypes::getBool($in);
 		$this->serverJoinInformation = CommonTypes::readOptional($in, ServerJoinInformation::read(...));
 		$this->serverTelemetryData = ServerTelemetryData::read($in);
 	}
@@ -223,7 +221,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
 		CommonTypes::putBool($out, $this->enableClientSideChunkGeneration);
 		CommonTypes::putBool($out, $this->blockNetworkIdsAreHashes);
 		$this->networkPermissions->encode($out);
-		CommonTypes::putBool($out, $this->isLoggingChat);
 		CommonTypes::writeOptional($out, $this->serverJoinInformation, fn(ByteBufferWriter $out, ServerJoinInformation $info) => $info->write($out));
 		$this->serverTelemetryData->write($out);
 	}

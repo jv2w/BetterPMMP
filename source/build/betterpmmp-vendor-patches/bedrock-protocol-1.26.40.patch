@@ -1,0 +1,2629 @@
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/AnvilDamagePacket.php b/source/vendor/pocketmine/bedrock-protocol/src/AnvilDamagePacket.php
+index 416f76b..5f7cf2b 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/AnvilDamagePacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/AnvilDamagePacket.php
+@@ -10,11 +10,12 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+ 
+-use pmmp\encoding\Byte;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+@@ -24,31 +25,23 @@ class AnvilDamagePacket extends DataPacket implements ServerboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::ANVIL_DAMAGE_PACKET;
+ 
+ 	private BlockPosition $blockPosition;
+-	private int $damageAmount;
+ 
+ 	/**
+ 	 * @generate-create-func
+ 	 */
+-	public static function create(BlockPosition $blockPosition, int $damageAmount) : self{
++	public static function create(BlockPosition $blockPosition) : self{
+ 		$result = new self;
+ 		$result->blockPosition = $blockPosition;
+-		$result->damageAmount = $damageAmount;
+ 		return $result;
+ 	}
+ 
+-	public function getDamageAmount() : int{
+-		return $this->damageAmount;
+-	}
+-
+ 	public function getBlockPosition() : BlockPosition{ return $this->blockPosition; }
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+-		$this->damageAmount = Byte::readUnsigned($in);
+ 		$this->blockPosition = CommonTypes::getBlockPosition($in);
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+-		Byte::writeUnsigned($out, $this->damageAmount);
+ 		CommonTypes::putBlockPosition($out, $this->blockPosition);
+ 	}
+ 
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php
+index 72914fe..166f27c 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -32,151 +34,114 @@ use function count;
+ class ClientboundMapItemDataPacket extends DataPacket implements ClientboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::CLIENTBOUND_MAP_ITEM_DATA_PACKET;
+ 
+-	public const BITFLAG_TEXTURE_UPDATE = 0x02;
+-	public const BITFLAG_DECORATION_UPDATE = 0x04;
+-	public const BITFLAG_MAP_CREATION = 0x08;
+-
+ 	public int $mapId;
+-	public int $type;
+ 	public int $dimensionId = DimensionIds::OVERWORLD;
+ 	public bool $isLocked = false;
+ 	public BlockPosition $origin;
+ 
+-	/** @var int[] */
+-	public array $parentMapIds = [];
+-	public int $scale;
++	/** @var int[]|null */
++	public ?array $parentMapIds = null;
++	public ?int $scale = null;
+ 
+-	/** @var MapTrackedObject[] */
+-	public array $trackedEntities = [];
+-	/** @var MapDecoration[] */
+-	public array $decorations = [];
++	/** @var MapTrackedObject[]|null */
++	public ?array $trackedEntities = null;
++	/** @var MapDecoration[]|null */
++	public ?array $decorations = null;
+ 
+-	public int $xOffset = 0;
+-	public int $yOffset = 0;
++	public ?int $xOffset = null;
++	public ?int $yOffset = null;
+ 	public ?MapImage $colors = null;
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+ 		$this->mapId = CommonTypes::getActorUniqueId($in);
+-		$this->type = VarInt::readUnsignedInt($in);
+ 		$this->dimensionId = Byte::readUnsigned($in);
+ 		$this->isLocked = CommonTypes::getBool($in);
+ 		$this->origin = CommonTypes::getBlockPosition($in);
+ 
+-		if(($this->type & self::BITFLAG_MAP_CREATION) !== 0){
++		$this->parentMapIds = CommonTypes::readOptional($in, function(ByteBufferReader $in) : array{
+ 			$count = VarInt::readUnsignedInt($in);
++			$parentMapIds = [];
+ 			for($i = 0; $i < $count; ++$i){
+-				$this->parentMapIds[] = CommonTypes::getActorUniqueId($in);
++				$parentMapIds[] = CommonTypes::getActorUniqueId($in);
+ 			}
+-		}
+-
+-		if(($this->type & (self::BITFLAG_MAP_CREATION | self::BITFLAG_DECORATION_UPDATE | self::BITFLAG_TEXTURE_UPDATE)) !== 0){ //Decoration bitflag or colour bitflag
+-			$this->scale = Byte::readUnsigned($in);
+-		}
+-
+-		if(($this->type & self::BITFLAG_DECORATION_UPDATE) !== 0){
+-			for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
+-				$object = new MapTrackedObject();
+-				$object->type = LE::readUnsignedInt($in);
+-				if($object->type === MapTrackedObject::TYPE_BLOCK){
+-					$object->blockPosition = CommonTypes::getBlockPosition($in);
+-				}elseif($object->type === MapTrackedObject::TYPE_ENTITY){
+-					$object->actorUniqueId = CommonTypes::getActorUniqueId($in);
+-				}else{
+-					throw new PacketDecodeException("Unknown map object type $object->type");
+-				}
+-				$this->trackedEntities[] = $object;
++			return $parentMapIds;
++		});
++		$this->scale = CommonTypes::readOptional($in, Byte::readUnsigned(...));
++		$this->trackedEntities = CommonTypes::readOptional($in, function(ByteBufferReader $in) : array{
++			$count = VarInt::readUnsignedInt($in);
++			$entities = [];
++			for($i = 0; $i < $count; ++$i){
++				$entities[] = MapTrackedObject::read($in);
+ 			}
+-
+-			for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			return $entities;
++		});
++		$this->decorations = CommonTypes::readOptional($in, function(ByteBufferReader $in) : array{
++			$count = VarInt::readUnsignedInt($in);
++			$decorations = [];
++			for($i = 0; $i < $count; ++$i){
+ 				$icon = Byte::readUnsigned($in);
+ 				$rotation = Byte::readUnsigned($in);
+ 				$xOffset = Byte::readUnsigned($in);
+ 				$yOffset = Byte::readUnsigned($in);
+ 				$label = CommonTypes::getString($in);
+-				$color = Color::fromRGBA(Binary::flipIntEndianness(VarInt::readUnsignedInt($in)));
+-				$this->decorations[] = new MapDecoration($icon, $rotation, $xOffset, $yOffset, $label, $color);
++				$color = Color::fromRGBA(Binary::flipIntEndianness(LE::readUnsignedInt($in)));
++				$decorations[] = new MapDecoration($icon, $rotation, $xOffset, $yOffset, $label, $color);
+ 			}
+-		}
+-
+-		if(($this->type & self::BITFLAG_TEXTURE_UPDATE) !== 0){
+-			$width = VarInt::readSignedInt($in);
+-			$height = VarInt::readSignedInt($in);
+-			$this->xOffset = VarInt::readSignedInt($in);
+-			$this->yOffset = VarInt::readSignedInt($in);
+-
++			return $decorations;
++		});
++		$width = CommonTypes::readOptional($in, VarInt::readSignedInt(...));
++		$height = CommonTypes::readOptional($in, VarInt::readSignedInt(...));
++		$this->xOffset = CommonTypes::readOptional($in, VarInt::readSignedInt(...));
++		$this->yOffset = CommonTypes::readOptional($in, VarInt::readSignedInt(...));
++		$this->colors = CommonTypes::readOptional($in, function(ByteBufferReader $in) use ($width, $height) : MapImage{
+ 			$count = VarInt::readUnsignedInt($in);
+-			if($count !== $width * $height){
+-				throw new PacketDecodeException("Expected colour count of " . ($height * $width) . " (height $height * width $width), got $count");
++			if($width === null || $height === null || $count !== $width * $height){
++				throw new PacketDecodeException("Expected colour count of " . (($height ?? 0) * ($width ?? 0)) . ", got $count");
+ 			}
+-
+-			$this->colors = MapImage::decode($in, $height, $width);
+-		}
++			return MapImage::decode($in, $height, $width);
++		});
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+ 		CommonTypes::putActorUniqueId($out, $this->mapId);
+-
+-		$type = 0;
+-		if(($parentMapIdsCount = count($this->parentMapIds)) > 0){
+-			$type |= self::BITFLAG_MAP_CREATION;
+-		}
+-		if(($decorationCount = count($this->decorations)) > 0){
+-			$type |= self::BITFLAG_DECORATION_UPDATE;
+-		}
+-		if($this->colors !== null){
+-			$type |= self::BITFLAG_TEXTURE_UPDATE;
+-		}
+-
+-		VarInt::writeUnsignedInt($out, $type);
+ 		Byte::writeUnsigned($out, $this->dimensionId);
+ 		CommonTypes::putBool($out, $this->isLocked);
+ 		CommonTypes::putBlockPosition($out, $this->origin);
+ 
+-		if(($type & self::BITFLAG_MAP_CREATION) !== 0){
+-			VarInt::writeUnsignedInt($out, $parentMapIdsCount);
+-			foreach($this->parentMapIds as $parentMapId){
++		CommonTypes::writeOptional($out, $this->parentMapIds, function(ByteBufferWriter $out, array $parentMapIds) : void{
++			VarInt::writeUnsignedInt($out, count($parentMapIds));
++			foreach($parentMapIds as $parentMapId){
+ 				CommonTypes::putActorUniqueId($out, $parentMapId);
+ 			}
+-		}
+-
+-		if(($type & (self::BITFLAG_MAP_CREATION | self::BITFLAG_TEXTURE_UPDATE | self::BITFLAG_DECORATION_UPDATE)) !== 0){
+-			Byte::writeUnsigned($out, $this->scale);
+-		}
+-
+-		if(($type & self::BITFLAG_DECORATION_UPDATE) !== 0){
+-			VarInt::writeUnsignedInt($out, count($this->trackedEntities));
+-			foreach($this->trackedEntities as $object){
+-				LE::writeUnsignedInt($out, $object->type);
+-				if($object->type === MapTrackedObject::TYPE_BLOCK){
+-					CommonTypes::putBlockPosition($out, $object->blockPosition);
+-				}elseif($object->type === MapTrackedObject::TYPE_ENTITY){
+-					CommonTypes::putActorUniqueId($out, $object->actorUniqueId);
+-				}else{
+-					throw new \InvalidArgumentException("Unknown map object type $object->type");
+-				}
++		});
++		CommonTypes::writeOptional($out, $this->scale, Byte::writeUnsigned(...));
++		CommonTypes::writeOptional($out, $this->trackedEntities, function(ByteBufferWriter $out, array $entities) : void{
++			VarInt::writeUnsignedInt($out, count($entities));
++			/** @var MapTrackedObject[] $entities */
++			foreach($entities as $entity){
++				$entity->write($out);
+ 			}
+-
+-			VarInt::writeUnsignedInt($out, $decorationCount);
+-			foreach($this->decorations as $decoration){
++		});
++		CommonTypes::writeOptional($out, $this->decorations, function(ByteBufferWriter $out, array $decorations) : void{
++			VarInt::writeUnsignedInt($out, count($decorations));
++			/** @var MapDecoration[] $decorations */
++			foreach($decorations as $decoration){
+ 				Byte::writeUnsigned($out, $decoration->getIcon());
+ 				Byte::writeUnsigned($out, $decoration->getRotation());
+ 				Byte::writeUnsigned($out, $decoration->getXOffset());
+ 				Byte::writeUnsigned($out, $decoration->getYOffset());
+ 				CommonTypes::putString($out, $decoration->getLabel());
+-				VarInt::writeUnsignedInt($out, Binary::flipIntEndianness($decoration->getColor()->toRGBA()));
++				LE::writeUnsignedInt($out, Binary::flipIntEndianness($decoration->getColor()->toRGBA()));
+ 			}
+-		}
+-
+-		if($this->colors !== null){
+-			VarInt::writeSignedInt($out, $this->colors->getWidth());
+-			VarInt::writeSignedInt($out, $this->colors->getHeight());
+-			VarInt::writeSignedInt($out, $this->xOffset);
+-			VarInt::writeSignedInt($out, $this->yOffset);
+-
+-			VarInt::writeUnsignedInt($out, $this->colors->getWidth() * $this->colors->getHeight()); //list count, but we handle it as a 2D array... thanks for the confusion mojang
+-
+-			$this->colors->encode($out);
+-		}
++		});
++		CommonTypes::writeOptional($out, $this->colors?->getWidth(), VarInt::writeSignedInt(...));
++		CommonTypes::writeOptional($out, $this->colors?->getHeight(), VarInt::writeSignedInt(...));
++		CommonTypes::writeOptional($out, $this->xOffset, VarInt::writeSignedInt(...));
++		CommonTypes::writeOptional($out, $this->yOffset, VarInt::writeSignedInt(...));
++		CommonTypes::writeOptional($out, $this->colors, function(ByteBufferWriter $out, MapImage $colors) : void{
++			VarInt::writeUnsignedInt($out, $colors->getWidth() * $colors->getHeight());
++			$colors->encode($out);
++		});
+ 	}
+ 
+ 	public function handle(PacketHandlerInterface $handler) : bool{
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/CraftingDataPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/CraftingDataPacket.php
+index b12130f..8385756 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/CraftingDataPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/CraftingDataPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -33,14 +35,14 @@ use function count;
+ class CraftingDataPacket extends DataPacket implements ClientboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::CRAFTING_DATA_PACKET;
+ 
+-	public const ENTRY_SHAPELESS = 0;
+-	public const ENTRY_SHAPED = 1;
+-	public const ENTRY_MULTI = 4;
+-	public const ENTRY_USER_DATA_SHAPELESS = 5;
+-	public const ENTRY_SHAPELESS_CHEMISTRY = 6;
+-	public const ENTRY_SHAPED_CHEMISTRY = 7;
+-	public const ENTRY_SMITHING_TRANSFORM = 8;
+-	public const ENTRY_SMITHING_TRIM = 9;
++	public const ENTRY_SHAPED = 0;
++	public const ENTRY_SHAPELESS = 1;
++	public const ENTRY_MULTI = 2;
++	public const ENTRY_USER_DATA_SHAPELESS = 3;
++	public const ENTRY_SHAPELESS_CHEMISTRY = 4;
++	public const ENTRY_SHAPED_CHEMISTRY = 5;
++	public const ENTRY_SMITHING_TRANSFORM = 6;
++	public const ENTRY_SMITHING_TRIM = 7;
+ 
+ 	/** @var RecipeWithTypeId[] */
+ 	public array $recipesWithTypeIds = [];
+@@ -70,20 +72,29 @@ class CraftingDataPacket extends DataPacket implements ClientboundPacket{
+ 	}
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+-		$recipeCount = VarInt::readUnsignedInt($in);
+-		$previousType = "none";
+-		for($i = 0; $i < $recipeCount; ++$i){
+-			$recipeType = VarInt::readSignedInt($in);
+-
+-			$this->recipesWithTypeIds[] = match($recipeType){
+-				self::ENTRY_SHAPELESS, self::ENTRY_USER_DATA_SHAPELESS, self::ENTRY_SHAPELESS_CHEMISTRY => ShapelessRecipe::decode($recipeType, $in),
+-				self::ENTRY_SHAPED, self::ENTRY_SHAPED_CHEMISTRY => ShapedRecipe::decode($recipeType, $in),
+-				self::ENTRY_MULTI => MultiRecipe::decode($recipeType, $in),
+-				self::ENTRY_SMITHING_TRANSFORM => SmithingTransformRecipe::decode($recipeType, $in),
+-				self::ENTRY_SMITHING_TRIM => SmithingTrimRecipe::decode($recipeType, $in),
+-				default => throw new PacketDecodeException("Unhandled recipe type $recipeType (previous was $previousType)"),
+-			};
+-			$previousType = $recipeType;
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$this->recipesWithTypeIds[] = ShapedRecipe::decode(self::ENTRY_SHAPED, $in);
++		}
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$this->recipesWithTypeIds[] = ShapelessRecipe::decode(self::ENTRY_SHAPELESS, $in);
++		}
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$this->recipesWithTypeIds[] = MultiRecipe::decode(self::ENTRY_MULTI, $in);
++		}
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$this->recipesWithTypeIds[] = ShapelessRecipe::decode(self::ENTRY_USER_DATA_SHAPELESS, $in);
++		}
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$this->recipesWithTypeIds[] = ShapelessRecipe::decode(self::ENTRY_SHAPELESS_CHEMISTRY, $in);
++		}
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$this->recipesWithTypeIds[] = ShapedRecipe::decode(self::ENTRY_SHAPED_CHEMISTRY, $in);
++		}
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$this->recipesWithTypeIds[] = SmithingTransformRecipe::decode(self::ENTRY_SMITHING_TRANSFORM, $in);
++		}
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$this->recipesWithTypeIds[] = SmithingTrimRecipe::decode(self::ENTRY_SMITHING_TRIM, $in);
+ 		}
+ 		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
+ 			$inputId = VarInt::readSignedInt($in);
+@@ -115,10 +126,28 @@ class CraftingDataPacket extends DataPacket implements ClientboundPacket{
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+-		VarInt::writeUnsignedInt($out, count($this->recipesWithTypeIds));
++		$buckets = [
++			self::ENTRY_SHAPED => [],
++			self::ENTRY_SHAPELESS => [],
++			self::ENTRY_MULTI => [],
++			self::ENTRY_USER_DATA_SHAPELESS => [],
++			self::ENTRY_SHAPELESS_CHEMISTRY => [],
++			self::ENTRY_SHAPED_CHEMISTRY => [],
++			self::ENTRY_SMITHING_TRANSFORM => [],
++			self::ENTRY_SMITHING_TRIM => [],
++		];
+ 		foreach($this->recipesWithTypeIds as $d){
+-			VarInt::writeSignedInt($out, $d->getTypeId());
+-			$d->encode($out);
++			$typeId = $d->getTypeId();
++			if(!isset($buckets[$typeId])){
++				throw new \InvalidArgumentException("Unhandled recipe type $typeId");
++			}
++			$buckets[$typeId][] = $d;
++		}
++		foreach($buckets as $recipes){
++			VarInt::writeUnsignedInt($out, count($recipes));
++			foreach($recipes as $d){
++				$d->encode($out);
++			}
+ 		}
+ 		VarInt::writeUnsignedInt($out, count($this->potionTypeRecipes));
+ 		foreach($this->potionTypeRecipes as $recipe){
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/LevelChunkPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/LevelChunkPacket.php
+index 2363c98..e53e57f 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/LevelChunkPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/LevelChunkPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -21,23 +23,11 @@ use pmmp\encoding\VarInt;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use pocketmine\network\mcpe\protocol\types\ChunkPosition;
+ use pocketmine\network\mcpe\protocol\types\DimensionIds;
+-use pocketmine\utils\Limits;
+ use function count;
+-use const PHP_INT_MAX;
+ 
+ class LevelChunkPacket extends DataPacket implements ClientboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::LEVEL_CHUNK_PACKET;
+ 
+-	/**
+-	 * Client will request all subchunks as needed up to the top of the world
+-	 */
+-	private const CLIENT_REQUEST_FULL_COLUMN_FAKE_COUNT = Limits::UINT32_MAX;
+-	/**
+-	 * Client will request subchunks as needed up to the height written in the packet, and assume that anything above
+-	 * that height is air (wtf mojang ...)
+-	 */
+-	private const CLIENT_REQUEST_TRUNCATED_COLUMN_FAKE_COUNT = Limits::UINT32_MAX - 1;
+-
+ 	//this appears large enough for a world height of 1024 blocks - it may need to be increased in the future
+ 	private const MAX_BLOB_HASHES = 64;
+ 
+@@ -45,9 +35,10 @@ class LevelChunkPacket extends DataPacket implements ClientboundPacket{
+ 	/** @phpstan-var DimensionIds::* */
+ 	private int $dimensionId;
+ 	private int $subChunkCount;
+-	private bool $clientSubChunkRequestsEnabled;
+-	/** @var int[]|null */
+-	private ?array $usedBlobHashes = null;
++	private ?int $clientRequestSubChunkLimit = null;
++	private bool $cacheEnabled;
++	/** @var int[] */
++	private array $usedBlobHashes = [];
+ 	private string $extraPayload;
+ 
+ 	/**
+@@ -55,12 +46,13 @@ class LevelChunkPacket extends DataPacket implements ClientboundPacket{
+ 	 * @param int[] $usedBlobHashes
+ 	 * @phpstan-param DimensionIds::* $dimensionId
+ 	 */
+-	public static function create(ChunkPosition $chunkPosition, int $dimensionId, int $subChunkCount, bool $clientSubChunkRequestsEnabled, ?array $usedBlobHashes, string $extraPayload) : self{
++	public static function create(ChunkPosition $chunkPosition, int $dimensionId, int $subChunkCount, ?int $clientRequestSubChunkLimit, bool $cacheEnabled, array $usedBlobHashes, string $extraPayload) : self{
+ 		$result = new self;
+ 		$result->chunkPosition = $chunkPosition;
+ 		$result->dimensionId = $dimensionId;
+ 		$result->subChunkCount = $subChunkCount;
+-		$result->clientSubChunkRequestsEnabled = $clientSubChunkRequestsEnabled;
++		$result->clientRequestSubChunkLimit = $clientRequestSubChunkLimit;
++		$result->cacheEnabled = $cacheEnabled;
+ 		$result->usedBlobHashes = $usedBlobHashes;
+ 		$result->extraPayload = $extraPayload;
+ 		return $result;
+@@ -75,22 +67,26 @@ class LevelChunkPacket extends DataPacket implements ClientboundPacket{
+ 	}
+ 
+ 	public function isClientSubChunkRequestsEnabled() : bool{
+-		return $this->clientSubChunkRequestsEnabled;
++		return $this->clientRequestSubChunkLimit !== null;
+ 	}
+ 
+ 	/** @deprecated incorrect name */
+ 	public function isClientSubChunkRequestEnabled() : bool{
+-		return $this->clientSubChunkRequestsEnabled;
++		return $this->clientRequestSubChunkLimit !== null;
++	}
++
++	public function getClientRequestSubChunkLimit() : ?int{
++		return $this->clientRequestSubChunkLimit;
+ 	}
+ 
+ 	public function isCacheEnabled() : bool{
+-		return $this->usedBlobHashes !== null;
++		return $this->cacheEnabled;
+ 	}
+ 
+ 	/**
+-	 * @return int[]|null
++	 * @return int[]
+ 	 */
+-	public function getUsedBlobHashes() : ?array{
++	public function getUsedBlobHashes() : array{
+ 		return $this->usedBlobHashes;
+ 	}
+ 
+@@ -101,55 +97,39 @@ class LevelChunkPacket extends DataPacket implements ClientboundPacket{
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+ 		$this->chunkPosition = ChunkPosition::read($in);
+ 		$this->dimensionId = VarInt::readSignedInt($in);
++		$this->subChunkCount = VarInt::readUnsignedInt($in);
+ 
+-		$subChunkCountButNotReally = VarInt::readUnsignedInt($in);
+-		if($subChunkCountButNotReally === self::CLIENT_REQUEST_FULL_COLUMN_FAKE_COUNT){
+-			$this->clientSubChunkRequestsEnabled = true;
+-			$this->subChunkCount = PHP_INT_MAX;
+-		}elseif($subChunkCountButNotReally === self::CLIENT_REQUEST_TRUNCATED_COLUMN_FAKE_COUNT){
+-			$this->clientSubChunkRequestsEnabled = true;
+-			$this->subChunkCount = LE::readUnsignedShort($in);
+-		}else{
+-			$this->clientSubChunkRequestsEnabled = false;
+-			$this->subChunkCount = $subChunkCountButNotReally;
+-		}
++		$this->clientRequestSubChunkLimit = CommonTypes::getBool($in) ? VarInt::readSignedInt($in) : null;
++		$this->cacheEnabled = CommonTypes::getBool($in);
+ 
+-		$cacheEnabled = CommonTypes::getBool($in);
+-		if($cacheEnabled){
+-			$this->usedBlobHashes = [];
+-			$count = VarInt::readUnsignedInt($in);
+-			if($count > self::MAX_BLOB_HASHES){
+-				throw new PacketDecodeException("Expected at most " . self::MAX_BLOB_HASHES . " blob hashes, got " . $count);
+-			}
+-			for($i = 0; $i < $count; ++$i){
+-				$this->usedBlobHashes[] = LE::readUnsignedLong($in);
+-			}
++		$this->usedBlobHashes = [];
++		$count = VarInt::readUnsignedInt($in);
++		if($count > self::MAX_BLOB_HASHES){
++			throw new PacketDecodeException("Expected at most " . self::MAX_BLOB_HASHES . " blob hashes, got " . $count);
+ 		}
++		for($i = 0; $i < $count; ++$i){
++			$this->usedBlobHashes[] = LE::readUnsignedLong($in);
++		}
++
+ 		$this->extraPayload = CommonTypes::getString($in);
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+ 		$this->chunkPosition->write($out);
+ 		VarInt::writeSignedInt($out, $this->dimensionId);
++		VarInt::writeUnsignedInt($out, $this->subChunkCount);
+ 
+-		if($this->clientSubChunkRequestsEnabled){
+-			if($this->subChunkCount === PHP_INT_MAX){
+-				VarInt::writeUnsignedInt($out, self::CLIENT_REQUEST_FULL_COLUMN_FAKE_COUNT);
+-			}else{
+-				VarInt::writeUnsignedInt($out, self::CLIENT_REQUEST_TRUNCATED_COLUMN_FAKE_COUNT);
+-				LE::writeUnsignedShort($out, $this->subChunkCount);
+-			}
+-		}else{
+-			VarInt::writeUnsignedInt($out, $this->subChunkCount);
++		CommonTypes::putBool($out, $this->clientRequestSubChunkLimit !== null);
++		if($this->clientRequestSubChunkLimit !== null){
++			VarInt::writeSignedInt($out, $this->clientRequestSubChunkLimit);
+ 		}
++		CommonTypes::putBool($out, $this->cacheEnabled);
+ 
+-		CommonTypes::putBool($out, $this->usedBlobHashes !== null);
+-		if($this->usedBlobHashes !== null){
+-			VarInt::writeUnsignedInt($out, count($this->usedBlobHashes));
+-			foreach($this->usedBlobHashes as $hash){
+-				LE::writeUnsignedLong($out, $hash);
+-			}
++		VarInt::writeUnsignedInt($out, count($this->usedBlobHashes));
++		foreach($this->usedBlobHashes as $hash){
++			LE::writeUnsignedLong($out, $hash);
+ 		}
++
+ 		CommonTypes::putString($out, $this->extraPayload);
+ 	}
+ 
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/MoveActorDeltaPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/MoveActorDeltaPacket.php
+index 788572b..d9c9a68 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/MoveActorDeltaPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/MoveActorDeltaPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -23,73 +25,74 @@ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ class MoveActorDeltaPacket extends DataPacket implements ClientboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::MOVE_ACTOR_DELTA_PACKET;
+ 
+-	public const FLAG_HAS_X = 0x01;
+-	public const FLAG_HAS_Y = 0x02;
+-	public const FLAG_HAS_Z = 0x04;
+-	public const FLAG_HAS_PITCH = 0x08;
+-	public const FLAG_HAS_YAW = 0x10;
+-	public const FLAG_HAS_HEAD_YAW = 0x20;
+-	public const FLAG_GROUND = 0x40;
+-	public const FLAG_TELEPORT = 0x80;
+-	public const FLAG_FORCE_MOVE_LOCAL_ENTITY = 0x100;
+-
+ 	public int $actorRuntimeId;
+-	public int $flags;
+-	public float $xPos = 0;
+-	public float $yPos = 0;
+-	public float $zPos = 0;
+-	public float $pitch = 0.0;
+-	public float $yaw = 0.0;
+-	public float $headYaw = 0.0;
++	public ?float $xPos = null;
++	public ?float $yPos = null;
++	public ?float $zPos = null;
++	public ?float $pitch = null;
++	public ?float $yaw = null;
++	public ?float $headYaw = null;
++	public bool $onGround = false;
++	public bool $teleport = false;
++	public bool $forceMoveLocalEntity = false;
++	public bool $forceCompletion = false;
+ 
+ 	/** @throws DataDecodeException */
+-	private function maybeReadCoord(int $flag, ByteBufferReader $in) : float{
+-		if(($this->flags & $flag) !== 0){
++	private function maybeReadCoord(ByteBufferReader $in) : ?float{
++		if(CommonTypes::getBool($in)){
+ 			return LE::readFloat($in);
+ 		}
+-		return 0;
++		return null;
+ 	}
+ 
+ 	/** @throws DataDecodeException */
+-	private function maybeReadRotation(int $flag, ByteBufferReader $in) : float{
+-		if(($this->flags & $flag) !== 0){
++	private function maybeReadRotation(ByteBufferReader $in) : ?float{
++		if(CommonTypes::getBool($in)){
+ 			return CommonTypes::getRotationByte($in);
+ 		}
+-		return 0.0;
++		return null;
+ 	}
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+ 		$this->actorRuntimeId = CommonTypes::getActorRuntimeId($in);
+-		$this->flags = LE::readUnsignedShort($in);
+-		$this->xPos = $this->maybeReadCoord(self::FLAG_HAS_X, $in);
+-		$this->yPos = $this->maybeReadCoord(self::FLAG_HAS_Y, $in);
+-		$this->zPos = $this->maybeReadCoord(self::FLAG_HAS_Z, $in);
+-		$this->pitch = $this->maybeReadRotation(self::FLAG_HAS_PITCH, $in);
+-		$this->yaw = $this->maybeReadRotation(self::FLAG_HAS_YAW, $in);
+-		$this->headYaw = $this->maybeReadRotation(self::FLAG_HAS_HEAD_YAW, $in);
++		$this->xPos = $this->maybeReadCoord($in);
++		$this->yPos = $this->maybeReadCoord($in);
++		$this->zPos = $this->maybeReadCoord($in);
++		$this->pitch = $this->maybeReadRotation($in);
++		$this->yaw = $this->maybeReadRotation($in);
++		$this->headYaw = $this->maybeReadRotation($in);
++		$this->onGround = CommonTypes::getBool($in);
++		$this->teleport = CommonTypes::getBool($in);
++		$this->forceMoveLocalEntity = CommonTypes::getBool($in);
++		$this->forceCompletion = CommonTypes::getBool($in);
+ 	}
+ 
+-	private function maybeWriteCoord(int $flag, float $val, ByteBufferWriter $out) : void{
+-		if(($this->flags & $flag) !== 0){
++	private function maybeWriteCoord(?float $val, ByteBufferWriter $out) : void{
++		CommonTypes::putBool($out, $val !== null);
++		if($val !== null){
+ 			LE::writeFloat($out, $val);
+ 		}
+ 	}
+ 
+-	private function maybeWriteRotation(int $flag, float $val, ByteBufferWriter $out) : void{
+-		if(($this->flags & $flag) !== 0){
++	private function maybeWriteRotation(?float $val, ByteBufferWriter $out) : void{
++		CommonTypes::putBool($out, $val !== null);
++		if($val !== null){
+ 			CommonTypes::putRotationByte($out, $val);
+ 		}
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+ 		CommonTypes::putActorRuntimeId($out, $this->actorRuntimeId);
+-		LE::writeUnsignedShort($out, $this->flags);
+-		$this->maybeWriteCoord(self::FLAG_HAS_X, $this->xPos, $out);
+-		$this->maybeWriteCoord(self::FLAG_HAS_Y, $this->yPos, $out);
+-		$this->maybeWriteCoord(self::FLAG_HAS_Z, $this->zPos, $out);
+-		$this->maybeWriteRotation(self::FLAG_HAS_PITCH, $this->pitch, $out);
+-		$this->maybeWriteRotation(self::FLAG_HAS_YAW, $this->yaw, $out);
+-		$this->maybeWriteRotation(self::FLAG_HAS_HEAD_YAW, $this->headYaw, $out);
++		$this->maybeWriteCoord($this->xPos, $out);
++		$this->maybeWriteCoord($this->yPos, $out);
++		$this->maybeWriteCoord($this->zPos, $out);
++		$this->maybeWriteRotation($this->pitch, $out);
++		$this->maybeWriteRotation($this->yaw, $out);
++		$this->maybeWriteRotation($this->headYaw, $out);
++		CommonTypes::putBool($out, $this->onGround);
++		CommonTypes::putBool($out, $this->teleport);
++		CommonTypes::putBool($out, $this->forceMoveLocalEntity);
++		CommonTypes::putBool($out, $this->forceCompletion);
+ 	}
+ 
+ 	public function handle(PacketHandlerInterface $handler) : bool{
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/MovePlayerPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/MovePlayerPacket.php
+index 2c6b9fb..1fff554 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/MovePlayerPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/MovePlayerPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -96,7 +98,7 @@ class MovePlayerPacket extends DataPacket implements ClientboundPacket, Serverbo
+ 		$this->mode = Byte::readUnsigned($in);
+ 		$this->onGround = CommonTypes::getBool($in);
+ 		$this->ridingActorRuntimeId = CommonTypes::getActorRuntimeId($in);
+-		if($this->mode === MovePlayerPacket::MODE_TELEPORT){
++		if(CommonTypes::getBool($in)){
+ 			$this->teleportCause = LE::readSignedInt($in);
+ 			$this->teleportItem = LE::readSignedInt($in);
+ 		}
+@@ -112,7 +114,8 @@ class MovePlayerPacket extends DataPacket implements ClientboundPacket, Serverbo
+ 		Byte::writeUnsigned($out, $this->mode);
+ 		CommonTypes::putBool($out, $this->onGround);
+ 		CommonTypes::putActorRuntimeId($out, $this->ridingActorRuntimeId);
+-		if($this->mode === MovePlayerPacket::MODE_TELEPORT){
++		CommonTypes::putBool($out, $isTeleportMode = $this->mode === MovePlayerPacket::MODE_TELEPORT);
++		if($isTeleportMode){
+ 			LE::writeSignedInt($out, $this->teleportCause);
+ 			LE::writeSignedInt($out, $this->teleportItem);
+ 		}
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlaySoundPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlaySoundPacket.php
+index 1d2b819..226f18f 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/PlaySoundPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/PlaySoundPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -17,6 +19,7 @@ namespace pocketmine\network\mcpe\protocol;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\LE;
++use pmmp\encoding\VarInt;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use pocketmine\network\mcpe\protocol\types\BlockPosition;
+ 
+@@ -29,6 +32,7 @@ class PlaySoundPacket extends DataPacket implements ClientboundPacket{
+ 	public float $z;
+ 	public float $volume;
+ 	public float $pitch;
++	public int $loopCount = 0;
+ 	public ?int $serverSoundHandle = null;
+ 
+ 	/**
+@@ -62,6 +66,7 @@ class PlaySoundPacket extends DataPacket implements ClientboundPacket{
+ 		$this->z = $blockPosition->getZ() / 8;
+ 		$this->volume = LE::readFloat($in);
+ 		$this->pitch = LE::readFloat($in);
++		$this->loopCount = VarInt::readSignedInt($in);
+ 		$this->serverSoundHandle = CommonTypes::readOptional($in, LE::readUnsignedLong(...));
+ 	}
+ 
+@@ -70,6 +75,7 @@ class PlaySoundPacket extends DataPacket implements ClientboundPacket{
+ 		CommonTypes::putBlockPosition($out, new BlockPosition((int) ($this->x * 8), (int) ($this->y * 8), (int) ($this->z * 8)));
+ 		LE::writeFloat($out, $this->volume);
+ 		LE::writeFloat($out, $this->pitch);
++		VarInt::writeSignedInt($out, $this->loopCount);
+ 		CommonTypes::writeOptional($out, $this->serverSoundHandle, LE::writeUnsignedLong(...));
+ 	}
+ 
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php
+index 6afdc4d..30325c6 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -26,11 +28,9 @@ use pocketmine\network\mcpe\protocol\types\InputMode;
+ use pocketmine\network\mcpe\protocol\types\InteractionMode;
+ use pocketmine\network\mcpe\protocol\types\inventory\stackrequest\ItemStackRequest;
+ use pocketmine\network\mcpe\protocol\types\ItemInteractionData;
+-use pocketmine\network\mcpe\protocol\types\PlayerAction;
+ use pocketmine\network\mcpe\protocol\types\PlayerAuthInputFlags;
+ use pocketmine\network\mcpe\protocol\types\PlayerAuthInputVehicleInfo;
+ use pocketmine\network\mcpe\protocol\types\PlayerBlockAction;
+-use pocketmine\network\mcpe\protocol\types\PlayerBlockActionStopBreak;
+ use pocketmine\network\mcpe\protocol\types\PlayerBlockActionWithBlockInfo;
+ use pocketmine\network\mcpe\protocol\types\PlayMode;
+ use function count;
+@@ -55,7 +55,7 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+ 	private ?ItemStackRequest $itemStackRequest = null;
+ 	/** @var PlayerBlockAction[]|null */
+ 	private ?array $blockActions = null;
+-	private ?PlayerAuthInputVehicleInfo $vehicleInfo = null;
++	private PlayerAuthInputVehicleInfo $vehicleInfo;
+ 	private float $analogMoveVecX;
+ 	private float $analogMoveVecZ;
+ 	private Vector3 $cameraOrientation;
+@@ -82,7 +82,7 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+ 		?ItemInteractionData $itemInteractionData,
+ 		?ItemStackRequest $itemStackRequest,
+ 		?array $blockActions,
+-		?PlayerAuthInputVehicleInfo $vehicleInfo,
++		PlayerAuthInputVehicleInfo $vehicleInfo,
+ 		float $analogMoveVecX,
+ 		float $analogMoveVecZ,
+ 		Vector3 $cameraOrientation,
+@@ -137,7 +137,7 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+ 		?ItemInteractionData $itemInteractionData,
+ 		?ItemStackRequest $itemStackRequest,
+ 		?array $blockActions,
+-		?PlayerAuthInputVehicleInfo $vehicleInfo,
++		PlayerAuthInputVehicleInfo $vehicleInfo,
+ 		float $analogMoveVecX,
+ 		float $analogMoveVecZ,
+ 		Vector3 $cameraOrientation,
+@@ -150,7 +150,7 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+ 		$inputFlags->set(PlayerAuthInputFlags::PERFORM_ITEM_STACK_REQUEST, $itemStackRequest !== null);
+ 		$inputFlags->set(PlayerAuthInputFlags::PERFORM_ITEM_INTERACTION, $itemInteractionData !== null);
+ 		$inputFlags->set(PlayerAuthInputFlags::PERFORM_BLOCK_ACTIONS, $blockActions !== null);
+-		$inputFlags->set(PlayerAuthInputFlags::IN_CLIENT_PREDICTED_VEHICLE, $vehicleInfo !== null);
++		$inputFlags->set(PlayerAuthInputFlags::IN_CLIENT_PREDICTED_VEHICLE, !$vehicleInfo->isNull());
+ 
+ 		return self::internalCreate(
+ 			$position,
+@@ -254,7 +254,7 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+ 		return $this->blockActions;
+ 	}
+ 
+-	public function getVehicleInfo() : ?PlayerAuthInputVehicleInfo{ return $this->vehicleInfo; }
++	public function getVehicleInfo() : PlayerAuthInputVehicleInfo{ return $this->vehicleInfo; }
+ 
+ 	public function getAnalogMoveVecX() : float{ return $this->analogMoveVecX; }
+ 
+@@ -271,34 +271,37 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+ 		$this->moveVecX = LE::readFloat($in);
+ 		$this->moveVecZ = LE::readFloat($in);
+ 		$this->headYaw = LE::readFloat($in);
+-		$this->inputFlags = BitSet::read($in, PlayerAuthInputFlags::NUMBER_OF_FLAGS);
++		$this->inputFlags = new BitSet(PlayerAuthInputFlags::NUMBER_OF_FLAGS);
++		if(CommonTypes::getBool($in)){
++			for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++				$flag = VarInt::readSignedInt($in);
++				if($flag < 0 || $flag >= PlayerAuthInputFlags::NUMBER_OF_FLAGS){
++					throw new PacketDecodeException("Unknown input flag $flag");
++				}
++				$this->inputFlags->set($flag, true);
++			}
++		}
+ 		$this->inputMode = VarInt::readUnsignedInt($in);
+ 		$this->playMode = VarInt::readUnsignedInt($in);
+-		$this->interactionMode = VarInt::readUnsignedInt($in);
++		$this->interactionMode = VarInt::readSignedInt($in);
+ 		$this->interactRotation = CommonTypes::getVector2($in);
+ 		$this->tick = VarInt::readUnsignedLong($in);
+ 		$this->delta = CommonTypes::getVector3($in);
+-		if($this->inputFlags->get(PlayerAuthInputFlags::PERFORM_ITEM_INTERACTION)){
+-			$this->itemInteractionData = ItemInteractionData::read($in);
+-		}
+-		if($this->inputFlags->get(PlayerAuthInputFlags::PERFORM_ITEM_STACK_REQUEST)){
+-			$this->itemStackRequest = ItemStackRequest::read($in);
+-		}
+-		if($this->inputFlags->get(PlayerAuthInputFlags::PERFORM_BLOCK_ACTIONS)){
+-			$this->blockActions = [];
+-			$max = VarInt::readSignedInt($in);
++		$this->itemInteractionData = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, ItemInteractionData::read(...)));
++		$this->itemStackRequest = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, ItemStackRequest::read(...)));
++		$this->blockActions = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, function(ByteBufferReader $in) : array{
++			$blockActions = [];
++			$max = VarInt::readUnsignedInt($in);
+ 			for($i = 0; $i < $max; ++$i){
+ 				$actionType = VarInt::readSignedInt($in);
+-				$this->blockActions[] = match(true){
++				$blockActions[] = match(true){
+ 					PlayerBlockActionWithBlockInfo::isValidActionType($actionType) => PlayerBlockActionWithBlockInfo::read($in, $actionType),
+-					$actionType === PlayerAction::STOP_BREAK => new PlayerBlockActionStopBreak(),
+ 					default => throw new PacketDecodeException("Unexpected block action type $actionType")
+ 				};
+ 			}
+-		}
+-		if($this->inputFlags->get(PlayerAuthInputFlags::IN_CLIENT_PREDICTED_VEHICLE)){
+-			$this->vehicleInfo = PlayerAuthInputVehicleInfo::read($in);
+-		}
++			return $blockActions;
++		}));
++		$this->vehicleInfo = PlayerAuthInputVehicleInfo::read($in);
+ 		$this->analogMoveVecX = LE::readFloat($in);
+ 		$this->analogMoveVecZ = LE::readFloat($in);
+ 		$this->cameraOrientation = CommonTypes::getVector3($in);
+@@ -312,29 +315,34 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+ 		LE::writeFloat($out, $this->moveVecX);
+ 		LE::writeFloat($out, $this->moveVecZ);
+ 		LE::writeFloat($out, $this->headYaw);
+-		$this->inputFlags->write($out);
++		$setFlags = [];
++		for($i = 0; $i < PlayerAuthInputFlags::NUMBER_OF_FLAGS; ++$i){
++			if($this->inputFlags->get($i)){
++				$setFlags[] = $i;
++			}
++		}
++		CommonTypes::putBool($out, true);
++		VarInt::writeUnsignedInt($out, count($setFlags));
++		foreach($setFlags as $flag){
++			VarInt::writeSignedInt($out, $flag);
++		}
+ 		VarInt::writeUnsignedInt($out, $this->inputMode);
+ 		VarInt::writeUnsignedInt($out, $this->playMode);
+-		VarInt::writeUnsignedInt($out, $this->interactionMode);
++		VarInt::writeSignedInt($out, $this->interactionMode);
+ 		CommonTypes::putVector2($out, $this->interactRotation);
+ 		VarInt::writeUnsignedLong($out, $this->tick);
+ 		CommonTypes::putVector3($out, $this->delta);
+-		if($this->itemInteractionData !== null){
+-			$this->itemInteractionData->write($out);
+-		}
+-		if($this->itemStackRequest !== null){
+-			$this->itemStackRequest->write($out);
+-		}
+-		if($this->blockActions !== null){
+-			VarInt::writeSignedInt($out, count($this->blockActions));
+-			foreach($this->blockActions as $blockAction){
++		CommonTypes::writeOptional($out, $this->itemInteractionData, fn(ByteBufferWriter $out, ItemInteractionData $v) => CommonTypes::writeOptional($out, $v, fn(ByteBufferWriter $out, ItemInteractionData $v) => $v->write($out)));
++		CommonTypes::writeOptional($out, $this->itemStackRequest, fn(ByteBufferWriter $out, ItemStackRequest $v) => CommonTypes::writeOptional($out, $v, fn(ByteBufferWriter $out, ItemStackRequest $v) => $v->write($out)));
++		CommonTypes::writeOptional($out, $this->blockActions, fn(ByteBufferWriter $out, array $v) => CommonTypes::writeOptional($out, $v, function(ByteBufferWriter $out, array $blockActions) : void{
++			VarInt::writeUnsignedInt($out, count($blockActions));
++			/** @var PlayerBlockAction[] $blockActions */
++			foreach($blockActions as $blockAction){
+ 				VarInt::writeSignedInt($out, $blockAction->getActionType());
+ 				$blockAction->write($out);
+ 			}
+-		}
+-		if($this->vehicleInfo !== null){
+-			$this->vehicleInfo->write($out);
+-		}
++		}));
++		$this->vehicleInfo->write($out);
+ 		LE::writeFloat($out, $this->analogMoveVecX);
+ 		LE::writeFloat($out, $this->analogMoveVecZ);
+ 		CommonTypes::putVector3($out, $this->cameraOrientation);
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlayerListPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlayerListPacket.php
+index ca72c85..78abfcd 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/PlayerListPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/PlayerListPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -27,10 +29,9 @@ use function count;
+ class PlayerListPacket extends DataPacket implements ClientboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::PLAYER_LIST_PACKET;
+ 
+-	public const TYPE_ADD = 0;
+-	public const TYPE_REMOVE = 1;
++	public const TYPE_REMOVE = 0;
++	public const TYPE_ADD = 1;
+ 
+-	public int $type;
+ 	/** @var PlayerListEntry[] */
+ 	public array $entries = [];
+ 
+@@ -38,9 +39,8 @@ class PlayerListPacket extends DataPacket implements ClientboundPacket{
+ 	 * @generate-create-func
+ 	 * @param PlayerListEntry[] $entries
+ 	 */
+-	private static function create(int $type, array $entries) : self{
++	private static function create(array $entries) : self{
+ 		$result = new self;
+-		$result->type = $type;
+ 		$result->entries = $entries;
+ 		return $result;
+ 	}
+@@ -49,23 +49,30 @@ class PlayerListPacket extends DataPacket implements ClientboundPacket{
+ 	 * @param PlayerListEntry[] $entries
+ 	 */
+ 	public static function add(array $entries) : self{
+-		return self::create(self::TYPE_ADD, $entries);
++		foreach($entries as $entry){
++			$entry->type = self::TYPE_ADD;
++		}
++		return self::create($entries);
+ 	}
+ 
+ 	/**
+ 	 * @param PlayerListEntry[] $entries
+ 	 */
+ 	public static function remove(array $entries) : self{
+-		return self::create(self::TYPE_REMOVE, $entries);
++		foreach($entries as $entry){
++			$entry->type = self::TYPE_REMOVE;
++		}
++		return self::create($entries);
+ 	}
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+-		$this->type = Byte::readUnsigned($in);
+ 		$count = VarInt::readUnsignedInt($in);
+ 		for($i = 0; $i < $count; ++$i){
+ 			$entry = new PlayerListEntry();
++			$entry->type = VarInt::readUnsignedInt($in);
++			Byte::readUnsigned($in); //legacyId
+ 
+-			if($this->type === self::TYPE_ADD){
++			if($entry->type === self::TYPE_ADD){
+ 				$entry->uuid = CommonTypes::getUUID($in);
+ 				$entry->actorUniqueId = CommonTypes::getActorUniqueId($in);
+ 				$entry->username = CommonTypes::getString($in);
+@@ -77,24 +84,23 @@ class PlayerListPacket extends DataPacket implements ClientboundPacket{
+ 				$entry->isHost = CommonTypes::getBool($in);
+ 				$entry->isSubClient = CommonTypes::getBool($in);
+ 				$entry->color = Color::fromARGB(LE::readUnsignedInt($in));
+-			}else{
++			}elseif($entry->type === self::TYPE_REMOVE){
+ 				$entry->uuid = CommonTypes::getUUID($in);
++			}else{
++				throw new PacketDecodeException("Unknown player list entry type " . $entry->type);
+ 			}
+ 
+ 			$this->entries[$i] = $entry;
+ 		}
+-		if($this->type === self::TYPE_ADD){
+-			for($i = 0; $i < $count; ++$i){
+-				$this->entries[$i]->skinData->setVerified(CommonTypes::getBool($in));
+-			}
+-		}
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+-		Byte::writeUnsigned($out, $this->type);
+ 		VarInt::writeUnsignedInt($out, count($this->entries));
+ 		foreach($this->entries as $entry){
+-			if($this->type === self::TYPE_ADD){
++			VarInt::writeUnsignedInt($out, $entry->type);
++			Byte::writeUnsigned($out, $entry->type === self::TYPE_ADD ? 0 : 1);
++
++			if($entry->type === self::TYPE_ADD){
+ 				CommonTypes::putUUID($out, $entry->uuid);
+ 				CommonTypes::putActorUniqueId($out, $entry->actorUniqueId);
+ 				CommonTypes::putString($out, $entry->username);
+@@ -110,11 +116,6 @@ class PlayerListPacket extends DataPacket implements ClientboundPacket{
+ 				CommonTypes::putUUID($out, $entry->uuid);
+ 			}
+ 		}
+-		if($this->type === self::TYPE_ADD){
+-			foreach($this->entries as $entry){
+-				CommonTypes::putBool($out, $entry->skinData->isVerified());
+-			}
+-		}
+ 	}
+ 
+ 	public function handle(PacketHandlerInterface $handler) : bool{
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlayerLocationPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlayerLocationPacket.php
+index 28d5a59..d1da9c4 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/PlayerLocationPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/PlayerLocationPacket.php
+@@ -10,13 +10,15 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+ 
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+-use pmmp\encoding\LE;
++use pmmp\encoding\VarInt;
+ use pocketmine\math\Vector3;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use pocketmine\network\mcpe\protocol\types\PlayerLocationType;
+@@ -54,8 +56,9 @@ class PlayerLocationPacket extends DataPacket implements ClientboundPacket{
+ 	public function getPosition() : ?Vector3{ return $this->position; }
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+-		$this->type = PlayerLocationType::fromPacket(LE::readUnsignedInt($in));
+ 		$this->actorUniqueId = CommonTypes::getActorUniqueId($in);
++		$this->type = PlayerLocationType::fromPacket(VarInt::readUnsignedInt($in));
++		VarInt::readSignedInt($in); //unknown
+ 
+ 		if($this->type === PlayerLocationType::PLAYER_LOCATION_COORDINATES){
+ 			$this->position = CommonTypes::getVector3($in);
+@@ -63,8 +66,9 @@ class PlayerLocationPacket extends DataPacket implements ClientboundPacket{
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+-		LE::writeUnsignedInt($out, $this->type->value);
+ 		CommonTypes::putActorUniqueId($out, $this->actorUniqueId);
++		VarInt::writeUnsignedInt($out, $this->type->value);
++		VarInt::writeSignedInt($out, 0);
+ 
+ 		if($this->type === PlayerLocationType::PLAYER_LOCATION_COORDINATES){
+ 			if($this->position === null){ // this should never be the case
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlayerSkinPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlayerSkinPacket.php
+index e4e35ab..557c480 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/PlayerSkinPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/PlayerSkinPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -43,17 +45,15 @@ class PlayerSkinPacket extends DataPacket implements ClientboundPacket, Serverbo
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+ 		$this->uuid = CommonTypes::getUUID($in);
+ 		$this->skin = CommonTypes::getSkin($in);
+-		$this->newSkinName = CommonTypes::getString($in);
+ 		$this->oldSkinName = CommonTypes::getString($in);
+-		$this->skin->setVerified(CommonTypes::getBool($in));
++		$this->newSkinName = CommonTypes::getString($in);
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+ 		CommonTypes::putUUID($out, $this->uuid);
+ 		CommonTypes::putSkin($out, $this->skin);
+-		CommonTypes::putString($out, $this->newSkinName);
+ 		CommonTypes::putString($out, $this->oldSkinName);
+-		CommonTypes::putBool($out, $this->skin->isVerified());
++		CommonTypes::putString($out, $this->newSkinName);
+ 	}
+ 
+ 	public function handle(PacketHandlerInterface $handler) : bool{
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/ProtocolInfo.php b/source/vendor/pocketmine/bedrock-protocol/src/ProtocolInfo.php
+index 340f9bc..26a6222 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/ProtocolInfo.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/ProtocolInfo.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -32,11 +34,11 @@ final class ProtocolInfo{
+ 	 */
+ 
+ 	/** Actual Minecraft: PE protocol version */
+-	public const CURRENT_PROTOCOL = 1001;
++	public const CURRENT_PROTOCOL = 2168;
+ 	/** Display version shown in the server logs. This should match the version on the game's home screen. */
+-	public const MINECRAFT_VERSION = 'v26.30';
++	public const MINECRAFT_VERSION = 'v26.40';
+ 	/** Version sent on the network for client side compatibility checks. This may differ from the display version. */
+-	public const MINECRAFT_VERSION_NETWORK = '1.26.30';
++	public const MINECRAFT_VERSION_NETWORK = '1.26.40';
+ 
+ 	public const LOGIN_PACKET = 0x01;
+ 	public const PLAY_STATUS_PACKET = 0x02;
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/ResourcePackClientResponsePacket.php b/source/vendor/pocketmine/bedrock-protocol/src/ResourcePackClientResponsePacket.php
+index 10fe96f..0ffc15e 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/ResourcePackClientResponsePacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/ResourcePackClientResponsePacket.php
+@@ -10,24 +10,25 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+ 
+-use pmmp\encoding\Byte;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+-use pmmp\encoding\LE;
++use pmmp\encoding\VarInt;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use function count;
+ 
+ class ResourcePackClientResponsePacket extends DataPacket implements ServerboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::RESOURCE_PACK_CLIENT_RESPONSE_PACKET;
+ 
+-	public const STATUS_REFUSED = 1;
+-	public const STATUS_SEND_PACKS = 2;
+-	public const STATUS_HAVE_ALL_PACKS = 3;
+-	public const STATUS_COMPLETED = 4;
++	public const STATUS_REFUSED = 0;
++	public const STATUS_SEND_PACKS = 1;
++	public const STATUS_HAVE_ALL_PACKS = 2;
++	public const STATUS_COMPLETED = 3;
+ 
+ 	public int $status;
+ 	/** @var string[] */
+@@ -45,19 +46,31 @@ class ResourcePackClientResponsePacket extends DataPacket implements Serverbound
+ 	}
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+-		$this->status = Byte::readUnsigned($in);
+-		$entryCount = LE::readUnsignedShort($in);
++		$this->status = VarInt::readUnsignedInt($in);
++		CommonTypes::getString($in); //status response string
+ 		$this->packIds = [];
+-		while($entryCount-- > 0){
+-			$this->packIds[] = CommonTypes::getString($in);
++		if($this->status === self::STATUS_SEND_PACKS){
++			$entryCount = VarInt::readUnsignedInt($in);
++			while($entryCount-- > 0){
++				$this->packIds[] = CommonTypes::getString($in);
++			}
+ 		}
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+-		Byte::writeUnsigned($out, $this->status);
+-		LE::writeUnsignedShort($out, count($this->packIds));
+-		foreach($this->packIds as $id){
+-			CommonTypes::putString($out, $id);
++		VarInt::writeUnsignedInt($out, $this->status);
++		CommonTypes::putString($out, match($this->status){
++			self::STATUS_REFUSED => "cancel",
++			self::STATUS_SEND_PACKS => "downloading",
++			self::STATUS_HAVE_ALL_PACKS => "downloadingfinished",
++			self::STATUS_COMPLETED => "resourcepackstackfinished",
++			default => "",
++		});
++		if($this->status === self::STATUS_SEND_PACKS){
++			VarInt::writeUnsignedInt($out, count($this->packIds));
++			foreach($this->packIds as $id){
++				CommonTypes::putString($out, $id);
++			}
+ 		}
+ 	}
+ 
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/ResourcePacksInfoPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/ResourcePacksInfoPacket.php
+index 11531ae..56e3d58 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/ResourcePacksInfoPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/ResourcePacksInfoPacket.php
+@@ -10,13 +10,15 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+ 
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+-use pmmp\encoding\LE;
++use pmmp\encoding\VarInt;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use pocketmine\network\mcpe\protocol\types\resourcepacks\ResourcePackInfoEntry;
+ use Ramsey\Uuid\UuidInterface;
+@@ -75,7 +77,7 @@ class ResourcePacksInfoPacket extends DataPacket implements ClientboundPacket{
+ 		$this->worldTemplateId = CommonTypes::getUUID($in);
+ 		$this->worldTemplateVersion = CommonTypes::getString($in);
+ 
+-		$resourcePackCount = LE::readUnsignedShort($in);
++		$resourcePackCount = VarInt::readUnsignedInt($in);
+ 		while($resourcePackCount-- > 0){
+ 			$this->resourcePackEntries[] = ResourcePackInfoEntry::read($in);
+ 		}
+@@ -88,7 +90,7 @@ class ResourcePacksInfoPacket extends DataPacket implements ClientboundPacket{
+ 		CommonTypes::putBool($out, $this->forceDisableVibrantVisuals);
+ 		CommonTypes::putUUID($out, $this->worldTemplateId);
+ 		CommonTypes::putString($out, $this->worldTemplateVersion);
+-		LE::writeUnsignedShort($out, count($this->resourcePackEntries));
++		VarInt::writeUnsignedInt($out, count($this->resourcePackEntries));
+ 		foreach($this->resourcePackEntries as $entry){
+ 			$entry->write($out);
+ 		}
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php b/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
+index 4bac0d2..c91a79b 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
+@@ -10,11 +10,12 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+ 
+-use pmmp\encoding\Byte;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\LE;
+@@ -26,10 +27,6 @@ use function count;
+ class SetScorePacket extends DataPacket implements ClientboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::SET_SCORE_PACKET;
+ 
+-	public const TYPE_CHANGE = 0;
+-	public const TYPE_REMOVE = 1;
+-
+-	public int $type;
+ 	/** @var ScorePacketEntry[] */
+ 	public array $entries = [];
+ 
+@@ -37,58 +34,69 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
+ 	 * @generate-create-func
+ 	 * @param ScorePacketEntry[] $entries
+ 	 */
+-	public static function create(int $type, array $entries) : self{
++	public static function create(array $entries) : self{
+ 		$result = new self;
+-		$result->type = $type;
+ 		$result->entries = $entries;
+ 		return $result;
+ 	}
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+-		$this->type = Byte::readUnsigned($in);
+ 		for($i = 0, $i2 = VarInt::readUnsignedInt($in); $i < $i2; ++$i){
+ 			$entry = new ScorePacketEntry();
++			$entry->type = VarInt::readUnsignedInt($in);
++			CommonTypes::getString($in); //type name string
+ 			$entry->scoreboardId = VarInt::readSignedLong($in);
+-			$entry->objectiveName = CommonTypes::getString($in);
+-			$entry->score = LE::readSignedInt($in);
+-			if($this->type !== self::TYPE_REMOVE){
+-				$entry->type = Byte::readUnsigned($in);
+-				switch($entry->type){
+-					case ScorePacketEntry::TYPE_PLAYER:
+-					case ScorePacketEntry::TYPE_ENTITY:
+-						$entry->actorUniqueId = CommonTypes::getActorUniqueId($in);
+-						break;
+-					case ScorePacketEntry::TYPE_FAKE_PLAYER:
+-						$entry->customName = CommonTypes::getString($in);
+-						break;
+-					default:
+-						throw new PacketDecodeException("Unknown entry type $entry->type");
+-				}
++
++			switch($entry->type){
++				case ScorePacketEntry::TYPE_REMOVE:
++					$entry->objectiveName = CommonTypes::readOptional($in, CommonTypes::getString(...));
++					break;
++				case ScorePacketEntry::TYPE_PLAYER:
++				case ScorePacketEntry::TYPE_ENTITY:
++					$entry->objectiveName = CommonTypes::getString($in);
++					$entry->score = LE::readSignedInt($in);
++					$entry->actorUniqueId = CommonTypes::getActorUniqueId($in);
++					break;
++				case ScorePacketEntry::TYPE_FAKE_PLAYER:
++					$entry->objectiveName = CommonTypes::getString($in);
++					$entry->score = LE::readSignedInt($in);
++					$entry->customName = CommonTypes::getString($in);
++					break;
++				default:
++					throw new PacketDecodeException("Unknown entry type $entry->type");
+ 			}
+ 			$this->entries[] = $entry;
+ 		}
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+-		Byte::writeUnsigned($out, $this->type);
+ 		VarInt::writeUnsignedInt($out, count($this->entries));
+ 		foreach($this->entries as $entry){
++			VarInt::writeUnsignedInt($out, $entry->type);
++			CommonTypes::putString($out, match($entry->type){
++				ScorePacketEntry::TYPE_REMOVE => "remove",
++				ScorePacketEntry::TYPE_PLAYER => "changeplayer",
++				ScorePacketEntry::TYPE_ENTITY => "changeentity",
++				ScorePacketEntry::TYPE_FAKE_PLAYER => "changefakeplayer",
++				default => throw new \InvalidArgumentException("Unknown entry type $entry->type"),
++			});
++
+ 			VarInt::writeSignedLong($out, $entry->scoreboardId);
+-			CommonTypes::putString($out, $entry->objectiveName);
+-			LE::writeSignedInt($out, $entry->score);
+-			if($this->type !== self::TYPE_REMOVE){
+-				Byte::writeUnsigned($out, $entry->type);
+-				switch($entry->type){
+-					case ScorePacketEntry::TYPE_PLAYER:
+-					case ScorePacketEntry::TYPE_ENTITY:
+-						CommonTypes::putActorUniqueId($out, $entry->actorUniqueId);
+-						break;
+-					case ScorePacketEntry::TYPE_FAKE_PLAYER:
+-						CommonTypes::putString($out, $entry->customName);
+-						break;
+-					default:
+-						throw new \InvalidArgumentException("Unknown entry type $entry->type");
+-				}
++			switch($entry->type){
++				case ScorePacketEntry::TYPE_REMOVE:
++					CommonTypes::writeOptional($out, $entry->objectiveName, CommonTypes::putString(...));
++					break;
++				case ScorePacketEntry::TYPE_PLAYER:
++				case ScorePacketEntry::TYPE_ENTITY:
++					CommonTypes::putString($out, $entry->objectiveName ?? throw new \InvalidArgumentException("Objective name must be set for player/entity entry"));
++					LE::writeSignedInt($out, $entry->score);
++					CommonTypes::putActorUniqueId($out, $entry->actorUniqueId);
++					break;
++				case ScorePacketEntry::TYPE_FAKE_PLAYER:
++					CommonTypes::putString($out, $entry->objectiveName ?? throw new \InvalidArgumentException("Objective name must be set for fake player entry"));
++					LE::writeSignedInt($out, $entry->score);
++					CommonTypes::putString($out, $entry->customName);
++					break;
+ 			}
+ 		}
+ 	}
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php
+index 77723fa..708c457 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -48,9 +50,7 @@ class SetScoreboardIdentityPacket extends DataPacket implements ClientboundPacke
+ 		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
+ 			$entry = new ScoreboardIdentityPacketEntry();
+ 			$entry->scoreboardId = VarInt::readSignedLong($in);
+-			if($this->type === self::TYPE_REGISTER_IDENTITY){
+-				$entry->actorUniqueId = CommonTypes::getActorUniqueId($in);
+-			}
++			$entry->actorUniqueId = CommonTypes::getActorUniqueId($in);
+ 
+ 			$this->entries[] = $entry;
+ 		}
+@@ -61,9 +61,7 @@ class SetScoreboardIdentityPacket extends DataPacket implements ClientboundPacke
+ 		VarInt::writeUnsignedInt($out, count($this->entries));
+ 		foreach($this->entries as $entry){
+ 			VarInt::writeSignedLong($out, $entry->scoreboardId);
+-			if($this->type === self::TYPE_REGISTER_IDENTITY){
+-				CommonTypes::putActorUniqueId($out, $entry->actorUniqueId);
+-			}
++			CommonTypes::putActorUniqueId($out, $entry->actorUniqueId);
+ 		}
+ 	}
+ 
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/StartGamePacket.php b/source/vendor/pocketmine/bedrock-protocol/src/StartGamePacket.php
+index df4fb40..9698b54 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/StartGamePacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/StartGamePacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -62,7 +64,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
+ 	public bool $enableClientSideChunkGeneration;
+ 	public bool $blockNetworkIdsAreHashes = false; //new in 1.19.80, possibly useful for multi version
+ 	public NetworkPermissions $networkPermissions;
+-	public bool $isLoggingChat = false;
+ 	public ?ServerJoinInformation $serverJoinInformation;
+ 	public ServerTelemetryData $serverTelemetryData;
+ 
+@@ -108,7 +109,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
+ 		bool $enableClientSideChunkGeneration,
+ 		bool $blockNetworkIdsAreHashes,
+ 		NetworkPermissions $networkPermissions,
+-		bool $isLoggingChat,
+ 		?ServerJoinInformation $serverJoinInformation,
+ 		ServerTelemetryData $serverTelemetryData,
+ 		array $blockPalette,
+@@ -137,7 +137,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
+ 		$result->enableClientSideChunkGeneration = $enableClientSideChunkGeneration;
+ 		$result->blockNetworkIdsAreHashes = $blockNetworkIdsAreHashes;
+ 		$result->networkPermissions = $networkPermissions;
+-		$result->isLoggingChat = $isLoggingChat;
+ 		$result->serverJoinInformation = $serverJoinInformation;
+ 		$result->serverTelemetryData = $serverTelemetryData;
+ 		$result->blockPalette = $blockPalette;
+@@ -182,7 +181,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
+ 		$this->enableClientSideChunkGeneration = CommonTypes::getBool($in);
+ 		$this->blockNetworkIdsAreHashes = CommonTypes::getBool($in);
+ 		$this->networkPermissions = NetworkPermissions::decode($in);
+-		$this->isLoggingChat = CommonTypes::getBool($in);
+ 		$this->serverJoinInformation = CommonTypes::readOptional($in, ServerJoinInformation::read(...));
+ 		$this->serverTelemetryData = ServerTelemetryData::read($in);
+ 	}
+@@ -223,7 +221,6 @@ class StartGamePacket extends DataPacket implements ClientboundPacket{
+ 		CommonTypes::putBool($out, $this->enableClientSideChunkGeneration);
+ 		CommonTypes::putBool($out, $this->blockNetworkIdsAreHashes);
+ 		$this->networkPermissions->encode($out);
+-		CommonTypes::putBool($out, $this->isLoggingChat);
+ 		CommonTypes::writeOptional($out, $this->serverJoinInformation, fn(ByteBufferWriter $out, ServerJoinInformation $info) => $info->write($out));
+ 		$this->serverTelemetryData->write($out);
+ 	}
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/SubChunkPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/SubChunkPacket.php
+index bebd337..e26a385 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/SubChunkPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/SubChunkPacket.php
+@@ -10,13 +10,14 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+ 
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+-use pmmp\encoding\LE;
+ use pmmp\encoding\VarInt;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use pocketmine\network\mcpe\protocol\types\SubChunkPacketEntryWithCache as EntryWithBlobHash;
+@@ -55,9 +56,9 @@ class SubChunkPacket extends DataPacket implements ClientboundPacket{
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+ 		$cacheEnabled = CommonTypes::getBool($in);
+ 		$this->dimension = VarInt::readSignedInt($in);
+-		$this->baseSubChunkPosition = SubChunkPosition::readVarInts($in);
++		$this->baseSubChunkPosition = SubChunkPosition::readFixedInts($in);
+ 
+-		$count = LE::readUnsignedInt($in);
++		$count = VarInt::readUnsignedInt($in);
+ 		if($cacheEnabled){
+ 			$entries = [];
+ 			for($i = 0; $i < $count; $i++){
+@@ -76,9 +77,9 @@ class SubChunkPacket extends DataPacket implements ClientboundPacket{
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+ 		CommonTypes::putBool($out, $this->entries instanceof ListWithBlobHashes);
+ 		VarInt::writeSignedInt($out, $this->dimension);
+-		$this->baseSubChunkPosition->writeVarInts($out);
++		$this->baseSubChunkPosition->writeFixedInts($out);
+ 
+-		LE::writeUnsignedInt($out, count($this->entries->getEntries()));
++		VarInt::writeUnsignedInt($out, count($this->entries->getEntries()));
+ 
+ 		foreach($this->entries->getEntries() as $entry){
+ 			$entry->write($out);
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/TransferPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/TransferPacket.php
+index 840e50e..946d127 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/TransferPacket.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/TransferPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -18,6 +20,7 @@ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\LE;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
++use pocketmine\network\mcpe\protocol\types\GatheringJoinInfo;
+ 
+ class TransferPacket extends DataPacket implements ClientboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::TRANSFER_PACKET;
+@@ -25,15 +28,17 @@ class TransferPacket extends DataPacket implements ClientboundPacket{
+ 	public string $address;
+ 	public int $port = 19132;
+ 	public bool $reloadWorld;
++	public ?GatheringJoinInfo $gatheringJoinInfo = null;
+ 
+ 	/**
+ 	 * @generate-create-func
+ 	 */
+-	public static function create(string $address, int $port, bool $reloadWorld) : self{
++	public static function create(string $address, int $port, bool $reloadWorld, ?GatheringJoinInfo $gatheringJoinInfo = null) : self{
+ 		$result = new self;
+ 		$result->address = $address;
+ 		$result->port = $port;
+ 		$result->reloadWorld = $reloadWorld;
++		$result->gatheringJoinInfo = $gatheringJoinInfo;
+ 		return $result;
+ 	}
+ 
+@@ -41,12 +46,14 @@ class TransferPacket extends DataPacket implements ClientboundPacket{
+ 		$this->address = CommonTypes::getString($in);
+ 		$this->port = LE::readUnsignedShort($in);
+ 		$this->reloadWorld = CommonTypes::getBool($in);
++		$this->gatheringJoinInfo = CommonTypes::readOptional($in, GatheringJoinInfo::read(...));
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+ 		CommonTypes::putString($out, $this->address);
+ 		LE::writeUnsignedShort($out, $this->port);
+ 		CommonTypes::putBool($out, $this->reloadWorld);
++		CommonTypes::writeOptional($out, $this->gatheringJoinInfo, fn(ByteBufferWriter $out, GatheringJoinInfo $info) => $info->write($out));
+ 	}
+ 
+ 	public function handle(PacketHandlerInterface $handler) : bool{
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php b/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php
+index ca0a11f..f23f3b8 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\serializer;
+@@ -111,13 +113,13 @@ final class CommonTypes{
+ 		$skinPlayFabId = self::getString($in);
+ 		$skinResourcePatch = self::getString($in);
+ 		$skinData = self::getSkinImage($in);
+-		$animationCount = LE::readUnsignedInt($in);
++		$animationCount = VarInt::readUnsignedInt($in);
+ 		$animations = [];
+ 		for($i = 0; $i < $animationCount; ++$i){
+ 			$skinImage = self::getSkinImage($in);
+-			$animationType = LE::readUnsignedInt($in);
++			$animationType = VarInt::readUnsignedInt($in);
+ 			$animationFrames = LE::readFloat($in);
+-			$expressionType = LE::readUnsignedInt($in);
++			$expressionType = VarInt::readUnsignedInt($in);
+ 			$animations[] = new SkinAnimation($skinImage, $animationType, $animationFrames, $expressionType);
+ 		}
+ 		$capeData = self::getSkinImage($in);
+@@ -126,26 +128,25 @@ final class CommonTypes{
+ 		$animationData = self::getString($in);
+ 		$capeId = self::getString($in);
+ 		$fullSkinId = self::getString($in);
+-		$armSize = self::getString($in);
+-		$skinColor = self::getString($in);
+-		$personaPieceCount = LE::readUnsignedInt($in);
++		$armSize = Byte::readUnsigned($in);
++		$skinColor = LE::readSignedInt($in);
++		$personaPieceCount = VarInt::readUnsignedInt($in);
+ 		$personaPieces = [];
+ 		for($i = 0; $i < $personaPieceCount; ++$i){
+ 			$pieceId = self::getString($in);
+-			$pieceType = self::getString($in);
+-			$packId = self::getString($in);
++			$pieceType = LE::readSignedInt($in);
++			$packId = self::getUUID($in);
+ 			$isDefaultPiece = self::getBool($in);
+ 			$productId = self::getString($in);
+ 			$personaPieces[] = new PersonaSkinPiece($pieceId, $pieceType, $packId, $isDefaultPiece, $productId);
+ 		}
+-		$pieceTintColorCount = LE::readUnsignedInt($in);
++		$pieceTintColorCount = VarInt::readUnsignedInt($in);
+ 		$pieceTintColors = [];
+ 		for($i = 0; $i < $pieceTintColorCount; ++$i){
+ 			$pieceType = self::getString($in);
+-			$colorCount = LE::readUnsignedInt($in);
+ 			$colors = [];
+-			for($j = 0; $j < $colorCount; ++$j){
+-				$colors[] = self::getString($in);
++			for($j = 0; $j < 4; ++$j){
++				$colors[] = LE::readSignedInt($in);
+ 			}
+ 			$pieceTintColors[] = new PersonaPieceTintColor(
+ 				$pieceType,
+@@ -158,6 +159,8 @@ final class CommonTypes{
+ 		$capeOnClassic = self::getBool($in);
+ 		$isPrimaryUser = self::getBool($in);
+ 		$override = self::getBool($in);
++		$trustedSkinFlag = self::getString($in);
++		$profileHash = self::getString($in);
+ 
+ 		return new SkinData(
+ 			$skinId,
+@@ -181,6 +184,8 @@ final class CommonTypes{
+ 			$capeOnClassic,
+ 			$isPrimaryUser,
+ 			$override,
++			$trustedSkinFlag,
++			$profileHash,
+ 		);
+ 	}
+ 
+@@ -189,12 +194,12 @@ final class CommonTypes{
+ 		self::putString($out, $skin->getPlayFabId());
+ 		self::putString($out, $skin->getResourcePatch());
+ 		self::putSkinImage($out, $skin->getSkinImage());
+-		LE::writeUnsignedInt($out, count($skin->getAnimations()));
++		VarInt::writeUnsignedInt($out, count($skin->getAnimations()));
+ 		foreach($skin->getAnimations() as $animation){
+ 			self::putSkinImage($out, $animation->getImage());
+-			LE::writeUnsignedInt($out, $animation->getType());
++			VarInt::writeUnsignedInt($out, $animation->getType());
+ 			LE::writeFloat($out, $animation->getFrames());
+-			LE::writeUnsignedInt($out, $animation->getExpressionType());
++			VarInt::writeUnsignedInt($out, $animation->getExpressionType());
+ 		}
+ 		self::putSkinImage($out, $skin->getCapeImage());
+ 		self::putString($out, $skin->getGeometryData());
+@@ -202,22 +207,21 @@ final class CommonTypes{
+ 		self::putString($out, $skin->getAnimationData());
+ 		self::putString($out, $skin->getCapeId());
+ 		self::putString($out, $skin->getFullSkinId());
+-		self::putString($out, $skin->getArmSize());
+-		self::putString($out, $skin->getSkinColor());
+-		LE::writeUnsignedInt($out, count($skin->getPersonaPieces()));
++		Byte::writeUnsigned($out, $skin->getArmSize());
++		LE::writeSignedInt($out, $skin->getSkinColor());
++		VarInt::writeUnsignedInt($out, count($skin->getPersonaPieces()));
+ 		foreach($skin->getPersonaPieces() as $piece){
+ 			self::putString($out, $piece->getPieceId());
+-			self::putString($out, $piece->getPieceType());
+-			self::putString($out, $piece->getPackId());
++			LE::writeSignedInt($out, $piece->getPieceType());
++			self::putUUID($out, $piece->getPackId());
+ 			self::putBool($out, $piece->isDefaultPiece());
+ 			self::putString($out, $piece->getProductId());
+ 		}
+-		LE::writeUnsignedInt($out, count($skin->getPieceTintColors()));
++		VarInt::writeUnsignedInt($out, count($skin->getPieceTintColors()));
+ 		foreach($skin->getPieceTintColors() as $tint){
+ 			self::putString($out, $tint->getPieceType());
+-			LE::writeUnsignedInt($out, count($tint->getColors()));
+ 			foreach($tint->getColors() as $color){
+-				self::putString($out, $color);
++				LE::writeSignedInt($out, $color);
+ 			}
+ 		}
+ 		self::putBool($out, $skin->isPremium());
+@@ -225,6 +229,8 @@ final class CommonTypes{
+ 		self::putBool($out, $skin->isPersonaCapeOnClassic());
+ 		self::putBool($out, $skin->isPrimaryUser());
+ 		self::putBool($out, $skin->isOverride());
++		self::putString($out, $skin->getTrustedSkinFlag());
++		self::putString($out, $skin->getProfileHash());
+ 	}
+ 
+ 	/** @throws DataDecodeException */
+@@ -252,10 +258,6 @@ final class CommonTypes{
+ 	 */
+ 	private static function getItemStackHeader(ByteBufferReader $in) : array{
+ 		$id = VarInt::readSignedInt($in);
+-		if($id === 0){
+-			return [0, 0, 0];
+-		}
+-
+ 		$count = LE::readUnsignedShort($in);
+ 		$meta = VarInt::readUnsignedInt($in);
+ 
+@@ -265,6 +267,8 @@ final class CommonTypes{
+ 	private static function putItemStackHeader(ByteBufferWriter $out, ItemStack $itemStack) : bool{
+ 		if($itemStack->getId() === 0){
+ 			VarInt::writeSignedInt($out, 0);
++			LE::writeUnsignedShort($out, 0);
++			VarInt::writeUnsignedInt($out, 0);
+ 			return false;
+ 		}
+ 
+@@ -294,30 +298,30 @@ final class CommonTypes{
+ 	 */
+ 	public static function getItemStackWithoutStackId(ByteBufferReader $in) : ItemStack{
+ 		[$id, $count, $meta] = self::getItemStackHeader($in);
++		$itemStack = self::getItemStackFooter($in, $id, $meta, $count);
+ 
+-		return $id !== 0 ? self::getItemStackFooter($in, $id, $meta, $count) : ItemStack::null();
+-
++		return $id !== 0 ? $itemStack : ItemStack::null();
+ 	}
+ 
+ 	public static function putItemStackWithoutStackId(ByteBufferWriter $out, ItemStack $itemStack) : void{
+ 		if(self::putItemStackHeader($out, $itemStack)){
+ 			self::putItemStackFooter($out, $itemStack);
++		}else{
++			VarInt::writeSignedInt($out, 0);
++			VarInt::writeUnsignedInt($out, 0);
+ 		}
+ 	}
+ 
+ 	/** @throws DataDecodeException */
+ 	public static function getItemStackWrapper(ByteBufferReader $in) : ItemStackWrapper{
+ 		[$id, $count, $meta] = self::getItemStackHeader($in);
+-		if($id === 0){
+-			return new ItemStackWrapper(0, ItemStack::null());
+-		}
+ 
+ 		$hasNetId = self::getBool($in);
+ 		$stackId = $hasNetId ? self::readServerItemStackId($in) : 0;
+ 
+ 		$itemStack = self::getItemStackFooter($in, $id, $meta, $count);
+ 
+-		return new ItemStackWrapper($stackId, $itemStack);
++		return $id !== 0 ? new ItemStackWrapper($stackId, $itemStack) : new ItemStackWrapper(0, ItemStack::null());
+ 	}
+ 
+ 	public static function putItemStackWrapper(ByteBufferWriter $out, ItemStackWrapper $itemStackWrapper) : void{
+@@ -330,6 +334,10 @@ final class CommonTypes{
+ 			}
+ 
+ 			self::putItemStackFooter($out, $itemStack);
++		}else{
++			self::putBool($out, false);
++			VarInt::writeSignedInt($out, 0);
++			VarInt::writeUnsignedInt($out, 0);
+ 		}
+ 	}
+ 
+@@ -339,18 +347,12 @@ final class CommonTypes{
+ 		$meta = VarInt::readUnsignedInt($in);
+ 
+ 		$hasNetId = self::getBool($in);
+-		if ($hasNetId) {
+-			$variant = VarInt::readUnsignedInt($in);
+-			$stackId = VarInt::readSignedInt($in);
+-		} else {
+-			$variant = 0;
+-			$stackId = 0;
+-		}
++		$stackId = $hasNetId ? VarInt::readSignedInt($in) : 0;
+ 
+ 		$blockRuntimeId = VarInt::readUnsignedInt($in);
+ 		$rawExtraData = self::getString($in);
+ 
+-		return new ItemStackWrapper($stackId, new ItemStack($id, $meta, $count, $blockRuntimeId, $rawExtraData), $variant);
++		return new ItemStackWrapper($stackId, new ItemStack($id, $meta, $count, $blockRuntimeId, $rawExtraData));
+ 	}
+ 
+ 	public static function putNetworkItemStackDescriptor(ByteBufferWriter $out, ItemStackWrapper $itemStackWrapper) : void{
+@@ -360,7 +362,6 @@ final class CommonTypes{
+ 
+ 		self::putBool($out, $hasNetId = $itemStackWrapper->getStackId() !== 0);
+ 		if($hasNetId){
+-			VarInt::writeUnsignedInt($out, $itemStackWrapper->getStackIdVariant());
+ 			VarInt::writeSignedInt($out, $itemStackWrapper->getStackId());
+ 		}
+ 
+@@ -408,6 +409,7 @@ final class CommonTypes{
+ 		for($i = 0; $i < $count; ++$i){
+ 			$key = VarInt::readUnsignedInt($in);
+ 			$type = VarInt::readUnsignedInt($in);
++			Byte::readUnsigned($in);
+ 
+ 			$data[$key] = self::readMetadataProperty($in, $type);
+ 		}
+@@ -443,6 +445,7 @@ final class CommonTypes{
+ 		foreach($metadata as $key => $d){
+ 			VarInt::writeUnsignedInt($out, $key);
+ 			VarInt::writeUnsignedInt($out, $d->getTypeId());
++			Byte::writeUnsigned($out, $d->getTypeId());
+ 			$d->write($out);
+ 		}
+ 	}
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php b/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php
+index d2a7789..115d25d 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -17,7 +19,6 @@ namespace pocketmine\network\mcpe\protocol\types;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\LE;
+-use pmmp\encoding\VarInt;
+ 
+ final class IntGameRule extends GameRule{
+ 	use GetTypeIdFromConstTrait;
+@@ -36,14 +37,10 @@ final class IntGameRule extends GameRule{
+ 	}
+ 
+ 	public function encode(ByteBufferWriter $out, bool $isStartGame) : void{
+-		if($isStartGame){
+-			VarInt::writeUnsignedInt($out, $this->value);
+-		}else{
+-			LE::writeUnsignedInt($out, $this->value);
+-		}
++		LE::writeUnsignedInt($out, $this->value);
+ 	}
+ 
+ 	public static function decode(ByteBufferReader $in, bool $isPlayerModifiable, bool $isStartGame) : self{
+-		return new self($isStartGame ? VarInt::readUnsignedInt($in) : LE::readUnsignedInt($in), $isPlayerModifiable);
++		return new self(LE::readUnsignedInt($in), $isPlayerModifiable);
+ 	}
+ }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/ItemInteractionData.php b/source/vendor/pocketmine/bedrock-protocol/src/types/ItemInteractionData.php
+index abd1a03..e1ab1d3 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/ItemInteractionData.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/ItemInteractionData.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -17,6 +19,7 @@ namespace pocketmine\network\mcpe\protocol\types;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\VarInt;
++use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use pocketmine\network\mcpe\protocol\types\inventory\InventoryTransactionChangedSlotsHack;
+ use pocketmine\network\mcpe\protocol\types\inventory\UseItemTransactionData;
+ use function count;
+@@ -49,25 +52,30 @@ final class ItemInteractionData{
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$requestId = VarInt::readSignedInt($in);
+ 		$requestChangedSlots = [];
+-		if($requestId !== 0){
++		if(CommonTypes::getBool($in)){
+ 			$len = VarInt::readUnsignedInt($in);
+ 			for($i = 0; $i < $len; ++$i){
+ 				$requestChangedSlots[] = InventoryTransactionChangedSlotsHack::read($in);
+ 			}
+ 		}
+ 		$transactionData = new UseItemTransactionData();
+-		$transactionData->decodeAuthInput($in);
++		CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, function(ByteBufferReader $in) use ($transactionData) : bool{
++			$transactionData->decodeAuthInput($in);
++			return true;
++		}));
+ 		return new ItemInteractionData($requestId, $requestChangedSlots, $transactionData);
+ 	}
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+ 		VarInt::writeSignedInt($out, $this->requestId);
++		CommonTypes::putBool($out, $this->requestId !== 0);
+ 		if($this->requestId !== 0){
+ 			VarInt::writeUnsignedInt($out, count($this->requestChangedSlots));
+ 			foreach($this->requestChangedSlots as $changedSlot){
+ 				$changedSlot->write($out);
+ 			}
+ 		}
+-		$this->transactionData->encodeAuthInput($out);
++
++		CommonTypes::writeOptional($out, $this->transactionData, fn(ByteBufferWriter $out, UseItemTransactionData $v) => CommonTypes::writeOptional($out, $v, fn(ByteBufferWriter $out, UseItemTransactionData $v) => $v->encodeAuthInput($out)));
+ 	}
+ }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/LevelSettings.php b/source/vendor/pocketmine/bedrock-protocol/src/types/LevelSettings.php
+index 8400b9b..ed8a4e9 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/LevelSettings.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/LevelSettings.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -112,7 +114,7 @@ final class LevelSettings{
+ 		$this->createdInEditorMode = CommonTypes::getBool($in);
+ 		$this->exportedFromEditorMode = CommonTypes::getBool($in);
+ 		$this->time = VarInt::readSignedInt($in);
+-		$this->eduEditionOffer = VarInt::readSignedInt($in);
++		$this->eduEditionOffer = VarInt::readUnsignedInt($in);
+ 		$this->hasEduFeaturesEnabled = CommonTypes::getBool($in);
+ 		$this->eduProductUUID = CommonTypes::getString($in);
+ 		$this->rainLevel = LE::readFloat($in);
+@@ -128,7 +130,7 @@ final class LevelSettings{
+ 		$this->experiments = Experiments::read($in);
+ 		$this->hasBonusChestEnabled = CommonTypes::getBool($in);
+ 		$this->hasStartWithMapEnabled = CommonTypes::getBool($in);
+-		$this->defaultPlayerPermission = VarInt::readSignedInt($in);
++		$this->defaultPlayerPermission = Byte::readUnsigned($in);
+ 		$this->serverChunkTickRadius = LE::readSignedInt($in); //doesn't make sense for this to be signed, but that's what the spec says
+ 		$this->hasLockedBehaviorPack = CommonTypes::getBool($in);
+ 		$this->hasLockedResourcePack = CommonTypes::getBool($in);
+@@ -165,7 +167,7 @@ final class LevelSettings{
+ 		CommonTypes::putBool($out, $this->createdInEditorMode);
+ 		CommonTypes::putBool($out, $this->exportedFromEditorMode);
+ 		VarInt::writeSignedInt($out, $this->time);
+-		VarInt::writeSignedInt($out, $this->eduEditionOffer);
++		VarInt::writeUnsignedInt($out, $this->eduEditionOffer);
+ 		CommonTypes::putBool($out, $this->hasEduFeaturesEnabled);
+ 		CommonTypes::putString($out, $this->eduProductUUID);
+ 		LE::writeFloat($out, $this->rainLevel);
+@@ -181,7 +183,7 @@ final class LevelSettings{
+ 		$this->experiments->write($out);
+ 		CommonTypes::putBool($out, $this->hasBonusChestEnabled);
+ 		CommonTypes::putBool($out, $this->hasStartWithMapEnabled);
+-		VarInt::writeSignedInt($out, $this->defaultPlayerPermission);
++		Byte::writeUnsigned($out, $this->defaultPlayerPermission);
+ 		LE::writeSignedInt($out, $this->serverChunkTickRadius); //doesn't make sense for this to be signed, but that's what the spec says
+ 		CommonTypes::putBool($out, $this->hasLockedBehaviorPack);
+ 		CommonTypes::putBool($out, $this->hasLockedResourcePack);
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/MapImage.php b/source/vendor/pocketmine/bedrock-protocol/src/types/MapImage.php
+index ca77bbb..be2dc47 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/MapImage.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/MapImage.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -17,7 +19,7 @@ namespace pocketmine\network\mcpe\protocol\types;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\DataDecodeException;
+-use pmmp\encoding\VarInt;
++use pmmp\encoding\LE;
+ use pocketmine\color\Color;
+ use pocketmine\network\mcpe\protocol\PacketDecodeException;
+ use pocketmine\utils\Binary;
+@@ -79,8 +81,7 @@ final class MapImage{
+ 			$serializer = new ByteBufferWriter();
+ 			for($y = 0; $y < $this->height; ++$y){
+ 				for($x = 0; $x < $this->width; ++$x){
+-					//if mojang had any sense this would just be a regular LE int
+-					VarInt::writeUnsignedInt($serializer, Binary::flipIntEndianness($this->pixels[$y][$x]->toRGBA()));
++					LE::writeUnsignedInt($serializer, Binary::flipIntEndianness($this->pixels[$y][$x]->toRGBA()));
+ 				}
+ 			}
+ 			$this->encodedPixelCache = $serializer->getData();
+@@ -105,7 +106,7 @@ final class MapImage{
+ 		for($y = 0; $y < $height; ++$y){
+ 			$row = [];
+ 			for($x = 0; $x < $width; ++$x){
+-				$row[] = Color::fromRGBA(Binary::flipIntEndianness(VarInt::readUnsignedInt($in)));
++				$row[] = Color::fromRGBA(Binary::flipIntEndianness(LE::readUnsignedInt($in)));
+ 			}
+ 			$pixels[] = $row;
+ 		}
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/MapTrackedObject.php b/source/vendor/pocketmine/bedrock-protocol/src/types/MapTrackedObject.php
+index 2c76f41..fdee32b 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/MapTrackedObject.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/MapTrackedObject.php
+@@ -10,19 +10,40 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+ 
++use pmmp\encoding\ByteBufferReader;
++use pmmp\encoding\ByteBufferWriter;
++use pmmp\encoding\LE;
++use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
++
+ class MapTrackedObject{
+ 	public const TYPE_ENTITY = 0;
+-	public const TYPE_BLOCK = 1;
++	public const TYPE_BLOCK_ENTITY = 1;
++	public const TYPE_OTHER = 2;
+ 
+ 	public int $type;
+ 
+-	/** @var int Only set if is TYPE_ENTITY */
+-	public int $actorUniqueId;
++	public ?int $actorUniqueId = null;
++
++	public ?BlockPosition $blockPosition = null;
++
++	public static function read(ByteBufferReader $in) : self{
++		$result = new self();
++		$result->type = LE::readUnsignedInt($in);
++		$result->actorUniqueId = CommonTypes::readOptional($in, CommonTypes::getActorUniqueId(...));
++		$result->blockPosition = CommonTypes::readOptional($in, CommonTypes::getBlockPosition(...));
++
++		return $result;
++	}
+ 
+-	/** Only set if is TYPE_BLOCK */
+-	public BlockPosition $blockPosition;
++	public function write(ByteBufferWriter $out) : void{
++		LE::writeUnsignedInt($out, $this->type);
++		CommonTypes::writeOptional($out, $this->actorUniqueId, CommonTypes::putActorUniqueId(...));
++		CommonTypes::writeOptional($out, $this->blockPosition, CommonTypes::putBlockPosition(...));
++	}
+ }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputFlags.php b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputFlags.php
+index 0be7476..9acfc9c 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputFlags.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputFlags.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -118,6 +120,7 @@ final class PlayerAuthInputFlags{
+ 	public const SNEAK_RELEASED_RAW = 62;
+ 	public const SNEAK_PRESSED_RAW = 63;
+ 	public const SNEAK_CURRENT_RAW = 64;
++	public const INTERNAL_UPDATE = 65;
+ 
+-	public const NUMBER_OF_FLAGS = 65;
++	public const NUMBER_OF_FLAGS = 66;
+ }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputVehicleInfo.php b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputVehicleInfo.php
+index aeb74ef..1b36375 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputVehicleInfo.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputVehicleInfo.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -22,28 +24,35 @@ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ final class PlayerAuthInputVehicleInfo{
+ 
+ 	public function __construct(
+-		private float $vehicleRotationX,
+-		private float $vehicleRotationZ,
+-		private int $predictedVehicleActorUniqueId
++		private ?float $vehicleRotationX = null,
++		private ?float $vehicleRotationZ = null,
++		private ?int $predictedVehicleActorUniqueId = null
+ 	){}
+ 
+-	public function getVehicleRotationX() : float{ return $this->vehicleRotationX; }
++	public function getVehicleRotationX() : ?float{ return $this->vehicleRotationX; }
++
++	public function getVehicleRotationZ() : ?float{ return $this->vehicleRotationZ; }
+ 
+-	public function getVehicleRotationZ() : float{ return $this->vehicleRotationZ; }
++	public function getPredictedVehicleActorUniqueId() : ?int{ return $this->predictedVehicleActorUniqueId; }
+ 
+-	public function getPredictedVehicleActorUniqueId() : int{ return $this->predictedVehicleActorUniqueId; }
++	public function isNull() : bool{
++		return $this->vehicleRotationX === null && $this->vehicleRotationZ === null && $this->predictedVehicleActorUniqueId === null;
++	}
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+-		$vehicleRotationX = LE::readFloat($in);
+-		$vehicleRotationZ = LE::readFloat($in);
+-		$predictedVehicleActorUniqueId = CommonTypes::getActorUniqueId($in);
++		//both fields are nested optionals - the outer one is skipped entirely when unset
++		$rotation = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, fn(ByteBufferReader $in) => [LE::readFloat($in), LE::readFloat($in)]));
++		$predictedVehicleActorUniqueId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::getActorUniqueId(...)));
+ 
+-		return new self($vehicleRotationX, $vehicleRotationZ, $predictedVehicleActorUniqueId);
++		return new self($rotation[0] ?? null, $rotation[1] ?? null, $predictedVehicleActorUniqueId);
+ 	}
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+-		LE::writeFloat($out, $this->vehicleRotationX);
+-		LE::writeFloat($out, $this->vehicleRotationZ);
+-		CommonTypes::putActorUniqueId($out, $this->predictedVehicleActorUniqueId);
++		$rotation = $this->vehicleRotationX !== null && $this->vehicleRotationZ !== null ? [$this->vehicleRotationX, $this->vehicleRotationZ] : null;
++		CommonTypes::writeOptional($out, $rotation, fn(ByteBufferWriter $out, array $v) => CommonTypes::writeOptional($out, $v, function(ByteBufferWriter $out, array $rotation) : void{
++			LE::writeFloat($out, $rotation[0]);
++			LE::writeFloat($out, $rotation[1]);
++		}));
++		CommonTypes::writeOptional($out, $this->predictedVehicleActorUniqueId, fn(ByteBufferWriter $out, int $v) => CommonTypes::writeOptional($out, $v, CommonTypes::putActorUniqueId(...)));
+ 	}
+ }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerBlockActionWithBlockInfo.php b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerBlockActionWithBlockInfo.php
+index ec8110b..0997903 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerBlockActionWithBlockInfo.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerBlockActionWithBlockInfo.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -54,6 +56,7 @@ final class PlayerBlockActionWithBlockInfo implements PlayerBlockAction{
+ 		return match($actionType){
+ 			PlayerAction::ABORT_BREAK,
+ 			PlayerAction::START_BREAK,
++			PlayerAction::STOP_BREAK,
+ 			PlayerAction::CRACK_BREAK,
+ 			PlayerAction::PREDICT_DESTROY_BLOCK,
+ 			PlayerAction::CONTINUE_DESTROY_BLOCK => true,
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerListEntry.php b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerListEntry.php
+index a6852f1..10f5244 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerListEntry.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerListEntry.php
+@@ -10,16 +10,20 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+ 
+ use pocketmine\color\Color;
++use pocketmine\network\mcpe\protocol\PlayerListPacket;
+ use pocketmine\network\mcpe\protocol\types\skin\SkinData;
+ use Ramsey\Uuid\UuidInterface;
+ 
+ class PlayerListEntry{
+ 
++	public int $type;
+ 	public UuidInterface $uuid;
+ 	public int $actorUniqueId;
+ 	public string $username;
+@@ -34,6 +38,7 @@ class PlayerListEntry{
+ 
+ 	public static function createRemovalEntry(UuidInterface $uuid) : PlayerListEntry{
+ 		$entry = new PlayerListEntry();
++		$entry->type = PlayerListPacket::TYPE_REMOVE;
+ 		$entry->uuid = $uuid;
+ 
+ 		return $entry;
+@@ -53,6 +58,7 @@ class PlayerListEntry{
+ 		?Color $color = null
+ 	) : PlayerListEntry{
+ 		$entry = new PlayerListEntry();
++		$entry->type = PlayerListPacket::TYPE_ADD;
+ 		$entry->uuid = $uuid;
+ 		$entry->actorUniqueId = $actorUniqueId;
+ 		$entry->username = $username;
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/ScorePacketEntry.php b/source/vendor/pocketmine/bedrock-protocol/src/types/ScorePacketEntry.php
+index 5b334bc..d969d17 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/ScorePacketEntry.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/ScorePacketEntry.php
+@@ -10,18 +10,22 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+ 
+ class ScorePacketEntry{
++	public const TYPE_REMOVE = 0;
+ 	public const TYPE_PLAYER = 1;
+ 	public const TYPE_ENTITY = 2;
+ 	public const TYPE_FAKE_PLAYER = 3;
+ 
+ 	public int $scoreboardId;
+-	public string $objectiveName;
+-	public int $score;
++	/** @var string|null (optional if type remove) */
++	public ?string $objectiveName = null;
++	public int $score = 0;
+ 	public int $type;
+ 	/** @var int|null (if type entity or player) */
+ 	public ?int $actorUniqueId;
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php b/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php
+index 0e14666..8b61057 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -17,6 +19,6 @@ namespace pocketmine\network\mcpe\protocol\types;
+ class ScoreboardIdentityPacketEntry{
+ 
+ 	public int $scoreboardId;
+-	public ?int $actorUniqueId = null;
++	public int $actorUniqueId;
+ 
+ }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php
+index 58875c3..cb47969 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\login\clientdata;
+@@ -164,6 +166,8 @@ final class ClientData{
+ 	/** @required */
+ 	public bool $TrustedSkin;
+ 
++	public string $ProfileHash = "";
++
+ 	/** @required */
+ 	public int $UIProfile;
+ }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientDataToSkinDataHelper.php b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientDataToSkinDataHelper.php
+index b0d9b7c..52b5cd9 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientDataToSkinDataHelper.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientDataToSkinDataHelper.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\login\clientdata;
+@@ -19,7 +21,11 @@ use pocketmine\network\mcpe\protocol\types\skin\PersonaSkinPiece;
+ use pocketmine\network\mcpe\protocol\types\skin\SkinAnimation;
+ use pocketmine\network\mcpe\protocol\types\skin\SkinData;
+ use pocketmine\network\mcpe\protocol\types\skin\SkinImage;
++use Ramsey\Uuid\Uuid;
+ use function array_map;
++use function array_pad;
++use function array_slice;
++use function array_values;
+ use function base64_decode;
+ 
+ final class ClientDataToSkinDataHelper{
+@@ -65,13 +71,20 @@ final class ClientDataToSkinDataHelper{
+ 			self::safeB64Decode($clientData->SkinAnimationData, "SkinAnimationData"),
+ 			$clientData->CapeId,
+ 			null,
+-			$clientData->ArmSize,
+-			$clientData->SkinColor,
++			SkinData::convertArmSize($clientData->ArmSize),
++			SkinData::convertColor($clientData->SkinColor),
+ 			array_map(function(ClientDataPersonaSkinPiece $piece) : PersonaSkinPiece{
+-				return new PersonaSkinPiece($piece->PieceId, $piece->PieceType, $piece->PackId, $piece->IsDefault, $piece->ProductId);
++				return new PersonaSkinPiece(
++					$piece->PieceId,
++					(int) $piece->PieceType,
++					Uuid::isValid($piece->PackId) ? Uuid::fromString($piece->PackId) : Uuid::fromInteger("0"),
++					$piece->IsDefault,
++					$piece->ProductId
++				);
+ 			}, $clientData->PersonaPieces),
+ 			array_map(function(ClientDataPersonaPieceTintColor $tint) : PersonaPieceTintColor{
+-				return new PersonaPieceTintColor($tint->PieceType, $tint->Colors);
++				$colors = array_map(SkinData::convertColor(...), array_slice(array_values($tint->Colors), 0, 4));
++				return new PersonaPieceTintColor($tint->PieceType, array_pad($colors, 4, 0));
+ 			}, $clientData->PieceTintColors),
+ 			true,
+ 			$clientData->PremiumSkin,
+@@ -79,6 +92,8 @@ final class ClientDataToSkinDataHelper{
+ 			$clientData->CapeOnClassicSkin,
+ 			true, //assume this is true? there's no field for it ...
+ 			$clientData->OverrideSkin ?? true,
++			$clientData->TrustedSkin ? SkinData::TRUSTED_SKIN_FLAG_TRUE : SkinData::TRUSTED_SKIN_FLAG_UNSET,
++			$clientData->ProfileHash,
+ 		);
+ 	}
+ }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/RecipeUnlockingRequirement.php b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/RecipeUnlockingRequirement.php
+index 4c352c1..c101c3d 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/RecipeUnlockingRequirement.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/RecipeUnlockingRequirement.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\recipe;
+@@ -37,11 +39,8 @@ final class RecipeUnlockingRequirement{
+ 	public function getUnlockingIngredients() : ?array{ return $this->unlockingIngredients; }
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+-		//I don't know what the point of this structure is. It could easily have been a list<RecipeIngredient> instead.
+-		//It's basically just an optional list, which could have been done by an empty list wherever it's not needed.
+-		$unlockingContext = CommonTypes::getBool($in);
+ 		$unlockingIngredients = null;
+-		if(!$unlockingContext){
++		if(CommonTypes::getBool($in)){
+ 			$unlockingIngredients = [];
+ 			for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; $i++){
+ 				$unlockingIngredients[] = CommonTypes::getRecipeIngredient($in);
+@@ -52,7 +51,7 @@ final class RecipeUnlockingRequirement{
+ 	}
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+-		CommonTypes::putBool($out, $this->unlockingIngredients === null);
++		CommonTypes::putBool($out, $this->unlockingIngredients !== null);
+ 		if($this->unlockingIngredients !== null){
+ 			VarInt::writeUnsignedInt($out, count($this->unlockingIngredients));
+ 			foreach($this->unlockingIngredients as $ingredient){
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ShapedRecipe.php b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ShapedRecipe.php
+index 1cdb679..1ee26fa 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ShapedRecipe.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ShapedRecipe.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\recipe;
+@@ -111,6 +113,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
+ 		$recipeId = CommonTypes::getString($in);
+ 		$width = VarInt::readSignedInt($in);
+ 		$height = VarInt::readSignedInt($in);
++		VarInt::readUnsignedInt($in); //ingredient count, always width * height
+ 		$input = [];
+ 		for($row = 0; $row < $height; ++$row){
+ 			for($column = 0; $column < $width; ++$column){
+@@ -137,6 +140,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
+ 		CommonTypes::putString($out, $this->recipeId);
+ 		VarInt::writeSignedInt($out, $this->getWidth());
+ 		VarInt::writeSignedInt($out, $this->getHeight());
++		VarInt::writeUnsignedInt($out, $this->getWidth() * $this->getHeight());
+ 		foreach($this->input as $row){
+ 			foreach($row as $ingredient){
+ 				CommonTypes::putRecipeIngredient($out, $ingredient);
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaPieceTintColor.php b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaPieceTintColor.php
+index 14dc05a..5b4b692 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaPieceTintColor.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaPieceTintColor.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\skin;
+@@ -21,7 +23,7 @@ final class PersonaPieceTintColor{
+ 	public const PIECE_TYPE_PERSONA_MOUTH = "persona_mouth";
+ 
+ 	/**
+-	 * @param string[] $colors
++	 * @param int[] $colors
+ 	 */
+ 	public function __construct(
+ 		private string $pieceType,
+@@ -33,7 +35,7 @@ final class PersonaPieceTintColor{
+ 	}
+ 
+ 	/**
+-	 * @return string[]
++	 * @return int[]
+ 	 */
+ 	public function getColors() : array{
+ 		return $this->colors;
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaSkinPiece.php b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaSkinPiece.php
+index 7c9d8fa..703db92 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaSkinPiece.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaSkinPiece.php
+@@ -10,27 +10,48 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\skin;
+ 
++use Ramsey\Uuid\UuidInterface;
++
+ final class PersonaSkinPiece{
+ 
+-	public const PIECE_TYPE_PERSONA_BODY = "persona_body";
+-	public const PIECE_TYPE_PERSONA_BOTTOM = "persona_bottom";
+-	public const PIECE_TYPE_PERSONA_EYES = "persona_eyes";
+-	public const PIECE_TYPE_PERSONA_FACIAL_HAIR = "persona_facial_hair";
+-	public const PIECE_TYPE_PERSONA_FEET = "persona_feet";
+-	public const PIECE_TYPE_PERSONA_HAIR = "persona_hair";
+-	public const PIECE_TYPE_PERSONA_MOUTH = "persona_mouth";
+-	public const PIECE_TYPE_PERSONA_SKELETON = "persona_skeleton";
+-	public const PIECE_TYPE_PERSONA_SKIN = "persona_skin";
+-	public const PIECE_TYPE_PERSONA_TOP = "persona_top";
++	public const PIECE_TYPE_PERSONA_SKELETON = 0;
++	public const PIECE_TYPE_PERSONA_BODY = 1;
++	public const PIECE_TYPE_PERSONA_SKIN = 2;
++	public const PIECE_TYPE_PERSONA_BOTTOM = 3;
++	public const PIECE_TYPE_PERSONA_FEET = 4;
++	public const PIECE_TYPE_DRESS = 5;
++	public const PIECE_TYPE_PERSONA_TOP = 6;
++	public const PIECE_TYPE_HIGH_PANTS = 7;
++	public const PIECE_TYPE_HANDS = 8;
++	public const PIECE_TYPE_OUTERWEAR = 9;
++	public const PIECE_TYPE_PERSONA_FACIAL_HAIR = 10;
++	public const PIECE_TYPE_PERSONA_MOUTH = 11;
++	public const PIECE_TYPE_PERSONA_EYES = 12;
++	public const PIECE_TYPE_PERSONA_HAIR = 13;
++	public const PIECE_TYPE_HOOD = 14;
++	public const PIECE_TYPE_BACK = 15;
++	public const PIECE_TYPE_FACE_ACCESSORY = 16;
++	public const PIECE_TYPE_HEAD = 17;
++	public const PIECE_TYPE_LEGS = 18;
++	public const PIECE_TYPE_LEFT_LEG = 19;
++	public const PIECE_TYPE_RIGHT_LEG = 20;
++	public const PIECE_TYPE_ARMS = 21;
++	public const PIECE_TYPE_LEFT_ARM = 22;
++	public const PIECE_TYPE_RIGHT_ARM = 23;
++	public const PIECE_TYPE_CAPES = 24;
++	public const PIECE_TYPE_CLASSIC_SKIN = 25;
++	public const PIECE_TYPE_EMOTE = 26;
+ 
+ 	public function __construct(
+ 		private string $pieceId,
+-		private string $pieceType,
+-		private string $packId,
++		private int $pieceType,
++		private UuidInterface $packId,
+ 		private bool $isDefaultPiece,
+ 		private string $productId
+ 	){}
+@@ -39,11 +60,11 @@ final class PersonaSkinPiece{
+ 		return $this->pieceId;
+ 	}
+ 
+-	public function getPieceType() : string{
++	public function getPieceType() : int{
+ 		return $this->pieceType;
+ 	}
+ 
+-	public function getPackId() : string{
++	public function getPackId() : UuidInterface{
+ 		return $this->packId;
+ 	}
+ 
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/SkinData.php b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/SkinData.php
+index da2d59c..d08fcfa 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/SkinData.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/SkinData.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\skin;
+@@ -19,8 +21,12 @@ use Ramsey\Uuid\Uuid;
+ 
+ class SkinData{
+ 
+-	public const ARM_SIZE_SLIM = "slim";
+-	public const ARM_SIZE_WIDE = "wide";
++	public const ARM_SIZE_SLIM = 0;
++	public const ARM_SIZE_WIDE = 1;
++
++	public const TRUSTED_SKIN_FLAG_UNSET = "unset";
++	public const TRUSTED_SKIN_FLAG_FALSE = "false";
++	public const TRUSTED_SKIN_FLAG_TRUE = "true";
+ 
+ 	private SkinImage $capeImage;
+ 	private string $fullSkinId;
+@@ -42,8 +48,8 @@ class SkinData{
+ 		private string $animationData = "",
+ 		private string $capeId = "",
+ 		?string $fullSkinId = null,
+-		private string $armSize = self::ARM_SIZE_WIDE,
+-		private string $skinColor = "",
++		private int $armSize = self::ARM_SIZE_WIDE,
++		private int $skinColor = 0,
+ 		private array $personaPieces = [],
+ 		private array $pieceTintColors = [],
+ 		private bool $isVerified = true,
+@@ -51,7 +57,9 @@ class SkinData{
+ 		private bool $persona = false,
+ 		private bool $personaCapeOnClassic = false,
+ 		private bool $isPrimaryUser = true,
+-		private bool $override = true
++		private bool $override = true,
++		private string $trustedSkinFlag = self::TRUSTED_SKIN_FLAG_TRUE,
++		private string $profileHash = ""
+ 	){
+ 		$this->capeImage = $capeImage ?? new SkinImage(0, 0, "");
+ 		//this has to be unique or the client will do stupid things
+@@ -101,14 +109,38 @@ class SkinData{
+ 		return $this->fullSkinId;
+ 	}
+ 
+-	public function getArmSize() : string{
++	public function getArmSize() : int{
+ 		return $this->armSize;
+ 	}
+ 
+-	public function getSkinColor() : string{
++	public function getSkinColor() : int{
+ 		return $this->skinColor;
+ 	}
+ 
++	public function getTrustedSkinFlag() : string{
++		return $this->trustedSkinFlag;
++	}
++
++	public function getProfileHash() : string{
++		return $this->profileHash;
++	}
++
++	public static function convertArmSize(string $armSize) : int{
++		return match ($armSize) {
++			"slim" => self::ARM_SIZE_SLIM,
++			default => self::ARM_SIZE_WIDE,
++		};
++	}
++
++	public static function convertColor(string $color) : int{
++		$hex = \ltrim($color, '#');
++		if($hex === '' || $hex === '0'){
++			return 0;
++		}
++
++		return (int) \hexdec($hex);
++	}
++
+ 	/**
+ 	 * @return PersonaSkinPiece[]
+ 	 */

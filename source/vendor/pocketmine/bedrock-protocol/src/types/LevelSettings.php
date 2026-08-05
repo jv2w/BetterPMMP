@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
@@ -112,7 +114,7 @@ final class LevelSettings{
 		$this->createdInEditorMode = CommonTypes::getBool($in);
 		$this->exportedFromEditorMode = CommonTypes::getBool($in);
 		$this->time = VarInt::readSignedInt($in);
-		$this->eduEditionOffer = VarInt::readSignedInt($in);
+		$this->eduEditionOffer = VarInt::readUnsignedInt($in);
 		$this->hasEduFeaturesEnabled = CommonTypes::getBool($in);
 		$this->eduProductUUID = CommonTypes::getString($in);
 		$this->rainLevel = LE::readFloat($in);
@@ -128,7 +130,7 @@ final class LevelSettings{
 		$this->experiments = Experiments::read($in);
 		$this->hasBonusChestEnabled = CommonTypes::getBool($in);
 		$this->hasStartWithMapEnabled = CommonTypes::getBool($in);
-		$this->defaultPlayerPermission = VarInt::readSignedInt($in);
+		$this->defaultPlayerPermission = Byte::readUnsigned($in);
 		$this->serverChunkTickRadius = LE::readSignedInt($in); //doesn't make sense for this to be signed, but that's what the spec says
 		$this->hasLockedBehaviorPack = CommonTypes::getBool($in);
 		$this->hasLockedResourcePack = CommonTypes::getBool($in);
@@ -165,7 +167,7 @@ final class LevelSettings{
 		CommonTypes::putBool($out, $this->createdInEditorMode);
 		CommonTypes::putBool($out, $this->exportedFromEditorMode);
 		VarInt::writeSignedInt($out, $this->time);
-		VarInt::writeSignedInt($out, $this->eduEditionOffer);
+		VarInt::writeUnsignedInt($out, $this->eduEditionOffer);
 		CommonTypes::putBool($out, $this->hasEduFeaturesEnabled);
 		CommonTypes::putString($out, $this->eduProductUUID);
 		LE::writeFloat($out, $this->rainLevel);
@@ -181,7 +183,7 @@ final class LevelSettings{
 		$this->experiments->write($out);
 		CommonTypes::putBool($out, $this->hasBonusChestEnabled);
 		CommonTypes::putBool($out, $this->hasStartWithMapEnabled);
-		VarInt::writeSignedInt($out, $this->defaultPlayerPermission);
+		Byte::writeUnsigned($out, $this->defaultPlayerPermission);
 		LE::writeSignedInt($out, $this->serverChunkTickRadius); //doesn't make sense for this to be signed, but that's what the spec says
 		CommonTypes::putBool($out, $this->hasLockedBehaviorPack);
 		CommonTypes::putBool($out, $this->hasLockedResourcePack);

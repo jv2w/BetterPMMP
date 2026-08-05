@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\skin;
@@ -21,7 +23,7 @@ final class PersonaPieceTintColor{
 	public const PIECE_TYPE_PERSONA_MOUTH = "persona_mouth";
 
 	/**
-	 * @param string[] $colors
+	 * @param int[] $colors
 	 */
 	public function __construct(
 		private string $pieceType,
@@ -33,7 +35,7 @@ final class PersonaPieceTintColor{
 	}
 
 	/**
-	 * @return string[]
+	 * @return int[]
 	 */
 	public function getColors() : array{
 		return $this->colors;

@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\serializer;
@@ -111,13 +113,13 @@ final class CommonTypes{
 		$skinPlayFabId = self::getString($in);
 		$skinResourcePatch = self::getString($in);
 		$skinData = self::getSkinImage($in);
-		$animationCount = LE::readUnsignedInt($in);
+		$animationCount = VarInt::readUnsignedInt($in);
 		$animations = [];
 		for($i = 0; $i < $animationCount; ++$i){
 			$skinImage = self::getSkinImage($in);
-			$animationType = LE::readUnsignedInt($in);
+			$animationType = VarInt::readUnsignedInt($in);
 			$animationFrames = LE::readFloat($in);
-			$expressionType = LE::readUnsignedInt($in);
+			$expressionType = VarInt::readUnsignedInt($in);
 			$animations[] = new SkinAnimation($skinImage, $animationType, $animationFrames, $expressionType);
 		}
 		$capeData = self::getSkinImage($in);
@@ -126,26 +128,25 @@ final class CommonTypes{
 		$animationData = self::getString($in);
 		$capeId = self::getString($in);
 		$fullSkinId = self::getString($in);
-		$armSize = self::getString($in);
-		$skinColor = self::getString($in);
-		$personaPieceCount = LE::readUnsignedInt($in);
+		$armSize = Byte::readUnsigned($in);
+		$skinColor = LE::readSignedInt($in);
+		$personaPieceCount = VarInt::readUnsignedInt($in);
 		$personaPieces = [];
 		for($i = 0; $i < $personaPieceCount; ++$i){
 			$pieceId = self::getString($in);
-			$pieceType = self::getString($in);
-			$packId = self::getString($in);
+			$pieceType = LE::readSignedInt($in);
+			$packId = self::getUUID($in);
 			$isDefaultPiece = self::getBool($in);
 			$productId = self::getString($in);
 			$personaPieces[] = new PersonaSkinPiece($pieceId, $pieceType, $packId, $isDefaultPiece, $productId);
 		}
-		$pieceTintColorCount = LE::readUnsignedInt($in);
+		$pieceTintColorCount = VarInt::readUnsignedInt($in);
 		$pieceTintColors = [];
 		for($i = 0; $i < $pieceTintColorCount; ++$i){
 			$pieceType = self::getString($in);
-			$colorCount = LE::readUnsignedInt($in);
 			$colors = [];
-			for($j = 0; $j < $colorCount; ++$j){
-				$colors[] = self::getString($in);
+			for($j = 0; $j < 4; ++$j){
+				$colors[] = LE::readSignedInt($in);
 			}
 			$pieceTintColors[] = new PersonaPieceTintColor(
 				$pieceType,
@@ -158,6 +159,8 @@ final class CommonTypes{
 		$capeOnClassic = self::getBool($in);
 		$isPrimaryUser = self::getBool($in);
 		$override = self::getBool($in);
+		$trustedSkinFlag = self::getString($in);
+		$profileHash = self::getString($in);
 
 		return new SkinData(
 			$skinId,
@@ -181,6 +184,8 @@ final class CommonTypes{
 			$capeOnClassic,
 			$isPrimaryUser,
 			$override,
+			$trustedSkinFlag,
+			$profileHash,
 		);
 	}
 
@@ -189,12 +194,12 @@ final class CommonTypes{
 		self::putString($out, $skin->getPlayFabId());
 		self::putString($out, $skin->getResourcePatch());
 		self::putSkinImage($out, $skin->getSkinImage());
-		LE::writeUnsignedInt($out, count($skin->getAnimations()));
+		VarInt::writeUnsignedInt($out, count($skin->getAnimations()));
 		foreach($skin->getAnimations() as $animation){
 			self::putSkinImage($out, $animation->getImage());
-			LE::writeUnsignedInt($out, $animation->getType());
+			VarInt::writeUnsignedInt($out, $animation->getType());
 			LE::writeFloat($out, $animation->getFrames());
-			LE::writeUnsignedInt($out, $animation->getExpressionType());
+			VarInt::writeUnsignedInt($out, $animation->getExpressionType());
 		}
 		self::putSkinImage($out, $skin->getCapeImage());
 		self::putString($out, $skin->getGeometryData());
@@ -202,22 +207,21 @@ final class CommonTypes{
 		self::putString($out, $skin->getAnimationData());
 		self::putString($out, $skin->getCapeId());
 		self::putString($out, $skin->getFullSkinId());
-		self::putString($out, $skin->getArmSize());
-		self::putString($out, $skin->getSkinColor());
-		LE::writeUnsignedInt($out, count($skin->getPersonaPieces()));
+		Byte::writeUnsigned($out, $skin->getArmSize());
+		LE::writeSignedInt($out, $skin->getSkinColor());
+		VarInt::writeUnsignedInt($out, count($skin->getPersonaPieces()));
 		foreach($skin->getPersonaPieces() as $piece){
 			self::putString($out, $piece->getPieceId());
-			self::putString($out, $piece->getPieceType());
-			self::putString($out, $piece->getPackId());
+			LE::writeSignedInt($out, $piece->getPieceType());
+			self::putUUID($out, $piece->getPackId());
 			self::putBool($out, $piece->isDefaultPiece());
 			self::putString($out, $piece->getProductId());
 		}
-		LE::writeUnsignedInt($out, count($skin->getPieceTintColors()));
+		VarInt::writeUnsignedInt($out, count($skin->getPieceTintColors()));
 		foreach($skin->getPieceTintColors() as $tint){
 			self::putString($out, $tint->getPieceType());
-			LE::writeUnsignedInt($out, count($tint->getColors()));
 			foreach($tint->getColors() as $color){
-				self::putString($out, $color);
+				LE::writeSignedInt($out, $color);
 			}
 		}
 		self::putBool($out, $skin->isPremium());
@@ -225,6 +229,8 @@ final class CommonTypes{
 		self::putBool($out, $skin->isPersonaCapeOnClassic());
 		self::putBool($out, $skin->isPrimaryUser());
 		self::putBool($out, $skin->isOverride());
+		self::putString($out, $skin->getTrustedSkinFlag());
+		self::putString($out, $skin->getProfileHash());
 	}
 
 	/** @throws DataDecodeException */
@@ -252,10 +258,6 @@ final class CommonTypes{
 	 */
 	private static function getItemStackHeader(ByteBufferReader $in) : array{
 		$id = VarInt::readSignedInt($in);
-		if($id === 0){
-			return [0, 0, 0];
-		}
-
 		$count = LE::readUnsignedShort($in);
 		$meta = VarInt::readUnsignedInt($in);
 
@@ -265,6 +267,8 @@ final class CommonTypes{
 	private static function putItemStackHeader(ByteBufferWriter $out, ItemStack $itemStack) : bool{
 		if($itemStack->getId() === 0){
 			VarInt::writeSignedInt($out, 0);
+			LE::writeUnsignedShort($out, 0);
+			VarInt::writeUnsignedInt($out, 0);
 			return false;
 		}
 
@@ -294,30 +298,30 @@ final class CommonTypes{
 	 */
 	public static function getItemStackWithoutStackId(ByteBufferReader $in) : ItemStack{
 		[$id, $count, $meta] = self::getItemStackHeader($in);
+		$itemStack = self::getItemStackFooter($in, $id, $meta, $count);
 
-		return $id !== 0 ? self::getItemStackFooter($in, $id, $meta, $count) : ItemStack::null();
-
+		return $id !== 0 ? $itemStack : ItemStack::null();
 	}
 
 	public static function putItemStackWithoutStackId(ByteBufferWriter $out, ItemStack $itemStack) : void{
 		if(self::putItemStackHeader($out, $itemStack)){
 			self::putItemStackFooter($out, $itemStack);
+		}else{
+			VarInt::writeSignedInt($out, 0);
+			VarInt::writeUnsignedInt($out, 0);
 		}
 	}
 
 	/** @throws DataDecodeException */
 	public static function getItemStackWrapper(ByteBufferReader $in) : ItemStackWrapper{
 		[$id, $count, $meta] = self::getItemStackHeader($in);
-		if($id === 0){
-			return new ItemStackWrapper(0, ItemStack::null());
-		}
 
 		$hasNetId = self::getBool($in);
 		$stackId = $hasNetId ? self::readServerItemStackId($in) : 0;
 
 		$itemStack = self::getItemStackFooter($in, $id, $meta, $count);
 
-		return new ItemStackWrapper($stackId, $itemStack);
+		return $id !== 0 ? new ItemStackWrapper($stackId, $itemStack) : new ItemStackWrapper(0, ItemStack::null());
 	}
 
 	public static function putItemStackWrapper(ByteBufferWriter $out, ItemStackWrapper $itemStackWrapper) : void{
@@ -330,6 +334,10 @@ final class CommonTypes{
 			}
 
 			self::putItemStackFooter($out, $itemStack);
+		}else{
+			self::putBool($out, false);
+			VarInt::writeSignedInt($out, 0);
+			VarInt::writeUnsignedInt($out, 0);
 		}
 	}
 
@@ -339,18 +347,12 @@ final class CommonTypes{
 		$meta = VarInt::readUnsignedInt($in);
 
 		$hasNetId = self::getBool($in);
-		if ($hasNetId) {
-			$variant = VarInt::readUnsignedInt($in);
-			$stackId = VarInt::readSignedInt($in);
-		} else {
-			$variant = 0;
-			$stackId = 0;
-		}
+		$stackId = $hasNetId ? VarInt::readSignedInt($in) : 0;
 
 		$blockRuntimeId = VarInt::readUnsignedInt($in);
 		$rawExtraData = self::getString($in);
 
-		return new ItemStackWrapper($stackId, new ItemStack($id, $meta, $count, $blockRuntimeId, $rawExtraData), $variant);
+		return new ItemStackWrapper($stackId, new ItemStack($id, $meta, $count, $blockRuntimeId, $rawExtraData));
 	}
 
 	public static function putNetworkItemStackDescriptor(ByteBufferWriter $out, ItemStackWrapper $itemStackWrapper) : void{
@@ -360,7 +362,6 @@ final class CommonTypes{
 
 		self::putBool($out, $hasNetId = $itemStackWrapper->getStackId() !== 0);
 		if($hasNetId){
-			VarInt::writeUnsignedInt($out, $itemStackWrapper->getStackIdVariant());
 			VarInt::writeSignedInt($out, $itemStackWrapper->getStackId());
 		}
 
@@ -408,6 +409,7 @@ final class CommonTypes{
 		for($i = 0; $i < $count; ++$i){
 			$key = VarInt::readUnsignedInt($in);
 			$type = VarInt::readUnsignedInt($in);
+			Byte::readUnsigned($in);
 
 			$data[$key] = self::readMetadataProperty($in, $type);
 		}
@@ -443,6 +445,7 @@ final class CommonTypes{
 		foreach($metadata as $key => $d){
 			VarInt::writeUnsignedInt($out, $key);
 			VarInt::writeUnsignedInt($out, $d->getTypeId());
+			Byte::writeUnsigned($out, $d->getTypeId());
 			$d->write($out);
 		}
 	}

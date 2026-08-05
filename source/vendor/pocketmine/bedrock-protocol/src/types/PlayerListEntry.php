@@ -10,16 +10,20 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
 
 use pocketmine\color\Color;
+use pocketmine\network\mcpe\protocol\PlayerListPacket;
 use pocketmine\network\mcpe\protocol\types\skin\SkinData;
 use Ramsey\Uuid\UuidInterface;
 
 class PlayerListEntry{
 
+	public int $type;
 	public UuidInterface $uuid;
 	public int $actorUniqueId;
 	public string $username;
@@ -34,6 +38,7 @@ class PlayerListEntry{
 
 	public static function createRemovalEntry(UuidInterface $uuid) : PlayerListEntry{
 		$entry = new PlayerListEntry();
+		$entry->type = PlayerListPacket::TYPE_REMOVE;
 		$entry->uuid = $uuid;
 
 		return $entry;
@@ -53,6 +58,7 @@ class PlayerListEntry{
 		?Color $color = null
 	) : PlayerListEntry{
 		$entry = new PlayerListEntry();
+		$entry->type = PlayerListPacket::TYPE_ADD;
 		$entry->uuid = $uuid;
 		$entry->actorUniqueId = $actorUniqueId;
 		$entry->username = $username;

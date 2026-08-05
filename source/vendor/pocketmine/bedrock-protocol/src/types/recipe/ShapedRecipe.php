@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\recipe;
@@ -111,6 +113,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
 		$recipeId = CommonTypes::getString($in);
 		$width = VarInt::readSignedInt($in);
 		$height = VarInt::readSignedInt($in);
+		VarInt::readUnsignedInt($in); //ingredient count, always width * height
 		$input = [];
 		for($row = 0; $row < $height; ++$row){
 			for($column = 0; $column < $width; ++$column){
@@ -137,6 +140,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
 		CommonTypes::putString($out, $this->recipeId);
 		VarInt::writeSignedInt($out, $this->getWidth());
 		VarInt::writeSignedInt($out, $this->getHeight());
+		VarInt::writeUnsignedInt($out, $this->getWidth() * $this->getHeight());
 		foreach($this->input as $row){
 			foreach($row as $ingredient){
 				CommonTypes::putRecipeIngredient($out, $ingredient);

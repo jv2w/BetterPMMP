@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\login\clientdata;
@@ -19,7 +21,11 @@ use pocketmine\network\mcpe\protocol\types\skin\PersonaSkinPiece;
 use pocketmine\network\mcpe\protocol\types\skin\SkinAnimation;
 use pocketmine\network\mcpe\protocol\types\skin\SkinData;
 use pocketmine\network\mcpe\protocol\types\skin\SkinImage;
+use Ramsey\Uuid\Uuid;
 use function array_map;
+use function array_pad;
+use function array_slice;
+use function array_values;
 use function base64_decode;
 
 final class ClientDataToSkinDataHelper{
@@ -65,13 +71,20 @@ final class ClientDataToSkinDataHelper{
 			self::safeB64Decode($clientData->SkinAnimationData, "SkinAnimationData"),
 			$clientData->CapeId,
 			null,
-			$clientData->ArmSize,
-			$clientData->SkinColor,
+			SkinData::convertArmSize($clientData->ArmSize),
+			SkinData::convertColor($clientData->SkinColor),
 			array_map(function(ClientDataPersonaSkinPiece $piece) : PersonaSkinPiece{
-				return new PersonaSkinPiece($piece->PieceId, $piece->PieceType, $piece->PackId, $piece->IsDefault, $piece->ProductId);
+				return new PersonaSkinPiece(
+					$piece->PieceId,
+					(int) $piece->PieceType,
+					Uuid::isValid($piece->PackId) ? Uuid::fromString($piece->PackId) : Uuid::fromInteger("0"),
+					$piece->IsDefault,
+					$piece->ProductId
+				);
 			}, $clientData->PersonaPieces),
 			array_map(function(ClientDataPersonaPieceTintColor $tint) : PersonaPieceTintColor{
-				return new PersonaPieceTintColor($tint->PieceType, $tint->Colors);
+				$colors = array_map(SkinData::convertColor(...), array_slice(array_values($tint->Colors), 0, 4));
+				return new PersonaPieceTintColor($tint->PieceType, array_pad($colors, 4, 0));
 			}, $clientData->PieceTintColors),
 			true,
 			$clientData->PremiumSkin,
@@ -79,6 +92,8 @@ final class ClientDataToSkinDataHelper{
 			$clientData->CapeOnClassicSkin,
 			true, //assume this is true? there's no field for it ...
 			$clientData->OverrideSkin ?? true,
+			$clientData->TrustedSkin ? SkinData::TRUSTED_SKIN_FLAG_TRUE : SkinData::TRUSTED_SKIN_FLAG_UNSET,
+			$clientData->ProfileHash,
 		);
 	}
 }

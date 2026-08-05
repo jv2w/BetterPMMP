@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
@@ -17,6 +19,6 @@ namespace pocketmine\network\mcpe\protocol\types;
 class ScoreboardIdentityPacketEntry{
 
 	public int $scoreboardId;
-	public ?int $actorUniqueId = null;
+	public int $actorUniqueId;
 
 }

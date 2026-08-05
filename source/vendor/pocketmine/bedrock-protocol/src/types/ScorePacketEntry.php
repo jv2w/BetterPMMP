@@ -10,18 +10,22 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
 
 class ScorePacketEntry{
+	public const TYPE_REMOVE = 0;
 	public const TYPE_PLAYER = 1;
 	public const TYPE_ENTITY = 2;
 	public const TYPE_FAKE_PLAYER = 3;
 
 	public int $scoreboardId;
-	public string $objectiveName;
-	public int $score;
+	/** @var string|null (optional if type remove) */
+	public ?string $objectiveName = null;
+	public int $score = 0;
 	public int $type;
 	/** @var int|null (if type entity or player) */
 	public ?int $actorUniqueId;

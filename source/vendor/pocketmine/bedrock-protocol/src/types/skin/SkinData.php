@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\skin;
@@ -19,8 +21,12 @@ use Ramsey\Uuid\Uuid;
 
 class SkinData{
 
-	public const ARM_SIZE_SLIM = "slim";
-	public const ARM_SIZE_WIDE = "wide";
+	public const ARM_SIZE_SLIM = 0;
+	public const ARM_SIZE_WIDE = 1;
+
+	public const TRUSTED_SKIN_FLAG_UNSET = "unset";
+	public const TRUSTED_SKIN_FLAG_FALSE = "false";
+	public const TRUSTED_SKIN_FLAG_TRUE = "true";
 
 	private SkinImage $capeImage;
 	private string $fullSkinId;
@@ -42,8 +48,8 @@ class SkinData{
 		private string $animationData = "",
 		private string $capeId = "",
 		?string $fullSkinId = null,
-		private string $armSize = self::ARM_SIZE_WIDE,
-		private string $skinColor = "",
+		private int $armSize = self::ARM_SIZE_WIDE,
+		private int $skinColor = 0,
 		private array $personaPieces = [],
 		private array $pieceTintColors = [],
 		private bool $isVerified = true,
@@ -51,7 +57,9 @@ class SkinData{
 		private bool $persona = false,
 		private bool $personaCapeOnClassic = false,
 		private bool $isPrimaryUser = true,
-		private bool $override = true
+		private bool $override = true,
+		private string $trustedSkinFlag = self::TRUSTED_SKIN_FLAG_TRUE,
+		private string $profileHash = ""
 	){
 		$this->capeImage = $capeImage ?? new SkinImage(0, 0, "");
 		//this has to be unique or the client will do stupid things
@@ -101,12 +109,36 @@ class SkinData{
 		return $this->fullSkinId;
 	}
 
-	public function getArmSize() : string{
+	public function getArmSize() : int{
 		return $this->armSize;
 	}
 
-	public function getSkinColor() : string{
+	public function getSkinColor() : int{
 		return $this->skinColor;
+	}
+
+	public function getTrustedSkinFlag() : string{
+		return $this->trustedSkinFlag;
+	}
+
+	public function getProfileHash() : string{
+		return $this->profileHash;
+	}
+
+	public static function convertArmSize(string $armSize) : int{
+		return match ($armSize) {
+			"slim" => self::ARM_SIZE_SLIM,
+			default => self::ARM_SIZE_WIDE,
+		};
+	}
+
+	public static function convertColor(string $color) : int{
+		$hex = \ltrim($color, '#');
+		if($hex === '' || $hex === '0'){
+			return 0;
+		}
+
+		return (int) \hexdec($hex);
 	}
 
 	/**

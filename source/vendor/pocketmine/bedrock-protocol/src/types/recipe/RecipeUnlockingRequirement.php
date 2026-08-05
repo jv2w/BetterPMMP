@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\recipe;
@@ -37,11 +39,8 @@ final class RecipeUnlockingRequirement{
 	public function getUnlockingIngredients() : ?array{ return $this->unlockingIngredients; }
 
 	public static function read(ByteBufferReader $in) : self{
-		//I don't know what the point of this structure is. It could easily have been a list<RecipeIngredient> instead.
-		//It's basically just an optional list, which could have been done by an empty list wherever it's not needed.
-		$unlockingContext = CommonTypes::getBool($in);
 		$unlockingIngredients = null;
-		if(!$unlockingContext){
+		if(CommonTypes::getBool($in)){
 			$unlockingIngredients = [];
 			for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; $i++){
 				$unlockingIngredients[] = CommonTypes::getRecipeIngredient($in);
@@ -52,7 +51,7 @@ final class RecipeUnlockingRequirement{
 	}
 
 	public function write(ByteBufferWriter $out) : void{
-		CommonTypes::putBool($out, $this->unlockingIngredients === null);
+		CommonTypes::putBool($out, $this->unlockingIngredients !== null);
 		if($this->unlockingIngredients !== null){
 			VarInt::writeUnsignedInt($out, count($this->unlockingIngredients));
 			foreach($this->unlockingIngredients as $ingredient){
