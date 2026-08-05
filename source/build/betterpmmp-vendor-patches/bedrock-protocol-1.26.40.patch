@@ -1598,7 +1598,7 @@ index 840e50e..946d127 100644
  
  	public function handle(PacketHandlerInterface $handler) : bool{
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php b/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php
-index ca0a11f..f23f3b8 100644
+index ca0a11f..e33dc62 100644
 --- a/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php
 +++ b/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php
 @@ -10,6 +10,8 @@
@@ -1848,6 +1848,26 @@ index ca0a11f..f23f3b8 100644
  			$d->write($out);
  		}
  	}
+@@ -767,7 +770,9 @@ final class CommonTypes{
+ 	 * @throws DataDecodeException
+ 	 */
+ 	public static function readItemStackNetIdVariant(ByteBufferReader $in) : int{
+-		return VarInt::readSignedInt($in);
++		//this is a variant index rather than a plain integer, so unlike the other IDs in a stack request it is
++		//sent uncompressed
++		return LE::readSignedInt($in);
+ 	}
+ 
+ 	/**
+@@ -776,7 +781,7 @@ final class CommonTypes{
+ 	 * as-yet unacknowledged request from the client.
+ 	 */
+ 	public static function writeItemStackNetIdVariant(ByteBufferWriter $out, int $id) : void{
+-		VarInt::writeSignedInt($out, $id);
++		LE::writeSignedInt($out, $id);
+ 	}
+ 
+ 	/** @throws DataDecodeException */
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php b/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php
 index d2a7789..115d25d 100644
 --- a/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php
@@ -2278,6 +2298,384 @@ index 0e14666..c243eaf 100644
 +	public int $actorUniqueId = 0;
  
  }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/CreativeGroupEntry.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/CreativeGroupEntry.php
+index 54e61bc..9b5507b 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/CreativeGroupEntry.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/CreativeGroupEntry.php
+@@ -10,13 +10,15 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\inventory;
+ 
++use pmmp\encoding\Byte;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+-use pmmp\encoding\LE;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ 
+ final class CreativeGroupEntry{
+@@ -33,14 +35,14 @@ final class CreativeGroupEntry{
+ 	public function getIcon() : ItemStack{ return $this->icon; }
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+-		$categoryId = LE::readSignedInt($in);
++		$categoryId = Byte::readUnsigned($in);
+ 		$categoryName = CommonTypes::getString($in);
+ 		$icon = CommonTypes::getItemStackWithoutStackId($in);
+ 		return new self($categoryId, $categoryName, $icon);
+ 	}
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+-		LE::writeSignedInt($out, $this->categoryId);
++		Byte::writeUnsigned($out, $this->categoryId);
+ 		CommonTypes::putString($out, $this->categoryName);
+ 		CommonTypes::putItemStackWithoutStackId($out, $this->icon);
+ 	}
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php
+index e5e75ce..694cc2e 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\inventory\stackrequest;
+@@ -17,9 +19,16 @@ namespace pocketmine\network\mcpe\protocol\types\inventory\stackrequest;
+ use pmmp\encoding\Byte;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
++use pmmp\encoding\DataDecodeException;
++use pmmp\encoding\LE;
++use pmmp\encoding\VarInt;
++use pocketmine\network\mcpe\protocol\PacketDecodeException;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use pocketmine\network\mcpe\protocol\types\GetTypeIdFromConstTrait;
++use pocketmine\network\mcpe\protocol\types\recipe\MolangItemDescriptor;
+ use pocketmine\network\mcpe\protocol\types\recipe\RecipeIngredient;
++use pocketmine\network\mcpe\protocol\types\recipe\StringIdMetaItemDescriptor;
++use pocketmine\network\mcpe\protocol\types\recipe\TagItemDescriptor;
+ use function count;
+ 
+ /**
+@@ -31,6 +40,11 @@ final class CraftRecipeAutoStackRequestAction extends ItemStackRequestAction{
+ 
+ 	public const ID = ItemStackRequestActionType::CRAFTING_RECIPE_AUTO;
+ 
++	private const DESCRIPTOR_INVALID = 0;
++	private const DESCRIPTOR_ITEM_NAME = 1;
++	private const DESCRIPTOR_MOLANG = 2;
++	private const DESCRIPTOR_ITEM_TAG = 3;
++
+ 	/**
+ 	 * @param RecipeIngredient[] $ingredients
+ 	 * @phpstan-param list<RecipeIngredient> $ingredients
+@@ -38,7 +52,6 @@ final class CraftRecipeAutoStackRequestAction extends ItemStackRequestAction{
+ 	final public function __construct(
+ 		private int $recipeId,
+ 		private int $repetitions,
+-		private int $repetitions2,
+ 		private array $ingredients
+ 	){}
+ 
+@@ -46,32 +59,75 @@ final class CraftRecipeAutoStackRequestAction extends ItemStackRequestAction{
+ 
+ 	public function getRepetitions() : int{ return $this->repetitions; }
+ 
+-	public function getRepetitions2() : int{ return $this->repetitions2; }
+-
+ 	/**
+ 	 * @return RecipeIngredient[]
+ 	 * @phpstan-return list<RecipeIngredient>
+ 	 */
+ 	public function getIngredients() : array{ return $this->ingredients; }
+ 
++	/**
++	 * Ingredients inside a stack request are not encoded like recipe ingredients: the descriptor type is a
++	 * variant index repeated as a byte, the payloads differ, and the count is a fixed-width short.
++	 *
++	 * @throws PacketDecodeException
++	 * @throws DataDecodeException
++	 */
++	private static function readIngredient(ByteBufferReader $in) : RecipeIngredient{
++		$variantId = VarInt::readUnsignedInt($in);
++		$descriptorType = Byte::readUnsigned($in);
++		if($descriptorType !== $variantId){
++			throw new PacketDecodeException("Item descriptor variant $variantId does not match type $descriptorType");
++		}
++		$descriptor = match($descriptorType){
++			self::DESCRIPTOR_INVALID => null,
++			self::DESCRIPTOR_ITEM_NAME => new StringIdMetaItemDescriptor(CommonTypes::getString($in), VarInt::readSignedInt($in)),
++			self::DESCRIPTOR_MOLANG => new MolangItemDescriptor(CommonTypes::getString($in), LE::readSignedShort($in)),
++			self::DESCRIPTOR_ITEM_TAG => new TagItemDescriptor(CommonTypes::getString($in)),
++			default => throw new PacketDecodeException("Unknown item descriptor type $descriptorType")
++		};
++		$count = LE::readUnsignedShort($in);
++
++		return new RecipeIngredient($descriptor, $count);
++	}
++
++	private static function writeIngredient(ByteBufferWriter $out, RecipeIngredient $ingredient) : void{
++		$descriptor = $ingredient->getDescriptor();
++		$descriptorType = match(true){
++			$descriptor instanceof StringIdMetaItemDescriptor => self::DESCRIPTOR_ITEM_NAME,
++			$descriptor instanceof MolangItemDescriptor => self::DESCRIPTOR_MOLANG,
++			$descriptor instanceof TagItemDescriptor => self::DESCRIPTOR_ITEM_TAG,
++			default => self::DESCRIPTOR_INVALID
++		};
++		VarInt::writeUnsignedInt($out, $descriptorType);
++		Byte::writeUnsigned($out, $descriptorType);
++		if($descriptor instanceof StringIdMetaItemDescriptor){
++			CommonTypes::putString($out, $descriptor->getId());
++			VarInt::writeSignedInt($out, $descriptor->getMeta());
++		}elseif($descriptor instanceof MolangItemDescriptor){
++			CommonTypes::putString($out, $descriptor->getMolangExpression());
++			LE::writeSignedShort($out, $descriptor->getMolangVersion());
++		}elseif($descriptor instanceof TagItemDescriptor){
++			CommonTypes::putString($out, $descriptor->getTag());
++		}
++		LE::writeUnsignedShort($out, $ingredient->getCount());
++	}
++
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$recipeId = CommonTypes::readRecipeNetId($in);
+ 		$repetitions = Byte::readUnsigned($in);
+-		$repetitions2 = Byte::readUnsigned($in); //repetitions property is sent twice, mojang...
+ 		$ingredients = [];
+-		for($i = 0, $count = Byte::readUnsigned($in); $i < $count; ++$i){
+-			$ingredients[] = CommonTypes::getRecipeIngredient($in);
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$ingredients[] = self::readIngredient($in);
+ 		}
+-		return new self($recipeId, $repetitions, $repetitions2, $ingredients);
++		return new self($recipeId, $repetitions, $ingredients);
+ 	}
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+ 		CommonTypes::writeRecipeNetId($out, $this->recipeId);
+ 		Byte::writeUnsigned($out, $this->repetitions);
+-		Byte::writeUnsigned($out, $this->repetitions2);
+-		Byte::writeUnsigned($out, count($this->ingredients));
++		VarInt::writeUnsignedInt($out, count($this->ingredients));
+ 		foreach($this->ingredients as $ingredient){
+-			CommonTypes::putRecipeIngredient($out, $ingredient);
++			self::writeIngredient($out, $ingredient);
+ 		}
+ 	}
+ }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php
+index 4dec8dd..f4917e8 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\inventory\stackrequest;
+@@ -18,9 +20,7 @@ use pmmp\encoding\Byte;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\VarInt;
+-use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use pocketmine\network\mcpe\protocol\types\GetTypeIdFromConstTrait;
+-use pocketmine\network\mcpe\protocol\types\inventory\ItemStack;
+ use function count;
+ 
+ /**
+@@ -33,14 +33,14 @@ final class DeprecatedCraftingResultsStackRequestAction extends ItemStackRequest
+ 	public const ID = ItemStackRequestActionType::CRAFTING_RESULTS_DEPRECATED_ASK_TY_LAING;
+ 
+ 	/**
+-	 * @param ItemStack[] $results
++	 * @param StackRequestItem[] $results
+ 	 */
+ 	public function __construct(
+ 		private array $results,
+ 		private int $iterations
+ 	){}
+ 
+-	/** @return ItemStack[] */
++	/** @return StackRequestItem[] */
+ 	public function getResults() : array{ return $this->results; }
+ 
+ 	public function getIterations() : int{ return $this->iterations; }
+@@ -48,7 +48,7 @@ final class DeprecatedCraftingResultsStackRequestAction extends ItemStackRequest
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$results = [];
+ 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
+-			$results[] = CommonTypes::getItemStackWithoutStackId($in);
++			$results[] = StackRequestItem::read($in);
+ 		}
+ 		$iterations = Byte::readUnsigned($in);
+ 		return new self($results, $iterations);
+@@ -57,7 +57,7 @@ final class DeprecatedCraftingResultsStackRequestAction extends ItemStackRequest
+ 	public function write(ByteBufferWriter $out) : void{
+ 		VarInt::writeUnsignedInt($out, count($this->results));
+ 		foreach($this->results as $result){
+-			CommonTypes::putItemStackWithoutStackId($out, $result);
++			$result->write($out);
+ 		}
+ 		Byte::writeUnsigned($out, $this->iterations);
+ 	}
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/ItemStackRequest.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/ItemStackRequest.php
+index 6123c38..0ee911b 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/ItemStackRequest.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/ItemStackRequest.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\inventory\stackrequest;
+@@ -78,11 +80,26 @@ final class ItemStackRequest{
+ 		};
+ 	}
+ 
++	/** ID of the last action type that was dropped from the variant list (TAKE_OUT_CONTAINER). */
++	private const LAST_REMOVED_ACTION_TYPE = 8;
++
++	/**
++	 * PLACE_IN_CONTAINER and TAKE_OUT_CONTAINER were dropped from the action variant list, but the types above
++	 * them kept their old IDs, so those sit two places earlier in the list than their ID suggests.
++	 */
++	private static function actionVariantId(int $typeId) : int{
++		return $typeId > self::LAST_REMOVED_ACTION_TYPE ? $typeId - 2 : $typeId;
++	}
++
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$requestId = CommonTypes::readItemStackRequestId($in);
+ 		$actions = [];
+ 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
++			$variantId = VarInt::readUnsignedInt($in);
+ 			$typeId = Byte::readUnsigned($in);
++			if(self::actionVariantId($typeId) !== $variantId){
++				throw new PacketDecodeException("Item stack request action variant $variantId does not match type $typeId");
++			}
+ 			$actions[] = self::readAction($in, $typeId);
+ 		}
+ 		$filterStrings = [];
+@@ -97,7 +114,9 @@ final class ItemStackRequest{
+ 		CommonTypes::writeItemStackRequestId($out, $this->requestId);
+ 		VarInt::writeUnsignedInt($out, count($this->actions));
+ 		foreach($this->actions as $action){
+-			Byte::writeUnsigned($out, $action->getTypeId());
++			$typeId = $action->getTypeId();
++			VarInt::writeUnsignedInt($out, self::actionVariantId($typeId));
++			Byte::writeUnsigned($out, $typeId);
+ 			$action->write($out);
+ 		}
+ 		VarInt::writeUnsignedInt($out, count($this->filterStrings));
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/StackRequestItem.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/StackRequestItem.php
+new file mode 100644
+index 0000000..1a44700
+--- /dev/null
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/StackRequestItem.php
+@@ -0,0 +1,90 @@
++<?php
++
++/*
++ * This file is part of BedrockProtocol.
++ * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
++ *
++ * BedrockProtocol is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * @author BetterPMMP Team
++ */
++
++declare(strict_types=1);
++
++namespace pocketmine\network\mcpe\protocol\types\inventory\stackrequest;
++
++use pmmp\encoding\Byte;
++use pmmp\encoding\ByteBufferReader;
++use pmmp\encoding\ByteBufferWriter;
++use pmmp\encoding\DataDecodeException;
++use pmmp\encoding\LE;
++use pmmp\encoding\VarInt;
++use pocketmine\network\mcpe\protocol\PacketDecodeException;
++use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
++
++/**
++ * An item as it appears inside an ItemStackRequest. Unlike a regular ItemStack it identifies the item by name
++ * rather than by network ID, and its descriptor type is a variant index repeated as a byte.
++ */
++final class StackRequestItem{
++	private const DESCRIPTOR_INVALID = 0;
++	private const DESCRIPTOR_ITEM_NAME = 1;
++
++	/** @param string $rawExtraData Serialized ItemStackExtraData (use ItemStackExtraData->write()) */
++	public function __construct(
++		private string $name,
++		private int $meta,
++		private int $count,
++		private int $blockRuntimeId,
++		private string $rawExtraData
++	){}
++
++	public function getName() : string{ return $this->name; }
++
++	public function getMeta() : int{ return $this->meta; }
++
++	public function getCount() : int{ return $this->count; }
++
++	public function getBlockRuntimeId() : int{ return $this->blockRuntimeId; }
++
++	public function getRawExtraData() : string{ return $this->rawExtraData; }
++
++	/**
++	 * @throws PacketDecodeException
++	 * @throws DataDecodeException
++	 */
++	public static function read(ByteBufferReader $in) : self{
++		$variantId = VarInt::readUnsignedInt($in);
++		$descriptorType = Byte::readUnsigned($in);
++		if($descriptorType !== $variantId){
++			throw new PacketDecodeException("Item descriptor variant $variantId does not match type $descriptorType");
++		}
++		$name = "";
++		$meta = 0;
++		if($descriptorType !== self::DESCRIPTOR_INVALID){
++			$name = CommonTypes::getString($in);
++			$meta = VarInt::readSignedInt($in);
++		}
++		$count = LE::readSignedShort($in);
++		$blockRuntimeId = VarInt::readUnsignedInt($in);
++		$rawExtraData = CommonTypes::getString($in);
++
++		return new self($name, $meta, $count, $blockRuntimeId, $rawExtraData);
++	}
++
++	public function write(ByteBufferWriter $out) : void{
++		$descriptorType = $this->name === "" ? self::DESCRIPTOR_INVALID : self::DESCRIPTOR_ITEM_NAME;
++		VarInt::writeUnsignedInt($out, $descriptorType);
++		Byte::writeUnsigned($out, $descriptorType);
++		if($descriptorType !== self::DESCRIPTOR_INVALID){
++			CommonTypes::putString($out, $this->name);
++			VarInt::writeSignedInt($out, $this->meta);
++		}
++		LE::writeSignedShort($out, $this->count);
++		VarInt::writeUnsignedInt($out, $this->blockRuntimeId);
++		CommonTypes::putString($out, $this->rawExtraData);
++	}
++}
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php
 index 58875c3..cb47969 100644
 --- a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php

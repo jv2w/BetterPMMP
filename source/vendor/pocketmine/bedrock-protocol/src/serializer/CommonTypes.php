@@ -770,7 +770,9 @@ final class CommonTypes{
 	 * @throws DataDecodeException
 	 */
 	public static function readItemStackNetIdVariant(ByteBufferReader $in) : int{
-		return VarInt::readSignedInt($in);
+		//this is a variant index rather than a plain integer, so unlike the other IDs in a stack request it is
+		//sent uncompressed
+		return LE::readSignedInt($in);
 	}
 
 	/**
@@ -779,7 +781,7 @@ final class CommonTypes{
 	 * as-yet unacknowledged request from the client.
 	 */
 	public static function writeItemStackNetIdVariant(ByteBufferWriter $out, int $id) : void{
-		VarInt::writeSignedInt($out, $id);
+		LE::writeSignedInt($out, $id);
 	}
 
 	/** @throws DataDecodeException */

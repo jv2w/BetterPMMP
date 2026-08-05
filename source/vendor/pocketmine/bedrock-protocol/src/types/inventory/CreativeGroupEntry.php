@@ -10,13 +10,15 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\inventory;
 
+use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
-use pmmp\encoding\LE;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 
 final class CreativeGroupEntry{
@@ -33,14 +35,14 @@ final class CreativeGroupEntry{
 	public function getIcon() : ItemStack{ return $this->icon; }
 
 	public static function read(ByteBufferReader $in) : self{
-		$categoryId = LE::readSignedInt($in);
+		$categoryId = Byte::readUnsigned($in);
 		$categoryName = CommonTypes::getString($in);
 		$icon = CommonTypes::getItemStackWithoutStackId($in);
 		return new self($categoryId, $categoryName, $icon);
 	}
 
 	public function write(ByteBufferWriter $out) : void{
-		LE::writeSignedInt($out, $this->categoryId);
+		Byte::writeUnsigned($out, $this->categoryId);
 		CommonTypes::putString($out, $this->categoryName);
 		CommonTypes::putItemStackWithoutStackId($out, $this->icon);
 	}

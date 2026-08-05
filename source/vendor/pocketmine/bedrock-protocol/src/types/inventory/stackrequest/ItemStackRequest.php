@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\inventory\stackrequest;
@@ -78,11 +80,26 @@ final class ItemStackRequest{
 		};
 	}
 
+	/** ID of the last action type that was dropped from the variant list (TAKE_OUT_CONTAINER). */
+	private const LAST_REMOVED_ACTION_TYPE = 8;
+
+	/**
+	 * PLACE_IN_CONTAINER and TAKE_OUT_CONTAINER were dropped from the action variant list, but the types above
+	 * them kept their old IDs, so those sit two places earlier in the list than their ID suggests.
+	 */
+	private static function actionVariantId(int $typeId) : int{
+		return $typeId > self::LAST_REMOVED_ACTION_TYPE ? $typeId - 2 : $typeId;
+	}
+
 	public static function read(ByteBufferReader $in) : self{
 		$requestId = CommonTypes::readItemStackRequestId($in);
 		$actions = [];
 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
+			$variantId = VarInt::readUnsignedInt($in);
 			$typeId = Byte::readUnsigned($in);
+			if(self::actionVariantId($typeId) !== $variantId){
+				throw new PacketDecodeException("Item stack request action variant $variantId does not match type $typeId");
+			}
 			$actions[] = self::readAction($in, $typeId);
 		}
 		$filterStrings = [];
@@ -97,7 +114,9 @@ final class ItemStackRequest{
 		CommonTypes::writeItemStackRequestId($out, $this->requestId);
 		VarInt::writeUnsignedInt($out, count($this->actions));
 		foreach($this->actions as $action){
-			Byte::writeUnsigned($out, $action->getTypeId());
+			$typeId = $action->getTypeId();
+			VarInt::writeUnsignedInt($out, self::actionVariantId($typeId));
+			Byte::writeUnsigned($out, $typeId);
 			$action->write($out);
 		}
 		VarInt::writeUnsignedInt($out, count($this->filterStrings));
