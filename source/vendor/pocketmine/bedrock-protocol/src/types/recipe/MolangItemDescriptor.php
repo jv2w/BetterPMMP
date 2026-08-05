@@ -10,13 +10,15 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\recipe;
 
-use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
+use pmmp\encoding\LE;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 use pocketmine\network\mcpe\protocol\types\GetTypeIdFromConstTrait;
 
@@ -36,13 +38,13 @@ final class MolangItemDescriptor implements ItemDescriptor{
 
 	public static function read(ByteBufferReader $in) : self{
 		$expression = CommonTypes::getString($in);
-		$version = Byte::readUnsigned($in);
+		$version = LE::readSignedShort($in);
 
 		return new self($expression, $version);
 	}
 
 	public function write(ByteBufferWriter $out) : void{
 		CommonTypes::putString($out, $this->molangExpression);
-		Byte::writeUnsigned($out, $this->molangVersion);
+		LE::writeSignedShort($out, $this->molangVersion);
 	}
 }

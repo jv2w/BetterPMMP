@@ -47,8 +47,6 @@ use pocketmine\network\mcpe\protocol\types\GameRule;
 use pocketmine\network\mcpe\protocol\types\IntGameRule;
 use pocketmine\network\mcpe\protocol\types\inventory\ItemStack;
 use pocketmine\network\mcpe\protocol\types\inventory\ItemStackWrapper;
-use pocketmine\network\mcpe\protocol\types\recipe\ComplexAliasItemDescriptor;
-use pocketmine\network\mcpe\protocol\types\recipe\IntIdMetaItemDescriptor;
 use pocketmine\network\mcpe\protocol\types\recipe\ItemDescriptorType;
 use pocketmine\network\mcpe\protocol\types\recipe\MolangItemDescriptor;
 use pocketmine\network\mcpe\protocol\types\recipe\RecipeIngredient;
@@ -370,26 +368,47 @@ final class CommonTypes{
 	}
 
 	/** @throws DataDecodeException */
+	/**
+	 * @throws PacketDecodeException
+	 * @throws DataDecodeException
+	 */
 	public static function getRecipeIngredient(ByteBufferReader $in) : RecipeIngredient{
-		$descriptorType = Byte::readUnsigned($in);
-		$descriptor = match($descriptorType){
-			ItemDescriptorType::INT_ID_META => IntIdMetaItemDescriptor::read($in),
-			ItemDescriptorType::STRING_ID_META => StringIdMetaItemDescriptor::read($in),
-			ItemDescriptorType::TAG => TagItemDescriptor::read($in),
-			ItemDescriptorType::MOLANG => MolangItemDescriptor::read($in),
-			ItemDescriptorType::COMPLEX_ALIAS => ComplexAliasItemDescriptor::read($in),
-			default => null
-		};
+		//a descriptor is identified by a name rather than a type ID, and an absent one carries the
+		//any-metadata value in place of a payload
+		if(VarInt::readUnsignedInt($in) === 0){
+			VarInt::readSignedInt($in);
+			$descriptor = null;
+		}else{
+			$descriptorName = self::getString($in);
+			$descriptor = match($descriptorName){
+				ItemDescriptorType::NAME_STRING_ID_META => StringIdMetaItemDescriptor::read($in),
+				ItemDescriptorType::NAME_MOLANG => MolangItemDescriptor::read($in),
+				ItemDescriptorType::NAME_TAG => TagItemDescriptor::read($in),
+				default => throw new PacketDecodeException("Unknown item descriptor type $descriptorName")
+			};
+		}
 		$count = VarInt::readSignedInt($in);
 
 		return new RecipeIngredient($descriptor, $count);
 	}
 
 	public static function putRecipeIngredient(ByteBufferWriter $out, RecipeIngredient $ingredient) : void{
-		$type = $ingredient->getDescriptor();
+		$descriptor = $ingredient->getDescriptor();
+		$descriptorName = match(true){
+			$descriptor instanceof StringIdMetaItemDescriptor => ItemDescriptorType::NAME_STRING_ID_META,
+			$descriptor instanceof MolangItemDescriptor => ItemDescriptorType::NAME_MOLANG,
+			$descriptor instanceof TagItemDescriptor => ItemDescriptorType::NAME_TAG,
+			$descriptor === null => null,
+			default => throw new \InvalidArgumentException("Unsupported item descriptor type " . $descriptor::class)
+		};
 
-		Byte::writeUnsigned($out, $type?->getTypeId() ?? 0);
-		$type?->write($out);
+		VarInt::writeUnsignedInt($out, $descriptorName === null ? 0 : 1);
+		if($descriptorName === null){
+			VarInt::writeSignedInt($out, ItemDescriptorType::ANY_METADATA);
+		}else{
+			self::putString($out, $descriptorName);
+			$descriptor->write($out);
+		}
 
 		VarInt::writeSignedInt($out, $ingredient->getCount());
 	}
