@@ -1525,7 +1525,7 @@ index 4bac0d2..bb97fc3 100644
  		}
  	}
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php
-index 77723fa..708c457 100644
+index 77723fa..d710e64 100644
 --- a/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php
 +++ b/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php
 @@ -10,6 +10,8 @@
@@ -1544,18 +1544,19 @@ index 77723fa..708c457 100644
 -			if($this->type === self::TYPE_REGISTER_IDENTITY){
 -				$entry->actorUniqueId = CommonTypes::getActorUniqueId($in);
 -			}
-+			$entry->actorUniqueId = CommonTypes::getActorUniqueId($in);
++			$entry->actorUniqueId = CommonTypes::readOptional($in, CommonTypes::getActorUniqueId(...)) ?? 0;
  
  			$this->entries[] = $entry;
  		}
-@@ -61,9 +61,7 @@ class SetScoreboardIdentityPacket extends DataPacket implements ClientboundPacke
+@@ -61,9 +61,8 @@ class SetScoreboardIdentityPacket extends DataPacket implements ClientboundPacke
  		VarInt::writeUnsignedInt($out, count($this->entries));
  		foreach($this->entries as $entry){
  			VarInt::writeSignedLong($out, $entry->scoreboardId);
 -			if($this->type === self::TYPE_REGISTER_IDENTITY){
 -				CommonTypes::putActorUniqueId($out, $entry->actorUniqueId);
 -			}
-+			CommonTypes::putActorUniqueId($out, $entry->actorUniqueId);
++			//the actor ID is only on the wire when an identity is being registered
++			CommonTypes::writeOptional($out, $this->type === self::TYPE_CLEAR_IDENTITY ? null : $entry->actorUniqueId, CommonTypes::putActorUniqueId(...));
  		}
  	}
  
