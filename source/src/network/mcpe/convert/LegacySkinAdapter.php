@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\convert;
@@ -27,12 +29,14 @@ use pocketmine\entity\InvalidSkinException;
 use pocketmine\entity\Skin;
 use pocketmine\network\mcpe\protocol\types\skin\SkinData;
 use pocketmine\network\mcpe\protocol\types\skin\SkinImage;
+use function in_array;
 use function is_array;
 use function is_string;
 use function json_decode;
 use function json_encode;
 use function random_bytes;
 use function str_repeat;
+use function strlen;
 use const JSON_THROW_ON_ERROR;
 
 class LegacySkinAdapter implements SkinAdapter{
@@ -44,18 +48,22 @@ class LegacySkinAdapter implements SkinAdapter{
 		if($geometryName === ""){
 			$geometryName = "geometry.humanoid.custom";
 		}
+		$skinData = $skin->getSkinData();
 		return new SkinData(
 			$skin->getSkinId(),
 			"", //TODO: playfab ID
 			json_encode(["geometry" => ["default" => $geometryName]], JSON_THROW_ON_ERROR),
-			SkinImage::fromLegacy($skin->getSkinData()), [],
+			strlen($skinData) === 256 * 256 * 4 ? new SkinImage(256, 256, $skinData) : SkinImage::fromLegacy($skinData), [],
 			$capeImage,
 			$skin->getGeometryData()
 		);
 	}
 
 	public function fromSkinData(SkinData $data) : Skin{
-		if($data->isPersona()){
+		//A persona carries its own geometry, so it survives as an ordinary custom-geometry skin. Replacing
+		//it with a placeholder that names geometry it does not ship is what crashed 1.26.40 clients: every
+		//client rendering that player has to resolve a geometry nothing defines.
+		if($data->isPersona() && !in_array(strlen($data->getSkinImage()->getData()), Skin::ACCEPTED_SKIN_SIZES, true)){
 			return new Skin("Standard_Custom", str_repeat(random_bytes(3) . "\xff", 4096));
 		}
 

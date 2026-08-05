@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\entity;
@@ -32,10 +34,13 @@ use function strlen;
 use const JSON_THROW_ON_ERROR;
 
 final class Skin{
+	//256x256 is the size the client bakes a character creator persona at, so refusing it would mean
+	//no persona could ever be carried as the skin it actually is.
 	public const ACCEPTED_SKIN_SIZES = [
 		64 * 32 * 4,
 		64 * 64 * 4,
-		128 * 128 * 4
+		128 * 128 * 4,
+		256 * 256 * 4
 	];
 
 	private string $skinId;
