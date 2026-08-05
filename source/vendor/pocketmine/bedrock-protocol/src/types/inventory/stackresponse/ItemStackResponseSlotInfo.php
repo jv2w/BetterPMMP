@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\inventory\stackresponse;
@@ -49,7 +51,7 @@ final class ItemStackResponseSlotInfo{
 		$slot = Byte::readUnsigned($in);
 		$hotbarSlot = Byte::readUnsigned($in);
 		$count = Byte::readUnsigned($in);
-		$itemStackId = CommonTypes::readServerItemStackId($in);
+		$itemStackId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::readServerItemStackId(...))) ?? 0;
 		$customName = CommonTypes::getString($in);
 		$filteredCustomName = CommonTypes::getString($in);
 		$durabilityCorrection = VarInt::readSignedInt($in);
@@ -60,7 +62,10 @@ final class ItemStackResponseSlotInfo{
 		Byte::writeUnsigned($out, $this->slot);
 		Byte::writeUnsigned($out, $this->hotbarSlot);
 		Byte::writeUnsigned($out, $this->count);
-		CommonTypes::writeServerItemStackId($out, $this->itemStackId);
+		//the stack ID is nested in two optionals; the outer one is always set, and the inner one is unset
+		//for a stack the server hasn't assigned an ID to
+		CommonTypes::putBool($out, true);
+		CommonTypes::writeOptional($out, $this->itemStackId > 0 ? $this->itemStackId : null, CommonTypes::writeServerItemStackId(...));
 		CommonTypes::putString($out, $this->customName);
 		CommonTypes::putString($out, $this->filteredCustomName);
 		VarInt::writeSignedInt($out, $this->durabilityCorrection);

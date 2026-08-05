@@ -118,6 +118,8 @@
          "vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/ItemStackRequest.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/StackRequestItem.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
+         "vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponse.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
+         "vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/types/ItemInteractionData.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/types/LevelSettings.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/types/MapImage.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",

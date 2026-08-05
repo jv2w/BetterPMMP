@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\inventory\stackresponse;
@@ -51,23 +53,27 @@ final class ItemStackResponse{
 	public static function read(ByteBufferReader $in) : self{
 		$result = Byte::readUnsigned($in);
 		$requestId = CommonTypes::readItemStackRequestId($in);
-		$containerInfos = [];
-		if($result === self::RESULT_OK){
+		$containerInfos = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, function(ByteBufferReader $in) : array{
+			$containerInfos = [];
 			for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
 				$containerInfos[] = ItemStackResponseContainerInfo::read($in);
 			}
-		}
+			return $containerInfos;
+		})) ?? [];
 		return new self($result, $requestId, $containerInfos);
 	}
 
 	public function write(ByteBufferWriter $out) : void{
 		Byte::writeUnsigned($out, $this->result);
 		CommonTypes::writeItemStackRequestId($out, $this->requestId);
-		if($this->result === self::RESULT_OK){
-			VarInt::writeUnsignedInt($out, count($this->containerInfos));
-			foreach($this->containerInfos as $containerInfo){
+		//the container info list is nested in two optionals, and its presence no longer depends on the
+		//result; the outer one is always set
+		CommonTypes::putBool($out, true);
+		CommonTypes::writeOptional($out, count($this->containerInfos) > 0 ? $this->containerInfos : null, function(ByteBufferWriter $out, array $containerInfos) : void{
+			VarInt::writeUnsignedInt($out, count($containerInfos));
+			foreach($containerInfos as $containerInfo){
 				$containerInfo->write($out);
 			}
-		}
+		});
 	}
 }

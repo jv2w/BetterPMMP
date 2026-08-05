@@ -2687,6 +2687,88 @@ index 0000000..1a44700
 +		CommonTypes::putString($out, $this->rawExtraData);
 +	}
 +}
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponse.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponse.php
+index dc78164..9707f59 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponse.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponse.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\inventory\stackresponse;
+@@ -51,23 +53,27 @@ final class ItemStackResponse{
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$result = Byte::readUnsigned($in);
+ 		$requestId = CommonTypes::readItemStackRequestId($in);
+-		$containerInfos = [];
+-		if($result === self::RESULT_OK){
++		$containerInfos = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, function(ByteBufferReader $in) : array{
++			$containerInfos = [];
+ 			for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
+ 				$containerInfos[] = ItemStackResponseContainerInfo::read($in);
+ 			}
+-		}
++			return $containerInfos;
++		})) ?? [];
+ 		return new self($result, $requestId, $containerInfos);
+ 	}
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+ 		Byte::writeUnsigned($out, $this->result);
+ 		CommonTypes::writeItemStackRequestId($out, $this->requestId);
+-		if($this->result === self::RESULT_OK){
+-			VarInt::writeUnsignedInt($out, count($this->containerInfos));
+-			foreach($this->containerInfos as $containerInfo){
++		//the container info list is nested in two optionals, and its presence no longer depends on the
++		//result; the outer one is always set
++		CommonTypes::putBool($out, true);
++		CommonTypes::writeOptional($out, count($this->containerInfos) > 0 ? $this->containerInfos : null, function(ByteBufferWriter $out, array $containerInfos) : void{
++			VarInt::writeUnsignedInt($out, count($containerInfos));
++			foreach($containerInfos as $containerInfo){
+ 				$containerInfo->write($out);
+ 			}
+-		}
++		});
+ 	}
+ }
+diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
+index 4613c13..afb98f3 100644
+--- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
++++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\inventory\stackresponse;
+@@ -49,7 +51,7 @@ final class ItemStackResponseSlotInfo{
+ 		$slot = Byte::readUnsigned($in);
+ 		$hotbarSlot = Byte::readUnsigned($in);
+ 		$count = Byte::readUnsigned($in);
+-		$itemStackId = CommonTypes::readServerItemStackId($in);
++		$itemStackId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::readServerItemStackId(...))) ?? 0;
+ 		$customName = CommonTypes::getString($in);
+ 		$filteredCustomName = CommonTypes::getString($in);
+ 		$durabilityCorrection = VarInt::readSignedInt($in);
+@@ -60,7 +62,10 @@ final class ItemStackResponseSlotInfo{
+ 		Byte::writeUnsigned($out, $this->slot);
+ 		Byte::writeUnsigned($out, $this->hotbarSlot);
+ 		Byte::writeUnsigned($out, $this->count);
+-		CommonTypes::writeServerItemStackId($out, $this->itemStackId);
++		//the stack ID is nested in two optionals; the outer one is always set, and the inner one is unset
++		//for a stack the server hasn't assigned an ID to
++		CommonTypes::putBool($out, true);
++		CommonTypes::writeOptional($out, $this->itemStackId > 0 ? $this->itemStackId : null, CommonTypes::writeServerItemStackId(...));
+ 		CommonTypes::putString($out, $this->customName);
+ 		CommonTypes::putString($out, $this->filteredCustomName);
+ 		VarInt::writeSignedInt($out, $this->durabilityCorrection);
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php
 index 58875c3..cb47969 100644
 --- a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php
