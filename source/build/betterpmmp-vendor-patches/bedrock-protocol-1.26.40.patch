@@ -1,7 +1,7 @@
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/AnvilDamagePacket.php b/source/vendor/pocketmine/bedrock-protocol/src/AnvilDamagePacket.php
+diff --git a/src/AnvilDamagePacket.php b/src/AnvilDamagePacket.php
 index 416f76b..5f7cf2b 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/AnvilDamagePacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/AnvilDamagePacket.php
+--- a/src/AnvilDamagePacket.php
++++ b/src/AnvilDamagePacket.php
 @@ -10,11 +10,12 @@
   * (at your option) any later version.
   */
@@ -49,10 +49,10 @@ index 416f76b..5f7cf2b 100644
  		CommonTypes::putBlockPosition($out, $this->blockPosition);
  	}
  
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php
+diff --git a/src/ClientboundMapItemDataPacket.php b/src/ClientboundMapItemDataPacket.php
 index 72914fe..4b412ea 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php
+--- a/src/ClientboundMapItemDataPacket.php
++++ b/src/ClientboundMapItemDataPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -278,10 +278,10 @@ index 72914fe..4b412ea 100644
  	}
  
  	public function handle(PacketHandlerInterface $handler) : bool{
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/CraftingDataPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/CraftingDataPacket.php
+diff --git a/src/CraftingDataPacket.php b/src/CraftingDataPacket.php
 index b12130f..8385756 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/CraftingDataPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/CraftingDataPacket.php
+--- a/src/CraftingDataPacket.php
++++ b/src/CraftingDataPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -390,10 +390,10 @@ index b12130f..8385756 100644
  		}
  		VarInt::writeUnsignedInt($out, count($this->potionTypeRecipes));
  		foreach($this->potionTypeRecipes as $recipe){
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/LevelChunkPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/LevelChunkPacket.php
+diff --git a/src/LevelChunkPacket.php b/src/LevelChunkPacket.php
 index 2363c98..e53e57f 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/LevelChunkPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/LevelChunkPacket.php
+--- a/src/LevelChunkPacket.php
++++ b/src/LevelChunkPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -565,10 +565,10 @@ index 2363c98..e53e57f 100644
  		CommonTypes::putString($out, $this->extraPayload);
  	}
  
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/MoveActorDeltaPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/MoveActorDeltaPacket.php
+diff --git a/src/MoveActorDeltaPacket.php b/src/MoveActorDeltaPacket.php
 index 788572b..d9c9a68 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/MoveActorDeltaPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/MoveActorDeltaPacket.php
+--- a/src/MoveActorDeltaPacket.php
++++ b/src/MoveActorDeltaPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -694,10 +694,10 @@ index 788572b..d9c9a68 100644
  	}
  
  	public function handle(PacketHandlerInterface $handler) : bool{
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/MovePlayerPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/MovePlayerPacket.php
+diff --git a/src/MovePlayerPacket.php b/src/MovePlayerPacket.php
 index 2c6b9fb..1fff554 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/MovePlayerPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/MovePlayerPacket.php
+--- a/src/MovePlayerPacket.php
++++ b/src/MovePlayerPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -726,10 +726,10 @@ index 2c6b9fb..1fff554 100644
  			LE::writeSignedInt($out, $this->teleportCause);
  			LE::writeSignedInt($out, $this->teleportItem);
  		}
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlaySoundPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlaySoundPacket.php
+diff --git a/src/PlaySoundPacket.php b/src/PlaySoundPacket.php
 index 1d2b819..226f18f 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/PlaySoundPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/PlaySoundPacket.php
+--- a/src/PlaySoundPacket.php
++++ b/src/PlaySoundPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -771,10 +771,10 @@ index 1d2b819..226f18f 100644
  		CommonTypes::writeOptional($out, $this->serverSoundHandle, LE::writeUnsignedLong(...));
  	}
  
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php
+diff --git a/src/PlayerAuthInputPacket.php b/src/PlayerAuthInputPacket.php
 index 6afdc4d..8f6872a 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/PlayerAuthInputPacket.php
+--- a/src/PlayerAuthInputPacket.php
++++ b/src/PlayerAuthInputPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -947,10 +947,10 @@ index 6afdc4d..8f6872a 100644
  		LE::writeFloat($out, $this->analogMoveVecX);
  		LE::writeFloat($out, $this->analogMoveVecZ);
  		CommonTypes::putVector3($out, $this->cameraOrientation);
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlayerListPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlayerListPacket.php
+diff --git a/src/PlayerListPacket.php b/src/PlayerListPacket.php
 index ca72c85..78abfcd 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/PlayerListPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/PlayerListPacket.php
+--- a/src/PlayerListPacket.php
++++ b/src/PlayerListPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -1063,10 +1063,10 @@ index ca72c85..78abfcd 100644
  	}
  
  	public function handle(PacketHandlerInterface $handler) : bool{
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlayerLocationPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlayerLocationPacket.php
+diff --git a/src/PlayerLocationPacket.php b/src/PlayerLocationPacket.php
 index 28d5a59..d1da9c4 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/PlayerLocationPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/PlayerLocationPacket.php
+--- a/src/PlayerLocationPacket.php
++++ b/src/PlayerLocationPacket.php
 @@ -10,13 +10,15 @@
   * (at your option) any later version.
   */
@@ -1106,10 +1106,10 @@ index 28d5a59..d1da9c4 100644
  
  		if($this->type === PlayerLocationType::PLAYER_LOCATION_COORDINATES){
  			if($this->position === null){ // this should never be the case
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/PlayerSkinPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/PlayerSkinPacket.php
+diff --git a/src/PlayerSkinPacket.php b/src/PlayerSkinPacket.php
 index e4e35ab..557c480 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/PlayerSkinPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/PlayerSkinPacket.php
+--- a/src/PlayerSkinPacket.php
++++ b/src/PlayerSkinPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -1139,10 +1139,10 @@ index e4e35ab..557c480 100644
  	}
  
  	public function handle(PacketHandlerInterface $handler) : bool{
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/ProtocolInfo.php b/source/vendor/pocketmine/bedrock-protocol/src/ProtocolInfo.php
+diff --git a/src/ProtocolInfo.php b/src/ProtocolInfo.php
 index 340f9bc..26a6222 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/ProtocolInfo.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/ProtocolInfo.php
+--- a/src/ProtocolInfo.php
++++ b/src/ProtocolInfo.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -1167,10 +1167,10 @@ index 340f9bc..26a6222 100644
  
  	public const LOGIN_PACKET = 0x01;
  	public const PLAY_STATUS_PACKET = 0x02;
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/ResourcePackClientResponsePacket.php b/source/vendor/pocketmine/bedrock-protocol/src/ResourcePackClientResponsePacket.php
+diff --git a/src/ResourcePackClientResponsePacket.php b/src/ResourcePackClientResponsePacket.php
 index 10fe96f..0ffc15e 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/ResourcePackClientResponsePacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/ResourcePackClientResponsePacket.php
+--- a/src/ResourcePackClientResponsePacket.php
++++ b/src/ResourcePackClientResponsePacket.php
 @@ -10,24 +10,25 @@
   * (at your option) any later version.
   */
@@ -1243,10 +1243,10 @@ index 10fe96f..0ffc15e 100644
  		}
  	}
  
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/ResourcePacksInfoPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/ResourcePacksInfoPacket.php
+diff --git a/src/ResourcePacksInfoPacket.php b/src/ResourcePacksInfoPacket.php
 index 11531ae..56e3d58 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/ResourcePacksInfoPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/ResourcePacksInfoPacket.php
+--- a/src/ResourcePacksInfoPacket.php
++++ b/src/ResourcePacksInfoPacket.php
 @@ -10,13 +10,15 @@
   * (at your option) any later version.
   */
@@ -1282,10 +1282,10 @@ index 11531ae..56e3d58 100644
  		foreach($this->resourcePackEntries as $entry){
  			$entry->write($out);
  		}
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/ServerboundDiagnosticsPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/ServerboundDiagnosticsPacket.php
+diff --git a/src/ServerboundDiagnosticsPacket.php b/src/ServerboundDiagnosticsPacket.php
 index bad53f6..26c6b47 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/ServerboundDiagnosticsPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/ServerboundDiagnosticsPacket.php
+--- a/src/ServerboundDiagnosticsPacket.php
++++ b/src/ServerboundDiagnosticsPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -1385,10 +1385,10 @@ index bad53f6..26c6b47 100644
  		VarInt::writeUnsignedInt($out, count($this->whiskerScopes));
  		foreach($this->whiskerScopes as $value){
  			$value->write($out);
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php b/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
+diff --git a/src/SetScorePacket.php b/src/SetScorePacket.php
 index 4bac0d2..bb97fc3 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
+--- a/src/SetScorePacket.php
++++ b/src/SetScorePacket.php
 @@ -10,11 +10,12 @@
   * (at your option) any later version.
   */
@@ -1524,10 +1524,10 @@ index 4bac0d2..bb97fc3 100644
  			}
  		}
  	}
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php
+diff --git a/src/SetScoreboardIdentityPacket.php b/src/SetScoreboardIdentityPacket.php
 index 77723fa..d710e64 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/SetScoreboardIdentityPacket.php
+--- a/src/SetScoreboardIdentityPacket.php
++++ b/src/SetScoreboardIdentityPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -1560,10 +1560,10 @@ index 77723fa..d710e64 100644
  		}
  	}
  
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/StartGamePacket.php b/source/vendor/pocketmine/bedrock-protocol/src/StartGamePacket.php
+diff --git a/src/StartGamePacket.php b/src/StartGamePacket.php
 index df4fb40..9698b54 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/StartGamePacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/StartGamePacket.php
+--- a/src/StartGamePacket.php
++++ b/src/StartGamePacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -1613,10 +1613,10 @@ index df4fb40..9698b54 100644
  		CommonTypes::writeOptional($out, $this->serverJoinInformation, fn(ByteBufferWriter $out, ServerJoinInformation $info) => $info->write($out));
  		$this->serverTelemetryData->write($out);
  	}
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/SubChunkPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/SubChunkPacket.php
+diff --git a/src/SubChunkPacket.php b/src/SubChunkPacket.php
 index bebd337..e26a385 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/SubChunkPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/SubChunkPacket.php
+--- a/src/SubChunkPacket.php
++++ b/src/SubChunkPacket.php
 @@ -10,13 +10,14 @@
   * (at your option) any later version.
   */
@@ -1657,10 +1657,10 @@ index bebd337..e26a385 100644
  
  		foreach($this->entries->getEntries() as $entry){
  			$entry->write($out);
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/TransferPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/TransferPacket.php
+diff --git a/src/TransferPacket.php b/src/TransferPacket.php
 index 840e50e..946d127 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/TransferPacket.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/TransferPacket.php
+--- a/src/TransferPacket.php
++++ b/src/TransferPacket.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -1712,10 +1712,10 @@ index 840e50e..946d127 100644
  	}
  
  	public function handle(PacketHandlerInterface $handler) : bool{
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php b/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php
-index ca0a11f..8525d71 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php
+diff --git a/src/serializer/CommonTypes.php b/src/serializer/CommonTypes.php
+index ca0a11f..135ac54 100644
+--- a/src/serializer/CommonTypes.php
++++ b/src/serializer/CommonTypes.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -1879,7 +1879,7 @@ index ca0a11f..8525d71 100644
  			return false;
  		}
  
-@@ -294,30 +296,30 @@ final class CommonTypes{
+@@ -294,43 +296,29 @@ final class CommonTypes{
  	 */
  	public static function getItemStackWithoutStackId(ByteBufferReader $in) : ItemStack{
  		[$id, $count, $meta] = self::getItemStackHeader($in);
@@ -1901,33 +1901,37 @@ index ca0a11f..8525d71 100644
  
  	/** @throws DataDecodeException */
  	public static function getItemStackWrapper(ByteBufferReader $in) : ItemStackWrapper{
- 		[$id, $count, $meta] = self::getItemStackHeader($in);
+-		[$id, $count, $meta] = self::getItemStackHeader($in);
 -		if($id === 0){
 -			return new ItemStackWrapper(0, ItemStack::null());
 -		}
+-
+-		$hasNetId = self::getBool($in);
+-		$stackId = $hasNetId ? self::readServerItemStackId($in) : 0;
++		$wrapper = self::getNetworkItemStackDescriptor($in);
  
- 		$hasNetId = self::getBool($in);
- 		$stackId = $hasNetId ? self::readServerItemStackId($in) : 0;
- 
- 		$itemStack = self::getItemStackFooter($in, $id, $meta, $count);
- 
+-		$itemStack = self::getItemStackFooter($in, $id, $meta, $count);
+-
 -		return new ItemStackWrapper($stackId, $itemStack);
-+		return $id !== 0 ? new ItemStackWrapper($stackId, $itemStack) : new ItemStackWrapper(0, ItemStack::null());
++		return $wrapper->getItemStack()->getId() !== 0 ? $wrapper : new ItemStackWrapper(0, ItemStack::null());
  	}
  
  	public static function putItemStackWrapper(ByteBufferWriter $out, ItemStackWrapper $itemStackWrapper) : void{
-@@ -330,6 +332,10 @@ final class CommonTypes{
- 			}
- 
- 			self::putItemStackFooter($out, $itemStack);
-+		}else{
-+			self::putBool($out, false);
-+			VarInt::writeSignedInt($out, 0);
-+			VarInt::writeUnsignedInt($out, 0);
- 		}
+-		$itemStack = $itemStackWrapper->getItemStack();
+-		if(self::putItemStackHeader($out, $itemStack)){
+-			$hasNetId = $itemStackWrapper->getStackId() !== 0;
+-			self::putBool($out, $hasNetId);
+-			if($hasNetId){
+-				self::writeServerItemStackId($out, $itemStackWrapper->getStackId());
+-			}
+-
+-			self::putItemStackFooter($out, $itemStack);
+-		}
++		self::putNetworkItemStackDescriptor($out, $itemStackWrapper);
  	}
  
-@@ -339,18 +345,12 @@ final class CommonTypes{
+ 	public static function getNetworkItemStackDescriptor(ByteBufferReader $in) : ItemStackWrapper{
+@@ -339,18 +327,12 @@ final class CommonTypes{
  		$meta = VarInt::readUnsignedInt($in);
  
  		$hasNetId = self::getBool($in);
@@ -1948,7 +1952,7 @@ index ca0a11f..8525d71 100644
  	}
  
  	public static function putNetworkItemStackDescriptor(ByteBufferWriter $out, ItemStackWrapper $itemStackWrapper) : void{
-@@ -360,7 +360,6 @@ final class CommonTypes{
+@@ -360,7 +342,6 @@ final class CommonTypes{
  
  		self::putBool($out, $hasNetId = $itemStackWrapper->getStackId() !== 0);
  		if($hasNetId){
@@ -1956,7 +1960,7 @@ index ca0a11f..8525d71 100644
  			VarInt::writeSignedInt($out, $itemStackWrapper->getStackId());
  		}
  
-@@ -369,26 +368,47 @@ final class CommonTypes{
+@@ -369,26 +350,47 @@ final class CommonTypes{
  	}
  
  	/** @throws DataDecodeException */
@@ -2016,7 +2020,7 @@ index ca0a11f..8525d71 100644
  
  		VarInt::writeSignedInt($out, $ingredient->getCount());
  	}
-@@ -408,6 +428,7 @@ final class CommonTypes{
+@@ -408,6 +410,7 @@ final class CommonTypes{
  		for($i = 0; $i < $count; ++$i){
  			$key = VarInt::readUnsignedInt($in);
  			$type = VarInt::readUnsignedInt($in);
@@ -2024,7 +2028,7 @@ index ca0a11f..8525d71 100644
  
  			$data[$key] = self::readMetadataProperty($in, $type);
  		}
-@@ -443,6 +464,7 @@ final class CommonTypes{
+@@ -443,6 +446,7 @@ final class CommonTypes{
  		foreach($metadata as $key => $d){
  			VarInt::writeUnsignedInt($out, $key);
  			VarInt::writeUnsignedInt($out, $d->getTypeId());
@@ -2032,7 +2036,7 @@ index ca0a11f..8525d71 100644
  			$d->write($out);
  		}
  	}
-@@ -767,7 +789,9 @@ final class CommonTypes{
+@@ -767,7 +771,9 @@ final class CommonTypes{
  	 * @throws DataDecodeException
  	 */
  	public static function readItemStackNetIdVariant(ByteBufferReader $in) : int{
@@ -2043,7 +2047,7 @@ index ca0a11f..8525d71 100644
  	}
  
  	/**
-@@ -776,7 +800,7 @@ final class CommonTypes{
+@@ -776,7 +782,7 @@ final class CommonTypes{
  	 * as-yet unacknowledged request from the client.
  	 */
  	public static function writeItemStackNetIdVariant(ByteBufferWriter $out, int $id) : void{
@@ -2052,10 +2056,10 @@ index ca0a11f..8525d71 100644
  	}
  
  	/** @throws DataDecodeException */
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php b/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php
+diff --git a/src/types/IntGameRule.php b/src/types/IntGameRule.php
 index d2a7789..115d25d 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php
+--- a/src/types/IntGameRule.php
++++ b/src/types/IntGameRule.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2090,10 +2094,10 @@ index d2a7789..115d25d 100644
 +		return new self(LE::readUnsignedInt($in), $isPlayerModifiable);
  	}
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/ItemInteractionData.php b/source/vendor/pocketmine/bedrock-protocol/src/types/ItemInteractionData.php
+diff --git a/src/types/ItemInteractionData.php b/src/types/ItemInteractionData.php
 index abd1a03..e1ab1d3 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/ItemInteractionData.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/ItemInteractionData.php
+--- a/src/types/ItemInteractionData.php
++++ b/src/types/ItemInteractionData.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2145,10 +2149,10 @@ index abd1a03..e1ab1d3 100644
 +		CommonTypes::writeOptional($out, $this->transactionData, fn(ByteBufferWriter $out, UseItemTransactionData $v) => CommonTypes::writeOptional($out, $v, fn(ByteBufferWriter $out, UseItemTransactionData $v) => $v->encodeAuthInput($out)));
  	}
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/LevelSettings.php b/source/vendor/pocketmine/bedrock-protocol/src/types/LevelSettings.php
+diff --git a/src/types/LevelSettings.php b/src/types/LevelSettings.php
 index 8400b9b..ed8a4e9 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/LevelSettings.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/LevelSettings.php
+--- a/src/types/LevelSettings.php
++++ b/src/types/LevelSettings.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2194,10 +2198,10 @@ index 8400b9b..ed8a4e9 100644
  		LE::writeSignedInt($out, $this->serverChunkTickRadius); //doesn't make sense for this to be signed, but that's what the spec says
  		CommonTypes::putBool($out, $this->hasLockedBehaviorPack);
  		CommonTypes::putBool($out, $this->hasLockedResourcePack);
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/MapImage.php b/source/vendor/pocketmine/bedrock-protocol/src/types/MapImage.php
+diff --git a/src/types/MapImage.php b/src/types/MapImage.php
 index ca77bbb..be2dc47 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/MapImage.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/MapImage.php
+--- a/src/types/MapImage.php
++++ b/src/types/MapImage.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2235,10 +2239,10 @@ index ca77bbb..be2dc47 100644
  			}
  			$pixels[] = $row;
  		}
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/MapTrackedObject.php b/source/vendor/pocketmine/bedrock-protocol/src/types/MapTrackedObject.php
+diff --git a/src/types/MapTrackedObject.php b/src/types/MapTrackedObject.php
 index 2c76f41..fdee32b 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/MapTrackedObject.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/MapTrackedObject.php
+--- a/src/types/MapTrackedObject.php
++++ b/src/types/MapTrackedObject.php
 @@ -10,19 +10,40 @@
   * (at your option) any later version.
   */
@@ -2285,10 +2289,10 @@ index 2c76f41..fdee32b 100644
 +		CommonTypes::writeOptional($out, $this->blockPosition, CommonTypes::putBlockPosition(...));
 +	}
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputFlags.php b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputFlags.php
+diff --git a/src/types/PlayerAuthInputFlags.php b/src/types/PlayerAuthInputFlags.php
 index 0be7476..9acfc9c 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputFlags.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputFlags.php
+--- a/src/types/PlayerAuthInputFlags.php
++++ b/src/types/PlayerAuthInputFlags.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2307,10 +2311,10 @@ index 0be7476..9acfc9c 100644
 -	public const NUMBER_OF_FLAGS = 65;
 +	public const NUMBER_OF_FLAGS = 66;
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputVehicleInfo.php b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputVehicleInfo.php
+diff --git a/src/types/PlayerAuthInputVehicleInfo.php b/src/types/PlayerAuthInputVehicleInfo.php
 index aeb74ef..1b36375 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputVehicleInfo.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerAuthInputVehicleInfo.php
+--- a/src/types/PlayerAuthInputVehicleInfo.php
++++ b/src/types/PlayerAuthInputVehicleInfo.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2369,10 +2373,10 @@ index aeb74ef..1b36375 100644
 +		CommonTypes::writeOptional($out, $this->predictedVehicleActorUniqueId, fn(ByteBufferWriter $out, int $v) => CommonTypes::writeOptional($out, $v, CommonTypes::putActorUniqueId(...)));
  	}
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerBlockActionWithBlockInfo.php b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerBlockActionWithBlockInfo.php
+diff --git a/src/types/PlayerBlockActionWithBlockInfo.php b/src/types/PlayerBlockActionWithBlockInfo.php
 index ec8110b..0997903 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerBlockActionWithBlockInfo.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerBlockActionWithBlockInfo.php
+--- a/src/types/PlayerBlockActionWithBlockInfo.php
++++ b/src/types/PlayerBlockActionWithBlockInfo.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2390,10 +2394,10 @@ index ec8110b..0997903 100644
  			PlayerAction::CRACK_BREAK,
  			PlayerAction::PREDICT_DESTROY_BLOCK,
  			PlayerAction::CONTINUE_DESTROY_BLOCK => true,
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerListEntry.php b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerListEntry.php
+diff --git a/src/types/PlayerListEntry.php b/src/types/PlayerListEntry.php
 index a6852f1..10f5244 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerListEntry.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/PlayerListEntry.php
+--- a/src/types/PlayerListEntry.php
++++ b/src/types/PlayerListEntry.php
 @@ -10,16 +10,20 @@
   * (at your option) any later version.
   */
@@ -2431,10 +2435,10 @@ index a6852f1..10f5244 100644
  		$entry->uuid = $uuid;
  		$entry->actorUniqueId = $actorUniqueId;
  		$entry->username = $username;
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/ScorePacketEntry.php b/source/vendor/pocketmine/bedrock-protocol/src/types/ScorePacketEntry.php
+diff --git a/src/types/ScorePacketEntry.php b/src/types/ScorePacketEntry.php
 index 5b334bc..d969d17 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/ScorePacketEntry.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/ScorePacketEntry.php
+--- a/src/types/ScorePacketEntry.php
++++ b/src/types/ScorePacketEntry.php
 @@ -10,18 +10,22 @@
   * (at your option) any later version.
   */
@@ -2460,10 +2464,10 @@ index 5b334bc..d969d17 100644
  	public int $type;
  	/** @var int|null (if type entity or player) */
  	public ?int $actorUniqueId;
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php b/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php
+diff --git a/src/types/ScoreboardIdentityPacketEntry.php b/src/types/ScoreboardIdentityPacketEntry.php
 index 0e14666..c243eaf 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php
+--- a/src/types/ScoreboardIdentityPacketEntry.php
++++ b/src/types/ScoreboardIdentityPacketEntry.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2482,11 +2486,11 @@ index 0e14666..c243eaf 100644
 +	public int $actorUniqueId = 0;
  
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/SystemCategory.php b/source/vendor/pocketmine/bedrock-protocol/src/types/SystemCategory.php
+diff --git a/src/types/SystemCategory.php b/src/types/SystemCategory.php
 new file mode 100644
 index 0000000..8679619
 --- /dev/null
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/SystemCategory.php
++++ b/src/types/SystemCategory.php
 @@ -0,0 +1,51 @@
 +<?php
 +
@@ -2539,10 +2543,10 @@ index 0000000..8679619
 +		LE::writeUnsignedLong($out, $this->systemIndex);
 +	}
 +}
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/CreativeGroupEntry.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/CreativeGroupEntry.php
+diff --git a/src/types/inventory/CreativeGroupEntry.php b/src/types/inventory/CreativeGroupEntry.php
 index 54e61bc..9b5507b 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/CreativeGroupEntry.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/CreativeGroupEntry.php
+--- a/src/types/inventory/CreativeGroupEntry.php
++++ b/src/types/inventory/CreativeGroupEntry.php
 @@ -10,13 +10,15 @@
   * (at your option) any later version.
   */
@@ -2577,10 +2581,126 @@ index 54e61bc..9b5507b 100644
  		CommonTypes::putString($out, $this->categoryName);
  		CommonTypes::putItemStackWithoutStackId($out, $this->icon);
  	}
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php
+diff --git a/src/types/inventory/NetworkInventoryAction.php b/src/types/inventory/NetworkInventoryAction.php
+index 56228f4..ef951c5 100644
+--- a/src/types/inventory/NetworkInventoryAction.php
++++ b/src/types/inventory/NetworkInventoryAction.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\inventory;
+@@ -67,71 +69,6 @@ class NetworkInventoryAction{
+ 	public ItemStackWrapper $oldItem;
+ 	public ItemStackWrapper $newItem;
+ 
+-	/**
+-	 * @return $this
+-	 *
+-	 * @throws DataDecodeException
+-	 * @throws PacketDecodeException
+-	 */
+-	public function readAuthInput(ByteBufferReader $in) : NetworkInventoryAction{
+-		$this->sourceType = VarInt::readUnsignedInt($in);
+-
+-		switch($this->sourceType){
+-			case self::SOURCE_CONTAINER:
+-				$this->windowId = VarInt::readSignedInt($in);
+-				break;
+-			case self::SOURCE_WORLD:
+-				$this->sourceFlags = VarInt::readUnsignedInt($in);
+-				break;
+-			case self::SOURCE_CREATIVE:
+-				break;
+-			case self::SOURCE_TODO:
+-				$this->windowId = VarInt::readSignedInt($in);
+-				break;
+-			default:
+-				throw new PacketDecodeException("Unknown inventory action source type $this->sourceType");
+-		}
+-
+-		$this->inventorySlot = VarInt::readUnsignedInt($in);
+-		$this->oldItem = CommonTypes::getItemStackWrapper($in);
+-		$this->newItem = CommonTypes::getItemStackWrapper($in);
+-
+-		return $this;
+-	}
+-
+-	public function writeAuthInput(ByteBufferWriter $out) : void{
+-		VarInt::writeUnsignedInt($out, $this->sourceType);
+-
+-		switch($this->sourceType){
+-			case self::SOURCE_CONTAINER:
+-				if($this->windowId === null){
+-					throw new \LogicException("WindowID must be set for SOURCE_CONTAINER");
+-				}
+-				VarInt::writeSignedInt($out, $this->windowId);
+-				break;
+-			case self::SOURCE_WORLD:
+-				if($this->sourceFlags === null){
+-					throw new \LogicException("SourceFlags must be set for SOURCE_WORLD");
+-				}
+-				VarInt::writeUnsignedInt($out, $this->sourceFlags);
+-				break;
+-			case self::SOURCE_CREATIVE:
+-				break;
+-			case self::SOURCE_TODO:
+-				if($this->windowId === null){
+-					throw new \LogicException("WindowID must be set for SOURCE_TODO");
+-				}
+-				VarInt::writeSignedInt($out, $this->windowId);
+-				break;
+-			default:
+-				throw new \InvalidArgumentException("Unknown inventory action source type $this->sourceType");
+-		}
+-
+-		VarInt::writeUnsignedInt($out, $this->inventorySlot);
+-		CommonTypes::putItemStackWrapper($out, $this->oldItem);
+-		CommonTypes::putItemStackWrapper($out, $this->newItem);
+-	}
+-
+ 	/**
+ 	 * @return $this
+ 	 *
+diff --git a/src/types/inventory/TransactionData.php b/src/types/inventory/TransactionData.php
+index 509d296..6f85905 100644
+--- a/src/types/inventory/TransactionData.php
++++ b/src/types/inventory/TransactionData.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\inventory;
+@@ -55,7 +57,7 @@ abstract class TransactionData{
+ 		$actionCount = VarInt::readUnsignedInt($in);
+ 		$this->actions = [];
+ 		for($i = 0; $i < $actionCount; ++$i){
+-			$this->actions[] = (new NetworkInventoryAction())->readAuthInput($in);
++			$this->actions[] = (new NetworkInventoryAction())->readTransaction($in);
+ 		}
+ 		$this->decodeData($in);
+ 	}
+@@ -77,7 +79,7 @@ abstract class TransactionData{
+ 	final public function encodeAuthInput(ByteBufferWriter $out) : void{
+ 		VarInt::writeUnsignedInt($out, count($this->actions));
+ 		foreach($this->actions as $action){
+-			$action->writeAuthInput($out);
++			$action->writeTransaction($out);
+ 		}
+ 		$this->encodeData($out);
+ 	}
+diff --git a/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php b/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php
 index e5e75ce..694cc2e 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php
+--- a/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php
++++ b/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2712,10 +2832,10 @@ index e5e75ce..694cc2e 100644
  		}
  	}
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php
+diff --git a/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php b/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php
 index 4dec8dd..f4917e8 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php
+--- a/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php
++++ b/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2770,10 +2890,10 @@ index 4dec8dd..f4917e8 100644
  		}
  		Byte::writeUnsigned($out, $this->iterations);
  	}
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/ItemStackRequest.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/ItemStackRequest.php
+diff --git a/src/types/inventory/stackrequest/ItemStackRequest.php b/src/types/inventory/stackrequest/ItemStackRequest.php
 index 6123c38..0ee911b 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/ItemStackRequest.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/ItemStackRequest.php
+--- a/src/types/inventory/stackrequest/ItemStackRequest.php
++++ b/src/types/inventory/stackrequest/ItemStackRequest.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2821,11 +2941,11 @@ index 6123c38..0ee911b 100644
  			$action->write($out);
  		}
  		VarInt::writeUnsignedInt($out, count($this->filterStrings));
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/StackRequestItem.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/StackRequestItem.php
+diff --git a/src/types/inventory/stackrequest/StackRequestItem.php b/src/types/inventory/stackrequest/StackRequestItem.php
 new file mode 100644
 index 0000000..1a44700
 --- /dev/null
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/StackRequestItem.php
++++ b/src/types/inventory/stackrequest/StackRequestItem.php
 @@ -0,0 +1,90 @@
 +<?php
 +
@@ -2917,10 +3037,10 @@ index 0000000..1a44700
 +		CommonTypes::putString($out, $this->rawExtraData);
 +	}
 +}
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponse.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponse.php
+diff --git a/src/types/inventory/stackresponse/ItemStackResponse.php b/src/types/inventory/stackresponse/ItemStackResponse.php
 index dc78164..9707f59 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponse.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponse.php
+--- a/src/types/inventory/stackresponse/ItemStackResponse.php
++++ b/src/types/inventory/stackresponse/ItemStackResponse.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2965,10 +3085,10 @@ index dc78164..9707f59 100644
 +		});
  	}
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
+diff --git a/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php b/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
 index 4613c13..afb98f3 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
+--- a/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
++++ b/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -2999,10 +3119,10 @@ index 4613c13..afb98f3 100644
  		CommonTypes::putString($out, $this->customName);
  		CommonTypes::putString($out, $this->filteredCustomName);
  		VarInt::writeSignedInt($out, $this->durabilityCorrection);
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php
+diff --git a/src/types/login/clientdata/ClientData.php b/src/types/login/clientdata/ClientData.php
 index 58875c3..cb47969 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php
+--- a/src/types/login/clientdata/ClientData.php
++++ b/src/types/login/clientdata/ClientData.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -3021,10 +3141,10 @@ index 58875c3..cb47969 100644
  	/** @required */
  	public int $UIProfile;
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientDataToSkinDataHelper.php b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientDataToSkinDataHelper.php
+diff --git a/src/types/login/clientdata/ClientDataToSkinDataHelper.php b/src/types/login/clientdata/ClientDataToSkinDataHelper.php
 index b0d9b7c..52b5cd9 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientDataToSkinDataHelper.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientDataToSkinDataHelper.php
+--- a/src/types/login/clientdata/ClientDataToSkinDataHelper.php
++++ b/src/types/login/clientdata/ClientDataToSkinDataHelper.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -3080,10 +3200,10 @@ index b0d9b7c..52b5cd9 100644
  		);
  	}
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ItemDescriptorType.php b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ItemDescriptorType.php
+diff --git a/src/types/recipe/ItemDescriptorType.php b/src/types/recipe/ItemDescriptorType.php
 index 7841e6f..22b1d4d 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ItemDescriptorType.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ItemDescriptorType.php
+--- a/src/types/recipe/ItemDescriptorType.php
++++ b/src/types/recipe/ItemDescriptorType.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -3106,10 +3226,10 @@ index 7841e6f..22b1d4d 100644
 +	/** Metadata value used by descriptors which match any variant of an item. */
 +	public const ANY_METADATA = 32767;
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/MolangItemDescriptor.php b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/MolangItemDescriptor.php
+diff --git a/src/types/recipe/MolangItemDescriptor.php b/src/types/recipe/MolangItemDescriptor.php
 index b196aad..04c51a7 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/MolangItemDescriptor.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/MolangItemDescriptor.php
+--- a/src/types/recipe/MolangItemDescriptor.php
++++ b/src/types/recipe/MolangItemDescriptor.php
 @@ -10,13 +10,15 @@
   * (at your option) any later version.
   */
@@ -3143,10 +3263,10 @@ index b196aad..04c51a7 100644
 +		LE::writeSignedShort($out, $this->molangVersion);
  	}
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/RecipeUnlockingRequirement.php b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/RecipeUnlockingRequirement.php
+diff --git a/src/types/recipe/RecipeUnlockingRequirement.php b/src/types/recipe/RecipeUnlockingRequirement.php
 index 4c352c1..c101c3d 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/RecipeUnlockingRequirement.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/RecipeUnlockingRequirement.php
+--- a/src/types/recipe/RecipeUnlockingRequirement.php
++++ b/src/types/recipe/RecipeUnlockingRequirement.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -3178,10 +3298,10 @@ index 4c352c1..c101c3d 100644
  		if($this->unlockingIngredients !== null){
  			VarInt::writeUnsignedInt($out, count($this->unlockingIngredients));
  			foreach($this->unlockingIngredients as $ingredient){
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ShapedRecipe.php b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ShapedRecipe.php
+diff --git a/src/types/recipe/ShapedRecipe.php b/src/types/recipe/ShapedRecipe.php
 index 1cdb679..1ee26fa 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ShapedRecipe.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/ShapedRecipe.php
+--- a/src/types/recipe/ShapedRecipe.php
++++ b/src/types/recipe/ShapedRecipe.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -3207,10 +3327,10 @@ index 1cdb679..1ee26fa 100644
  		foreach($this->input as $row){
  			foreach($row as $ingredient){
  				CommonTypes::putRecipeIngredient($out, $ingredient);
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/StringIdMetaItemDescriptor.php b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/StringIdMetaItemDescriptor.php
+diff --git a/src/types/recipe/StringIdMetaItemDescriptor.php b/src/types/recipe/StringIdMetaItemDescriptor.php
 index 07f0b50..a714b0b 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/StringIdMetaItemDescriptor.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/StringIdMetaItemDescriptor.php
+--- a/src/types/recipe/StringIdMetaItemDescriptor.php
++++ b/src/types/recipe/StringIdMetaItemDescriptor.php
 @@ -10,13 +10,15 @@
   * (at your option) any later version.
   */
@@ -3244,10 +3364,10 @@ index 07f0b50..a714b0b 100644
 +		VarInt::writeSignedInt($out, $this->meta);
  	}
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/TagItemDescriptor.php b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/TagItemDescriptor.php
+diff --git a/src/types/recipe/TagItemDescriptor.php b/src/types/recipe/TagItemDescriptor.php
 index c2c8435..6d3917a 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/TagItemDescriptor.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/recipe/TagItemDescriptor.php
+--- a/src/types/recipe/TagItemDescriptor.php
++++ b/src/types/recipe/TagItemDescriptor.php
 @@ -10,12 +10,15 @@
   * (at your option) any later version.
   */
@@ -3278,10 +3398,10 @@ index c2c8435..6d3917a 100644
 +		VarInt::writeSignedInt($out, ItemDescriptorType::ANY_METADATA);
  	}
  }
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaPieceTintColor.php b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaPieceTintColor.php
+diff --git a/src/types/skin/PersonaPieceTintColor.php b/src/types/skin/PersonaPieceTintColor.php
 index 14dc05a..5b4b692 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaPieceTintColor.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaPieceTintColor.php
+--- a/src/types/skin/PersonaPieceTintColor.php
++++ b/src/types/skin/PersonaPieceTintColor.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */
@@ -3309,10 +3429,10 @@ index 14dc05a..5b4b692 100644
  	 */
  	public function getColors() : array{
  		return $this->colors;
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaSkinPiece.php b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaSkinPiece.php
+diff --git a/src/types/skin/PersonaSkinPiece.php b/src/types/skin/PersonaSkinPiece.php
 index 7c9d8fa..703db92 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaSkinPiece.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/PersonaSkinPiece.php
+--- a/src/types/skin/PersonaSkinPiece.php
++++ b/src/types/skin/PersonaSkinPiece.php
 @@ -10,27 +10,48 @@
   * (at your option) any later version.
   */
@@ -3388,10 +3508,10 @@ index 7c9d8fa..703db92 100644
  		return $this->packId;
  	}
  
-diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/SkinData.php b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/SkinData.php
+diff --git a/src/types/skin/SkinData.php b/src/types/skin/SkinData.php
 index da2d59c..d08fcfa 100644
---- a/source/vendor/pocketmine/bedrock-protocol/src/types/skin/SkinData.php
-+++ b/source/vendor/pocketmine/bedrock-protocol/src/types/skin/SkinData.php
+--- a/src/types/skin/SkinData.php
++++ b/src/types/skin/SkinData.php
 @@ -10,6 +10,8 @@
   * (at your option) any later version.
   */

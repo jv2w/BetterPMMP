@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\inventory;
@@ -55,7 +57,7 @@ abstract class TransactionData{
 		$actionCount = VarInt::readUnsignedInt($in);
 		$this->actions = [];
 		for($i = 0; $i < $actionCount; ++$i){
-			$this->actions[] = (new NetworkInventoryAction())->readAuthInput($in);
+			$this->actions[] = (new NetworkInventoryAction())->readTransaction($in);
 		}
 		$this->decodeData($in);
 	}
@@ -77,7 +79,7 @@ abstract class TransactionData{
 	final public function encodeAuthInput(ByteBufferWriter $out) : void{
 		VarInt::writeUnsignedInt($out, count($this->actions));
 		foreach($this->actions as $action){
-			$action->writeAuthInput($out);
+			$action->writeTransaction($out);
 		}
 		$this->encodeData($out);
 	}

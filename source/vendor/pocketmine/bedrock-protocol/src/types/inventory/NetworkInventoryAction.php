@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\inventory;
@@ -66,71 +68,6 @@ class NetworkInventoryAction{
 	public int $inventorySlot;
 	public ItemStackWrapper $oldItem;
 	public ItemStackWrapper $newItem;
-
-	/**
-	 * @return $this
-	 *
-	 * @throws DataDecodeException
-	 * @throws PacketDecodeException
-	 */
-	public function readAuthInput(ByteBufferReader $in) : NetworkInventoryAction{
-		$this->sourceType = VarInt::readUnsignedInt($in);
-
-		switch($this->sourceType){
-			case self::SOURCE_CONTAINER:
-				$this->windowId = VarInt::readSignedInt($in);
-				break;
-			case self::SOURCE_WORLD:
-				$this->sourceFlags = VarInt::readUnsignedInt($in);
-				break;
-			case self::SOURCE_CREATIVE:
-				break;
-			case self::SOURCE_TODO:
-				$this->windowId = VarInt::readSignedInt($in);
-				break;
-			default:
-				throw new PacketDecodeException("Unknown inventory action source type $this->sourceType");
-		}
-
-		$this->inventorySlot = VarInt::readUnsignedInt($in);
-		$this->oldItem = CommonTypes::getItemStackWrapper($in);
-		$this->newItem = CommonTypes::getItemStackWrapper($in);
-
-		return $this;
-	}
-
-	public function writeAuthInput(ByteBufferWriter $out) : void{
-		VarInt::writeUnsignedInt($out, $this->sourceType);
-
-		switch($this->sourceType){
-			case self::SOURCE_CONTAINER:
-				if($this->windowId === null){
-					throw new \LogicException("WindowID must be set for SOURCE_CONTAINER");
-				}
-				VarInt::writeSignedInt($out, $this->windowId);
-				break;
-			case self::SOURCE_WORLD:
-				if($this->sourceFlags === null){
-					throw new \LogicException("SourceFlags must be set for SOURCE_WORLD");
-				}
-				VarInt::writeUnsignedInt($out, $this->sourceFlags);
-				break;
-			case self::SOURCE_CREATIVE:
-				break;
-			case self::SOURCE_TODO:
-				if($this->windowId === null){
-					throw new \LogicException("WindowID must be set for SOURCE_TODO");
-				}
-				VarInt::writeSignedInt($out, $this->windowId);
-				break;
-			default:
-				throw new \InvalidArgumentException("Unknown inventory action source type $this->sourceType");
-		}
-
-		VarInt::writeUnsignedInt($out, $this->inventorySlot);
-		CommonTypes::putItemStackWrapper($out, $this->oldItem);
-		CommonTypes::putItemStackWrapper($out, $this->newItem);
-	}
 
 	/**
 	 * @return $this

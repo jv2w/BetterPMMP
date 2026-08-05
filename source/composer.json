@@ -115,6 +115,8 @@
          "vendor/pocketmine/bedrock-protocol/src/serializer/CommonTypes.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/types/IntGameRule.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/types/inventory/CreativeGroupEntry.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
+         "vendor/pocketmine/bedrock-protocol/src/types/inventory/NetworkInventoryAction.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
+         "vendor/pocketmine/bedrock-protocol/src/types/inventory/TransactionData.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/CraftRecipeAutoStackRequestAction.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/DeprecatedCraftingResultsStackRequestAction.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/types/inventory/stackrequest/ItemStackRequest.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",

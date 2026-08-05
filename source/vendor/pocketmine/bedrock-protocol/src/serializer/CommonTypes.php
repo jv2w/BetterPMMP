@@ -312,31 +312,13 @@ final class CommonTypes{
 
 	/** @throws DataDecodeException */
 	public static function getItemStackWrapper(ByteBufferReader $in) : ItemStackWrapper{
-		[$id, $count, $meta] = self::getItemStackHeader($in);
+		$wrapper = self::getNetworkItemStackDescriptor($in);
 
-		$hasNetId = self::getBool($in);
-		$stackId = $hasNetId ? self::readServerItemStackId($in) : 0;
-
-		$itemStack = self::getItemStackFooter($in, $id, $meta, $count);
-
-		return $id !== 0 ? new ItemStackWrapper($stackId, $itemStack) : new ItemStackWrapper(0, ItemStack::null());
+		return $wrapper->getItemStack()->getId() !== 0 ? $wrapper : new ItemStackWrapper(0, ItemStack::null());
 	}
 
 	public static function putItemStackWrapper(ByteBufferWriter $out, ItemStackWrapper $itemStackWrapper) : void{
-		$itemStack = $itemStackWrapper->getItemStack();
-		if(self::putItemStackHeader($out, $itemStack)){
-			$hasNetId = $itemStackWrapper->getStackId() !== 0;
-			self::putBool($out, $hasNetId);
-			if($hasNetId){
-				self::writeServerItemStackId($out, $itemStackWrapper->getStackId());
-			}
-
-			self::putItemStackFooter($out, $itemStack);
-		}else{
-			self::putBool($out, false);
-			VarInt::writeSignedInt($out, 0);
-			VarInt::writeUnsignedInt($out, 0);
-		}
+		self::putNetworkItemStackDescriptor($out, $itemStackWrapper);
 	}
 
 	public static function getNetworkItemStackDescriptor(ByteBufferReader $in) : ItemStackWrapper{
