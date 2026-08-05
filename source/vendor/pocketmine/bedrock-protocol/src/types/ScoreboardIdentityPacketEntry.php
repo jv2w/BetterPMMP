@@ -19,6 +19,7 @@ namespace pocketmine\network\mcpe\protocol\types;
 class ScoreboardIdentityPacketEntry{
 
 	public int $scoreboardId;
-	public int $actorUniqueId;
+	/** 1.26.40 always writes this, even when clearing an identity, where callers leave it unset */
+	public int $actorUniqueId = 0;
 
 }

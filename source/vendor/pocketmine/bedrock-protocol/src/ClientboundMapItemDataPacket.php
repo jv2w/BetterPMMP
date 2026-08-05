@@ -48,8 +48,8 @@ class ClientboundMapItemDataPacket extends DataPacket implements ClientboundPack
 	/** @var MapDecoration[]|null */
 	public ?array $decorations = null;
 
-	public ?int $xOffset = null;
-	public ?int $yOffset = null;
+	public ?int $xOffset = 0;
+	public ?int $yOffset = 0;
 	public ?MapImage $colors = null;
 
 	protected function decodePayload(ByteBufferReader $in) : void{

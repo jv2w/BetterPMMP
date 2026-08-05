@@ -50,7 +50,7 @@ index 416f76b..5f7cf2b 100644
  	}
  
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php b/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php
-index 72914fe..166f27c 100644
+index 72914fe..4b412ea 100644
 --- a/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php
 +++ b/source/vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php
 @@ -10,6 +10,8 @@
@@ -94,8 +94,8 @@ index 72914fe..166f27c 100644
  
 -	public int $xOffset = 0;
 -	public int $yOffset = 0;
-+	public ?int $xOffset = null;
-+	public ?int $yOffset = null;
++	public ?int $xOffset = 0;
++	public ?int $yOffset = 0;
  	public ?MapImage $colors = null;
  
  	protected function decodePayload(ByteBufferReader $in) : void{
@@ -1282,7 +1282,7 @@ index 11531ae..56e3d58 100644
  			$entry->write($out);
  		}
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php b/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
-index 4bac0d2..c91a79b 100644
+index 4bac0d2..4ccfcfe 100644
 --- a/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
 +++ b/source/vendor/pocketmine/bedrock-protocol/src/SetScorePacket.php
 @@ -10,11 +10,12 @@
@@ -1299,27 +1299,20 @@ index 4bac0d2..c91a79b 100644
  use pmmp\encoding\ByteBufferReader;
  use pmmp\encoding\ByteBufferWriter;
  use pmmp\encoding\LE;
-@@ -26,10 +27,6 @@ use function count;
- class SetScorePacket extends DataPacket implements ClientboundPacket{
- 	public const NETWORK_ID = ProtocolInfo::SET_SCORE_PACKET;
+@@ -29,7 +30,11 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
+ 	public const TYPE_CHANGE = 0;
+ 	public const TYPE_REMOVE = 1;
  
--	public const TYPE_CHANGE = 0;
--	public const TYPE_REMOVE = 1;
--
 -	public int $type;
++	/**
++	 * 1.26.40 moved the change/remove selector onto each entry, but plugins still build packets with a
++	 * packet-wide type, so it is kept here and applied to every entry on encode.
++	 */
++	public int $type = self::TYPE_CHANGE;
  	/** @var ScorePacketEntry[] */
  	public array $entries = [];
  
-@@ -37,58 +34,69 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
- 	 * @generate-create-func
- 	 * @param ScorePacketEntry[] $entries
- 	 */
--	public static function create(int $type, array $entries) : self{
-+	public static function create(array $entries) : self{
- 		$result = new self;
--		$result->type = $type;
- 		$result->entries = $entries;
- 		return $result;
+@@ -45,50 +50,65 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
  	}
  
  	protected function decodePayload(ByteBufferReader $in) : void{
@@ -1365,19 +1358,22 @@ index 4bac0d2..c91a79b 100644
  			}
  			$this->entries[] = $entry;
  		}
++
++		$this->type = ($this->entries[0] ?? null)?->type === ScorePacketEntry::TYPE_REMOVE ? self::TYPE_REMOVE : self::TYPE_CHANGE;
  	}
  
  	protected function encodePayload(ByteBufferWriter $out) : void{
 -		Byte::writeUnsigned($out, $this->type);
  		VarInt::writeUnsignedInt($out, count($this->entries));
  		foreach($this->entries as $entry){
-+			VarInt::writeUnsignedInt($out, $entry->type);
-+			CommonTypes::putString($out, match($entry->type){
++			$entryType = $this->type === self::TYPE_REMOVE ? ScorePacketEntry::TYPE_REMOVE : $entry->type;
++			VarInt::writeUnsignedInt($out, $entryType);
++			CommonTypes::putString($out, match($entryType){
 +				ScorePacketEntry::TYPE_REMOVE => "remove",
 +				ScorePacketEntry::TYPE_PLAYER => "changeplayer",
 +				ScorePacketEntry::TYPE_ENTITY => "changeentity",
 +				ScorePacketEntry::TYPE_FAKE_PLAYER => "changefakeplayer",
-+				default => throw new \InvalidArgumentException("Unknown entry type $entry->type"),
++				default => throw new \InvalidArgumentException("Unknown entry type $entryType"),
 +			});
 +
  			VarInt::writeSignedLong($out, $entry->scoreboardId);
@@ -1396,7 +1392,7 @@ index 4bac0d2..c91a79b 100644
 -					default:
 -						throw new \InvalidArgumentException("Unknown entry type $entry->type");
 -				}
-+			switch($entry->type){
++			switch($entryType){
 +				case ScorePacketEntry::TYPE_REMOVE:
 +					CommonTypes::writeOptional($out, $entry->objectiveName, CommonTypes::putString(...));
 +					break;
@@ -2261,7 +2257,7 @@ index 5b334bc..d969d17 100644
  	/** @var int|null (if type entity or player) */
  	public ?int $actorUniqueId;
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php b/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php
-index 0e14666..8b61057 100644
+index 0e14666..c243eaf 100644
 --- a/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php
 +++ b/source/vendor/pocketmine/bedrock-protocol/src/types/ScoreboardIdentityPacketEntry.php
 @@ -10,6 +10,8 @@
@@ -2273,12 +2269,13 @@ index 0e14666..8b61057 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types;
-@@ -17,6 +19,6 @@ namespace pocketmine\network\mcpe\protocol\types;
+@@ -17,6 +19,7 @@ namespace pocketmine\network\mcpe\protocol\types;
  class ScoreboardIdentityPacketEntry{
  
  	public int $scoreboardId;
 -	public ?int $actorUniqueId = null;
-+	public int $actorUniqueId;
++	/** 1.26.40 always writes this, even when clearing an identity, where callers leave it unset */
++	public int $actorUniqueId = 0;
  
  }
 diff --git a/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php b/source/vendor/pocketmine/bedrock-protocol/src/types/login/clientdata/ClientData.php

@@ -27,6 +27,14 @@ use function count;
 class SetScorePacket extends DataPacket implements ClientboundPacket{
 	public const NETWORK_ID = ProtocolInfo::SET_SCORE_PACKET;
 
+	public const TYPE_CHANGE = 0;
+	public const TYPE_REMOVE = 1;
+
+	/**
+	 * 1.26.40 moved the change/remove selector onto each entry, but plugins still build packets with a
+	 * packet-wide type, so it is kept here and applied to every entry on encode.
+	 */
+	public int $type = self::TYPE_CHANGE;
 	/** @var ScorePacketEntry[] */
 	public array $entries = [];
 
@@ -34,8 +42,9 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
 	 * @generate-create-func
 	 * @param ScorePacketEntry[] $entries
 	 */
-	public static function create(array $entries) : self{
+	public static function create(int $type, array $entries) : self{
 		$result = new self;
+		$result->type = $type;
 		$result->entries = $entries;
 		return $result;
 	}
@@ -67,22 +76,25 @@ class SetScorePacket extends DataPacket implements ClientboundPacket{
 			}
 			$this->entries[] = $entry;
 		}
+
+		$this->type = ($this->entries[0] ?? null)?->type === ScorePacketEntry::TYPE_REMOVE ? self::TYPE_REMOVE : self::TYPE_CHANGE;
 	}
 
 	protected function encodePayload(ByteBufferWriter $out) : void{
 		VarInt::writeUnsignedInt($out, count($this->entries));
 		foreach($this->entries as $entry){
-			VarInt::writeUnsignedInt($out, $entry->type);
-			CommonTypes::putString($out, match($entry->type){
+			$entryType = $this->type === self::TYPE_REMOVE ? ScorePacketEntry::TYPE_REMOVE : $entry->type;
+			VarInt::writeUnsignedInt($out, $entryType);
+			CommonTypes::putString($out, match($entryType){
 				ScorePacketEntry::TYPE_REMOVE => "remove",
 				ScorePacketEntry::TYPE_PLAYER => "changeplayer",
 				ScorePacketEntry::TYPE_ENTITY => "changeentity",
 				ScorePacketEntry::TYPE_FAKE_PLAYER => "changefakeplayer",
-				default => throw new \InvalidArgumentException("Unknown entry type $entry->type"),
+				default => throw new \InvalidArgumentException("Unknown entry type $entryType"),
 			});
 
 			VarInt::writeSignedLong($out, $entry->scoreboardId);
-			switch($entry->type){
+			switch($entryType){
 				case ScorePacketEntry::TYPE_REMOVE:
 					CommonTypes::writeOptional($out, $entry->objectiveName, CommonTypes::putString(...));
 					break;
