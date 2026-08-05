@@ -88,7 +88,10 @@
    },
    "extra": {
       "betterpmmp-vendor-patches": {
-         "_comment": "BetterPMMP modifies these vendor files in place, and the patched versions are what this repository commits. Composer owns vendor/, so an install or update silently reverts them; restore with 'git checkout -- <file>'. The .patch files record the change for review and for trees that are not checkouts - they are already applied here, so 'git apply' on a fresh clone will report that the patch does not apply. Each patched file carries a one-line BetterPMMP modification notice near its license header, so grep for 'Modified by the BetterPMMP project' to check.",
+         "_comment": "BetterPMMP modifies these vendor files in place, and the patched versions are what this repository commits. Composer owns vendor/, so an install or update silently reverts them; restore with 'git checkout -- <file>'. The .patch files record the change for review and for trees that are not checkouts - they are already applied here, so 'git apply' on a fresh clone will report that the patch does not apply. Each patched PHP file carries a one-line BetterPMMP modification notice near its license header, so grep for 'Modified by the BetterPMMP project' to check; the bedrock-data assets are data, so they carry no such notice.",
+         "vendor/pocketmine/bedrock-data/block_state_meta_map.json": "build/betterpmmp-vendor-patches/bedrock-data-1.26.40.patch",
+         "vendor/pocketmine/bedrock-data/canonical_block_states.nbt": "build/betterpmmp-vendor-patches/bedrock-data-1.26.40.patch",
+         "vendor/pocketmine/bedrock-data/required_item_list.json": "build/betterpmmp-vendor-patches/bedrock-data-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/AnvilDamagePacket.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/ClientboundMapItemDataPacket.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
          "vendor/pocketmine/bedrock-protocol/src/CraftingDataPacket.php": "build/betterpmmp-vendor-patches/bedrock-protocol-1.26.40.patch",
