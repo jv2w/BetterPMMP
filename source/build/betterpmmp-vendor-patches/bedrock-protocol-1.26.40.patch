@@ -3086,7 +3086,7 @@ index dc78164..9707f59 100644
  	}
  }
 diff --git a/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php b/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
-index 4613c13..04fc7a2 100644
+index 4613c13..bc468a5 100644
 --- a/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
 +++ b/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
 @@ -10,6 +10,8 @@
@@ -3106,56 +3106,29 @@ index 4613c13..04fc7a2 100644
  use pmmp\encoding\VarInt;
  use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
  
-@@ -45,13 +48,30 @@ final class ItemStackResponseSlotInfo{
- 
- 	public function getDurabilityCorrection() : int{ return $this->durabilityCorrection; }
- 
-+	/**
-+	 * Names sit in two nested optionals. An absent name is a single unset outer bool, which is byte-identical
-+	 * to the empty string the field used to be, so only renamed items were affected by getting this wrong.
-+	 *
-+	 * @throws DataDecodeException
-+	 */
-+	private static function readName(ByteBufferReader $in) : string{
-+		return CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::getString(...))) ?? "";
-+	}
-+
-+	private static function writeName(ByteBufferWriter $out, string $name) : void{
-+		CommonTypes::writeOptional($out, $name !== "" ? $name : null, function(ByteBufferWriter $out, string $name) : void{
-+			CommonTypes::putBool($out, true);
-+			CommonTypes::putString($out, $name);
-+		});
-+	}
-+
- 	public static function read(ByteBufferReader $in) : self{
+@@ -49,7 +52,7 @@ final class ItemStackResponseSlotInfo{
  		$slot = Byte::readUnsigned($in);
  		$hotbarSlot = Byte::readUnsigned($in);
  		$count = Byte::readUnsigned($in);
 -		$itemStackId = CommonTypes::readServerItemStackId($in);
--		$customName = CommonTypes::getString($in);
--		$filteredCustomName = CommonTypes::getString($in);
 +		$itemStackId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::readServerItemStackId(...))) ?? 0;
-+		$customName = self::readName($in);
-+		$filteredCustomName = self::readName($in);
+ 		$customName = CommonTypes::getString($in);
+ 		$filteredCustomName = CommonTypes::getString($in);
  		$durabilityCorrection = VarInt::readSignedInt($in);
- 		return new self($slot, $hotbarSlot, $count, $itemStackId, $customName, $filteredCustomName, $durabilityCorrection);
- 	}
-@@ -60,9 +80,12 @@ final class ItemStackResponseSlotInfo{
+@@ -60,7 +63,12 @@ final class ItemStackResponseSlotInfo{
  		Byte::writeUnsigned($out, $this->slot);
  		Byte::writeUnsigned($out, $this->hotbarSlot);
  		Byte::writeUnsigned($out, $this->count);
 -		CommonTypes::writeServerItemStackId($out, $this->itemStackId);
--		CommonTypes::putString($out, $this->customName);
--		CommonTypes::putString($out, $this->filteredCustomName);
 +		//the stack ID is nested in two optionals; the outer one is always set, and the inner one is unset
 +		//for a stack the server hasn't assigned an ID to
 +		CommonTypes::putBool($out, true);
 +		CommonTypes::writeOptional($out, $this->itemStackId > 0 ? $this->itemStackId : null, CommonTypes::writeServerItemStackId(...));
-+		self::writeName($out, $this->customName);
-+		self::writeName($out, $this->filteredCustomName);
++		//the encoding of a populated name is unknown: 1.26.40 clients crash on every framing tried, so the
++		//server never sends one (see ItemStackResponseBuilder). An empty name is a bare zero either way.
+ 		CommonTypes::putString($out, $this->customName);
+ 		CommonTypes::putString($out, $this->filteredCustomName);
  		VarInt::writeSignedInt($out, $this->durabilityCorrection);
- 	}
- }
 diff --git a/src/types/login/clientdata/ClientData.php b/src/types/login/clientdata/ClientData.php
 index 58875c3..cb47969 100644
 --- a/src/types/login/clientdata/ClientData.php

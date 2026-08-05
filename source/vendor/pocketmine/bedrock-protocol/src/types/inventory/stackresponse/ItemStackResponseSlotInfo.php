@@ -48,30 +48,13 @@ final class ItemStackResponseSlotInfo{
 
 	public function getDurabilityCorrection() : int{ return $this->durabilityCorrection; }
 
-	/**
-	 * Names sit in two nested optionals. An absent name is a single unset outer bool, which is byte-identical
-	 * to the empty string the field used to be, so only renamed items were affected by getting this wrong.
-	 *
-	 * @throws DataDecodeException
-	 */
-	private static function readName(ByteBufferReader $in) : string{
-		return CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::getString(...))) ?? "";
-	}
-
-	private static function writeName(ByteBufferWriter $out, string $name) : void{
-		CommonTypes::writeOptional($out, $name !== "" ? $name : null, function(ByteBufferWriter $out, string $name) : void{
-			CommonTypes::putBool($out, true);
-			CommonTypes::putString($out, $name);
-		});
-	}
-
 	public static function read(ByteBufferReader $in) : self{
 		$slot = Byte::readUnsigned($in);
 		$hotbarSlot = Byte::readUnsigned($in);
 		$count = Byte::readUnsigned($in);
 		$itemStackId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::readServerItemStackId(...))) ?? 0;
-		$customName = self::readName($in);
-		$filteredCustomName = self::readName($in);
+		$customName = CommonTypes::getString($in);
+		$filteredCustomName = CommonTypes::getString($in);
 		$durabilityCorrection = VarInt::readSignedInt($in);
 		return new self($slot, $hotbarSlot, $count, $itemStackId, $customName, $filteredCustomName, $durabilityCorrection);
 	}
@@ -84,8 +67,10 @@ final class ItemStackResponseSlotInfo{
 		//for a stack the server hasn't assigned an ID to
 		CommonTypes::putBool($out, true);
 		CommonTypes::writeOptional($out, $this->itemStackId > 0 ? $this->itemStackId : null, CommonTypes::writeServerItemStackId(...));
-		self::writeName($out, $this->customName);
-		self::writeName($out, $this->filteredCustomName);
+		//the encoding of a populated name is unknown: 1.26.40 clients crash on every framing tried, so the
+		//server never sends one (see ItemStackResponseBuilder). An empty name is a bare zero either way.
+		CommonTypes::putString($out, $this->customName);
+		CommonTypes::putString($out, $this->filteredCustomName);
 		VarInt::writeSignedInt($out, $this->durabilityCorrection);
 	}
 }
