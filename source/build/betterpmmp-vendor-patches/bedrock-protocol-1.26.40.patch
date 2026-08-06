@@ -3089,7 +3089,7 @@ index dc78164..9707f59 100644
  	}
  }
 diff --git a/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php b/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
-index 4613c13..bc468a5 100644
+index 4613c13..eb46c19 100644
 --- a/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
 +++ b/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
 @@ -10,6 +10,8 @@
@@ -3109,16 +3109,19 @@ index 4613c13..bc468a5 100644
  use pmmp\encoding\VarInt;
  use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
  
-@@ -49,7 +52,7 @@ final class ItemStackResponseSlotInfo{
+@@ -49,9 +52,9 @@ final class ItemStackResponseSlotInfo{
  		$slot = Byte::readUnsigned($in);
  		$hotbarSlot = Byte::readUnsigned($in);
  		$count = Byte::readUnsigned($in);
 -		$itemStackId = CommonTypes::readServerItemStackId($in);
 +		$itemStackId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::readServerItemStackId(...))) ?? 0;
  		$customName = CommonTypes::getString($in);
- 		$filteredCustomName = CommonTypes::getString($in);
+-		$filteredCustomName = CommonTypes::getString($in);
++		$filteredCustomName = CommonTypes::readOptional($in, CommonTypes::getString(...)) ?? "";
  		$durabilityCorrection = VarInt::readSignedInt($in);
-@@ -60,7 +63,12 @@ final class ItemStackResponseSlotInfo{
+ 		return new self($slot, $hotbarSlot, $count, $itemStackId, $customName, $filteredCustomName, $durabilityCorrection);
+ 	}
+@@ -60,9 +63,15 @@ final class ItemStackResponseSlotInfo{
  		Byte::writeUnsigned($out, $this->slot);
  		Byte::writeUnsigned($out, $this->hotbarSlot);
  		Byte::writeUnsigned($out, $this->count);
@@ -3127,11 +3130,15 @@ index 4613c13..bc468a5 100644
 +		//for a stack the server hasn't assigned an ID to
 +		CommonTypes::putBool($out, true);
 +		CommonTypes::writeOptional($out, $this->itemStackId > 0 ? $this->itemStackId : null, CommonTypes::writeServerItemStackId(...));
-+		//the encoding of a populated name is unknown: 1.26.40 clients crash on every framing tried, so the
-+		//server never sends one (see ItemStackResponseBuilder). An empty name is a bare zero either way.
++		//the two names are one redactable string: the unredacted half is a plain string, but the redacted
++		//half is optional. Writing both as plain strings made clients read the second string's length byte
++		//as a presence flag, which is why only renamed items crashed them.
  		CommonTypes::putString($out, $this->customName);
- 		CommonTypes::putString($out, $this->filteredCustomName);
+-		CommonTypes::putString($out, $this->filteredCustomName);
++		CommonTypes::writeOptional($out, $this->filteredCustomName !== "" ? $this->filteredCustomName : null, CommonTypes::putString(...));
  		VarInt::writeSignedInt($out, $this->durabilityCorrection);
+ 	}
+ }
 diff --git a/src/types/login/clientdata/ClientData.php b/src/types/login/clientdata/ClientData.php
 index 58875c3..cb47969 100644
 --- a/src/types/login/clientdata/ClientData.php
