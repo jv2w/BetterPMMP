@@ -215,11 +215,13 @@ final class CommonTypes{
 			self::putBool($out, $piece->isDefaultPiece());
 			self::putString($out, $piece->getProductId());
 		}
-		//1.26.40 replaced the tint entry's string piece type with a numeric one and its fixed four integer
-		//colours with a counted list of strings. The client only ever sends the string form in its login
-		//JSON, so the numeric type it expects back cannot be derived, and every persona skin crashed clients
-		//while this was written the old way. An empty list is what classic skins have always sent.
-		VarInt::writeUnsignedInt($out, 0);
+		VarInt::writeUnsignedInt($out, count($skin->getPieceTintColors()));
+		foreach($skin->getPieceTintColors() as $tint){
+			self::putString($out, $tint->getPieceType());
+			foreach($tint->getColors() as $color){
+				LE::writeSignedInt($out, $color);
+			}
+		}
 		self::putBool($out, $skin->isPremium());
 		self::putBool($out, $skin->isPersona());
 		self::putBool($out, $skin->isPersonaCapeOnClassic());
