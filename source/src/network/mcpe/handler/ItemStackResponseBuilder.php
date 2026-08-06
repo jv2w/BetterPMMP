@@ -94,8 +94,10 @@ final class ItemStackResponseBuilder{
 					$slotId,
 					$item->getCount(),
 					$itemStackInfo->getStackId(),
-					$item->getCustomName(),
-					$item->getCustomName(),
+					//1.26.40 clients crash on a populated name here regardless of how it is framed, and the field
+					//only feeds client-side text filtering - the name the player sees comes from the item's NBT
+					"",
+					"",
 					$item instanceof Durable ? $item->getDamage() : 0,
 				);
 			}

@@ -54,7 +54,7 @@ final class ItemStackResponseSlotInfo{
 		$count = Byte::readUnsigned($in);
 		$itemStackId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::readServerItemStackId(...))) ?? 0;
 		$customName = CommonTypes::getString($in);
-		$filteredCustomName = CommonTypes::readOptional($in, CommonTypes::getString(...)) ?? "";
+		$filteredCustomName = CommonTypes::getString($in);
 		$durabilityCorrection = VarInt::readSignedInt($in);
 		return new self($slot, $hotbarSlot, $count, $itemStackId, $customName, $filteredCustomName, $durabilityCorrection);
 	}
@@ -67,11 +67,10 @@ final class ItemStackResponseSlotInfo{
 		//for a stack the server hasn't assigned an ID to
 		CommonTypes::putBool($out, true);
 		CommonTypes::writeOptional($out, $this->itemStackId > 0 ? $this->itemStackId : null, CommonTypes::writeServerItemStackId(...));
-		//the two names are one redactable string: the unredacted half is a plain string, but the redacted
-		//half is optional. Writing both as plain strings made clients read the second string's length byte
-		//as a presence flag, which is why only renamed items crashed them.
+		//the encoding of a populated name is unknown: 1.26.40 clients crash on every framing tried, so the
+		//server never sends one (see ItemStackResponseBuilder). An empty name is a bare zero either way.
 		CommonTypes::putString($out, $this->customName);
-		CommonTypes::writeOptional($out, $this->filteredCustomName !== "" ? $this->filteredCustomName : null, CommonTypes::putString(...));
+		CommonTypes::putString($out, $this->filteredCustomName);
 		VarInt::writeSignedInt($out, $this->durabilityCorrection);
 	}
 }
