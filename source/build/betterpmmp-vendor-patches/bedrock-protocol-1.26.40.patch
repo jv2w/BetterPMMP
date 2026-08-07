@@ -2500,6 +2500,176 @@ index 79fd2bb..4dc462b 100644
  		CommonTypes::putBool($out, $this->enabled);
  		CommonTypes::putBool($out, $this->transitionsPaused);
  	}
+diff --git a/src/types/AttributeLayerSettingsWeight.php b/src/types/AttributeLayerSettingsWeight.php
+deleted file mode 100644
+index a4623cc..0000000
+--- a/src/types/AttributeLayerSettingsWeight.php
++++ /dev/null
+@@ -1,27 +0,0 @@
+-<?php
+-
+-/*
+- * This file is part of BedrockProtocol.
+- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
+- *
+- * BedrockProtocol is free software: you can redistribute it and/or modify
+- * it under the terms of the GNU Lesser General Public License as published by
+- * the Free Software Foundation, either version 3 of the License, or
+- * (at your option) any later version.
+- */
+-
+-declare(strict_types=1);
+-
+-namespace pocketmine\network\mcpe\protocol\types;
+-
+-use pmmp\encoding\ByteBufferWriter;
+-
+-/**
+- * @see AttributeLayerSettings
+- */
+-abstract class AttributeLayerSettingsWeight{
+-
+-	abstract public function getTypeId() : int;
+-
+-	abstract public function write(ByteBufferWriter $out) : void;
+-}
+diff --git a/src/types/AttributeLayerSettingsWeightFloat.php b/src/types/AttributeLayerSettingsWeightFloat.php
+deleted file mode 100644
+index 699ac35..0000000
+--- a/src/types/AttributeLayerSettingsWeightFloat.php
++++ /dev/null
+@@ -1,48 +0,0 @@
+-<?php
+-
+-/*
+- * This file is part of BedrockProtocol.
+- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
+- *
+- * BedrockProtocol is free software: you can redistribute it and/or modify
+- * it under the terms of the GNU Lesser General Public License as published by
+- * the Free Software Foundation, either version 3 of the License, or
+- * (at your option) any later version.
+- */
+-
+-declare(strict_types=1);
+-
+-namespace pocketmine\network\mcpe\protocol\types;
+-
+-use pmmp\encoding\ByteBufferReader;
+-use pmmp\encoding\ByteBufferWriter;
+-use pmmp\encoding\LE;
+-
+-/**
+- * @see AttributeLayerSettings
+- */
+-final class AttributeLayerSettingsWeightFloat extends AttributeLayerSettingsWeight{
+-	public const ID = AttributeLayerSettingsWeightType::FLOAT;
+-
+-	public function __construct(
+-		private float $value
+-	){}
+-
+-	public function getTypeId() : int{
+-		return self::ID;
+-	}
+-
+-	public function getValue() : float{ return $this->value; }
+-
+-	public static function read(ByteBufferReader $in) : self{
+-		$value = LE::readFloat($in);
+-
+-		return new self(
+-			$value
+-		);
+-	}
+-
+-	public function write(ByteBufferWriter $out) : void{
+-		LE::writeFloat($out, $this->value);
+-	}
+-}
+diff --git a/src/types/AttributeLayerSettingsWeightString.php b/src/types/AttributeLayerSettingsWeightString.php
+deleted file mode 100644
+index 39a0ddd..0000000
+--- a/src/types/AttributeLayerSettingsWeightString.php
++++ /dev/null
+@@ -1,48 +0,0 @@
+-<?php
+-
+-/*
+- * This file is part of BedrockProtocol.
+- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
+- *
+- * BedrockProtocol is free software: you can redistribute it and/or modify
+- * it under the terms of the GNU Lesser General Public License as published by
+- * the Free Software Foundation, either version 3 of the License, or
+- * (at your option) any later version.
+- */
+-
+-declare(strict_types=1);
+-
+-namespace pocketmine\network\mcpe\protocol\types;
+-
+-use pmmp\encoding\ByteBufferReader;
+-use pmmp\encoding\ByteBufferWriter;
+-use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+-
+-/**
+- * @see AttributeLayerSettings
+- */
+-final class AttributeLayerSettingsWeightString extends AttributeLayerSettingsWeight{
+-	public const ID = AttributeLayerSettingsWeightType::STRING;
+-
+-	public function __construct(
+-		private string $value
+-	){}
+-
+-	public function getTypeId() : int{
+-		return self::ID;
+-	}
+-
+-	public function getValue() : string{ return $this->value; }
+-
+-	public static function read(ByteBufferReader $in) : self{
+-		$value = CommonTypes::getString($in);
+-
+-		return new self(
+-			$value
+-		);
+-	}
+-
+-	public function write(ByteBufferWriter $out) : void{
+-		CommonTypes::putString($out, $this->value);
+-	}
+-}
+diff --git a/src/types/AttributeLayerSettingsWeightType.php b/src/types/AttributeLayerSettingsWeightType.php
+deleted file mode 100644
+index 78df3b3..0000000
+--- a/src/types/AttributeLayerSettingsWeightType.php
++++ /dev/null
+@@ -1,23 +0,0 @@
+-<?php
+-
+-/*
+- * This file is part of BedrockProtocol.
+- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
+- *
+- * BedrockProtocol is free software: you can redistribute it and/or modify
+- * it under the terms of the GNU Lesser General Public License as published by
+- * the Free Software Foundation, either version 3 of the License, or
+- * (at your option) any later version.
+- */
+-
+-declare(strict_types=1);
+-
+-namespace pocketmine\network\mcpe\protocol\types;
+-
+-/**
+- * @see AttributeLayerSettingsWeight
+- */
+-final class AttributeLayerSettingsWeightType{
+-	public const FLOAT = 0;
+-	public const STRING = 1;
+-}
 diff --git a/src/types/AttributeUpdateLayerSettings.php b/src/types/AttributeUpdateLayerSettings.php
 index c7ae944..329f5fe 100644
 --- a/src/types/AttributeUpdateLayerSettings.php
@@ -2695,6 +2865,50 @@ index fc38ef3..871c5e0 100644
 +		CommonTypes::putUUID($out, $this->packId);
  	}
  }
+diff --git a/src/types/EmptyGameRule.php b/src/types/EmptyGameRule.php
+new file mode 100644
+index 0000000..10ef3f3
+--- /dev/null
++++ b/src/types/EmptyGameRule.php
+@@ -0,0 +1,38 @@
++<?php
++
++/*
++ * This file is part of BedrockProtocol.
++ * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
++ *
++ * BedrockProtocol is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * @author BetterPMMP Team
++ */
++
++declare(strict_types=1);
++
++namespace pocketmine\network\mcpe\protocol\types;
++
++use pmmp\encoding\ByteBufferReader;
++use pmmp\encoding\ByteBufferWriter;
++
++/**
++ * A game rule that carries no value at all. The client uses it for rules it knows the name of but has no
++ * setting for.
++ */
++final class EmptyGameRule extends GameRule{
++	use GetTypeIdFromConstTrait;
++
++	public const ID = GameRuleType::EMPTY;
++
++	public function encode(ByteBufferWriter $out, bool $isStartGame) : void{
++		//NOOP
++	}
++
++	public static function decode(ByteBufferReader $in, bool $isPlayerModifiable) : self{
++		return new self($isPlayerModifiable);
++	}
++}
 diff --git a/src/types/GameRuleType.php b/src/types/GameRuleType.php
 index bdc6a57..b403ad4 100644
 --- a/src/types/GameRuleType.php
@@ -3271,6 +3485,110 @@ index 0e14666..c243eaf 100644
 +	public int $actorUniqueId = 0;
  
  }
+diff --git a/src/types/SoundDataUpdate.php b/src/types/SoundDataUpdate.php
+new file mode 100644
+index 0000000..dd6fad9
+--- /dev/null
++++ b/src/types/SoundDataUpdate.php
+@@ -0,0 +1,98 @@
++<?php
++
++/*
++ * This file is part of BedrockProtocol.
++ * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
++ *
++ * BedrockProtocol is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU Lesser General Public License as published by
++ * the Free Software Foundation, either version 3 of the License, or
++ * (at your option) any later version.
++ *
++ * @author BetterPMMP Team
++ */
++
++declare(strict_types=1);
++
++namespace pocketmine\network\mcpe\protocol\types;
++
++use pmmp\encoding\ByteBufferReader;
++use pmmp\encoding\ByteBufferWriter;
++use pmmp\encoding\LE;
++use pmmp\encoding\VarInt;
++use pocketmine\network\mcpe\protocol\PacketDecodeException;
++
++/**
++ * A single change to a sound that is already playing, identified by the handle the server sent in PlaySoundPacket.
++ */
++final class SoundDataUpdate{
++
++	public const TYPE_STOP = 0;
++	public const TYPE_SET_VOLUME = 1;
++	public const TYPE_SET_PITCH = 2;
++	public const TYPE_FADE = 3;
++	public const TYPE_SEEK_TO = 4;
++	public const TYPE_PAUSE = 5;
++	public const TYPE_RESUME = 6;
++
++	public function __construct(
++		private int $type,
++		private float $volume = 0.0,
++		private float $pitch = 0.0,
++		private float $duration = 0.0,
++		private float $targetVolume = 0.0,
++		private float $seconds = 0.0,
++	){}
++
++	public function getType() : int{ return $this->type; }
++
++	public function getVolume() : float{ return $this->volume; }
++
++	public function getPitch() : float{ return $this->pitch; }
++
++	public function getDuration() : float{ return $this->duration; }
++
++	public function getTargetVolume() : float{ return $this->targetVolume; }
++
++	public function getSeconds() : float{ return $this->seconds; }
++
++	/**
++	 * @throws PacketDecodeException
++	 */
++	public static function read(ByteBufferReader $in) : self{
++		$type = VarInt::readUnsignedInt($in);
++		$volume = 0.0;
++		$pitch = 0.0;
++		$duration = 0.0;
++		$targetVolume = 0.0;
++		$seconds = 0.0;
++		if($type === self::TYPE_SET_VOLUME){
++			$volume = LE::readFloat($in);
++		}elseif($type === self::TYPE_SET_PITCH){
++			$pitch = LE::readFloat($in);
++		}elseif($type === self::TYPE_FADE){
++			$duration = LE::readFloat($in);
++			$targetVolume = LE::readFloat($in);
++		}elseif($type === self::TYPE_SEEK_TO){
++			$seconds = LE::readFloat($in);
++		}elseif($type !== self::TYPE_STOP && $type !== self::TYPE_PAUSE && $type !== self::TYPE_RESUME){
++			throw new PacketDecodeException("Unknown sound data update type {$type}");
++		}
++
++		return new self($type, $volume, $pitch, $duration, $targetVolume, $seconds);
++	}
++
++	public function write(ByteBufferWriter $out) : void{
++		VarInt::writeUnsignedInt($out, $this->type);
++		if($this->type === self::TYPE_SET_VOLUME){
++			LE::writeFloat($out, $this->volume);
++		}elseif($this->type === self::TYPE_SET_PITCH){
++			LE::writeFloat($out, $this->pitch);
++		}elseif($this->type === self::TYPE_FADE){
++			LE::writeFloat($out, $this->duration);
++			LE::writeFloat($out, $this->targetVolume);
++		}elseif($this->type === self::TYPE_SEEK_TO){
++			LE::writeFloat($out, $this->seconds);
++		}
++	}
++}
 diff --git a/src/types/SystemCategory.php b/src/types/SystemCategory.php
 new file mode 100644
 index 0000000..8679619
