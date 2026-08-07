@@ -294,11 +294,9 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
 			$blockActions = [];
 			$max = VarInt::readUnsignedInt($in);
 			for($i = 0; $i < $max; ++$i){
+				//the frame is self-describing, so an action type this build does not know still parses
 				$actionType = VarInt::readSignedInt($in);
-				$blockActions[] = match(true){
-					PlayerBlockActionWithBlockInfo::isValidActionType($actionType) => PlayerBlockActionWithBlockInfo::read($in, $actionType),
-					default => throw new PacketDecodeException("Unexpected block action type $actionType")
-				};
+				$blockActions[] = PlayerBlockActionWithBlockInfo::read($in, $actionType);
 			}
 			return $blockActions;
 		}));

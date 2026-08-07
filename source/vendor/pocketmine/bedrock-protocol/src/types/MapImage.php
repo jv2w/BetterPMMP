@@ -22,7 +22,6 @@ use pmmp\encoding\DataDecodeException;
 use pmmp\encoding\LE;
 use pocketmine\color\Color;
 use pocketmine\network\mcpe\protocol\PacketDecodeException;
-use pocketmine\utils\Binary;
 use function count;
 
 final class MapImage{
@@ -81,7 +80,7 @@ final class MapImage{
 			$serializer = new ByteBufferWriter();
 			for($y = 0; $y < $this->height; ++$y){
 				for($x = 0; $x < $this->width; ++$x){
-					LE::writeUnsignedInt($serializer, Binary::flipIntEndianness($this->pixels[$y][$x]->toRGBA()));
+					LE::writeUnsignedInt($serializer, $this->pixels[$y][$x]->toARGB());
 				}
 			}
 			$this->encodedPixelCache = $serializer->getData();
@@ -106,7 +105,7 @@ final class MapImage{
 		for($y = 0; $y < $height; ++$y){
 			$row = [];
 			for($x = 0; $x < $width; ++$x){
-				$row[] = Color::fromRGBA(Binary::flipIntEndianness(LE::readUnsignedInt($in)));
+				$row[] = Color::fromARGB(LE::readUnsignedInt($in));
 			}
 			$pixels[] = $row;
 		}

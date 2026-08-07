@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\entity;
@@ -168,6 +170,9 @@ final class EntityMetadataProperties{
 	public const AIM_ASSIST_PRIORITY_PRESET_ID = 136; //int
 	public const AIM_ASSIST_PRIORITY_CATEGORY_ID = 137; //int
 	public const AIM_ASSIST_PRIORITY_ACTOR_ID = 138; //int
-	public const RESERVED_139 = 139; //long
-	public const NAMEPLATE_RENDER_DISTANCE_MAX = 140; //float
+	public const ARROW_SHOOTER_ID = 139; //long
+	public const FIREWORK_DIRECTION = 140; //vector3f
+	public const FIREWORK_SHOOTER_ID = 141; //long
+	public const RESERVED_139 = 142; //long
+	public const NAMEPLATE_RENDER_DISTANCE_MAX = 143; //float
 }

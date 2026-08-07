@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
@@ -52,7 +54,7 @@ final class AttributesRemoveEnvironment extends AttributeLayerSyncPayload{
 
 	public static function read(ByteBufferReader $in) : self{
 		$name = CommonTypes::getString($in);
-		$dimension = VarInt::readUnsignedInt($in);
+		$dimension = VarInt::readSignedInt($in);
 
 		$attributes = [];
 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
@@ -68,7 +70,7 @@ final class AttributesRemoveEnvironment extends AttributeLayerSyncPayload{
 
 	public function write(ByteBufferWriter $out) : void{
 		CommonTypes::putString($out, $this->name);
-		VarInt::writeUnsignedInt($out, $this->dimension);
+		VarInt::writeSignedInt($out, $this->dimension);
 
 		VarInt::writeUnsignedInt($out, count($this->attributes));
 		foreach($this->attributes as $attribute){

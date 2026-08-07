@@ -30,6 +30,7 @@ use pocketmine\nbt\TreeRoot;
 use pocketmine\network\mcpe\protocol\PacketDecodeException;
 use pocketmine\network\mcpe\protocol\types\BlockPosition;
 use pocketmine\network\mcpe\protocol\types\BoolGameRule;
+use pocketmine\network\mcpe\protocol\types\EmptyGameRule;
 use pocketmine\network\mcpe\protocol\types\command\CommandOriginData;
 use pocketmine\network\mcpe\protocol\types\entity\BlockPosMetadataProperty;
 use pocketmine\network\mcpe\protocol\types\entity\ByteMetadataProperty;
@@ -62,6 +63,7 @@ use pocketmine\network\mcpe\protocol\types\StructureSettings;
 use Ramsey\Uuid\Uuid;
 use Ramsey\Uuid\UuidInterface;
 use function count;
+use function str_starts_with;
 use function strlen;
 use function strrev;
 use function substr;
@@ -105,6 +107,23 @@ final class CommonTypes{
 		$out->writeByteArray(strrev(substr($bytes, 8, 8)));
 	}
 
+	//the skin codec shortens the persona_* tint piece names the client uses in its login JSON, and makes
+	//the hands type plural. Echoing back the login spelling leaves the client unable to resolve the piece.
+	private static function personaPieceTintWireType(string $pieceType) : string{
+		if($pieceType === 'persona_hand'){
+			return 'hands';
+		}
+		return str_starts_with($pieceType, 'persona_') ? substr($pieceType, 8) : $pieceType;
+	}
+
+	private static function personaPieceTintLoginType(string $pieceType) : string{
+		return match($pieceType){
+			'hands' => 'persona_hand',
+			'unsupported' => $pieceType,
+			default => "persona_{$pieceType}"
+		};
+	}
+
 	/** @throws DataDecodeException */
 	public static function getSkin(ByteBufferReader $in) : SkinData{
 		$skinId = self::getString($in);
@@ -141,7 +160,7 @@ final class CommonTypes{
 		$pieceTintColorCount = VarInt::readUnsignedInt($in);
 		$pieceTintColors = [];
 		for($i = 0; $i < $pieceTintColorCount; ++$i){
-			$pieceType = self::getString($in);
+			$pieceType = self::personaPieceTintLoginType(self::getString($in));
 			$colors = [];
 			for($j = 0; $j < 4; ++$j){
 				$colors[] = LE::readSignedInt($in);
@@ -215,11 +234,14 @@ final class CommonTypes{
 			self::putBool($out, $piece->isDefaultPiece());
 			self::putString($out, $piece->getProductId());
 		}
-		//1.26.40 replaced the tint entry's string piece type with a numeric one and its fixed four integer
-		//colours with a counted list of strings. The client only ever sends the string form in its login
-		//JSON, so the numeric type it expects back cannot be derived, and every persona skin crashed clients
-		//while this was written the old way. An empty list is what classic skins have always sent.
-		VarInt::writeUnsignedInt($out, 0);
+		VarInt::writeUnsignedInt($out, count($skin->getPieceTintColors()));
+		foreach($skin->getPieceTintColors() as $tint){
+			self::putString($out, self::personaPieceTintWireType($tint->getPieceType()));
+			$colors = $tint->getColors();
+			for($i = 0; $i < 4; ++$i){
+				LE::writeSignedInt($out, $colors[$i] ?? 0);
+			}
+		}
 		self::putBool($out, $skin->isPremium());
 		self::putBool($out, $skin->isPersona());
 		self::putBool($out, $skin->isPersonaCapeOnClassic());
@@ -558,6 +580,7 @@ final class CommonTypes{
 	/** @throws DataDecodeException */
 	private static function readGameRule(ByteBufferReader $in, int $type, bool $isPlayerModifiable, bool $isStartGame) : GameRule{
 		return match($type){
+			EmptyGameRule::ID => EmptyGameRule::decode($in, $isPlayerModifiable),
 			BoolGameRule::ID => BoolGameRule::decode($in, $isPlayerModifiable),
 			IntGameRule::ID => IntGameRule::decode($in, $isPlayerModifiable, $isStartGame),
 			FloatGameRule::ID => FloatGameRule::decode($in, $isPlayerModifiable),
@@ -700,7 +723,7 @@ final class CommonTypes{
 
 		$result->structureBlockType = VarInt::readSignedInt($in);
 		$result->structureSettings = self::getStructureSettings($in);
-		$result->structureRedstoneSaveMode = VarInt::readSignedInt($in);
+		$result->structureRedstoneSaveMode = Byte::readUnsigned($in);
 
 		return $result;
 	}
@@ -715,7 +738,7 @@ final class CommonTypes{
 
 		VarInt::writeSignedInt($out, $structureEditorData->structureBlockType);
 		self::putStructureSettings($out, $structureEditorData->structureSettings);
-		VarInt::writeSignedInt($out, $structureEditorData->structureRedstoneSaveMode);
+		Byte::writeUnsigned($out, $structureEditorData->structureRedstoneSaveMode);
 	}
 
 	/** @throws PacketDecodeException */

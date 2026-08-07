@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
@@ -55,8 +57,10 @@ final class PlayerAction{
 	public const STOP_CRAWLING = 33;
 	public const START_FLYING = 34;
 	public const STOP_FLYING = 35;
+	public const RECEIVED_SERVER_DATA = 36;
 
 	public const START_USING_ITEM = 37;
+	public const INTERNAL_UPDATE = 38;
 
 	//Backwards compatibility (blame @dktapps)
 	public const CRACK_BREAK = 18;

@@ -42,7 +42,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
 		string $blockType, //TODO: rename this
 		private int $priority,
 		private bool $symmetric,
-		private RecipeUnlockingRequirement $unlockingRequirement,
+		private ?RecipeUnlockingRequirement $unlockingRequirement,
 		private int $recipeNetId
 	){
 		parent::__construct($typeId);
@@ -103,7 +103,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
 
 	public function isSymmetric() : bool{ return $this->symmetric; }
 
-	public function getUnlockingRequirement() : RecipeUnlockingRequirement{ return $this->unlockingRequirement; }
+	public function getUnlockingRequirement() : ?RecipeUnlockingRequirement{ return $this->unlockingRequirement; }
 
 	public function getRecipeNetId() : int{
 		return $this->recipeNetId;
@@ -129,7 +129,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
 		$block = CommonTypes::getString($in);
 		$priority = VarInt::readSignedInt($in);
 		$symmetric = CommonTypes::getBool($in);
-		$unlockingRequirement = RecipeUnlockingRequirement::read($in);
+		$unlockingRequirement = CommonTypes::readOptional($in, RecipeUnlockingRequirement::read(...));
 
 		$recipeNetId = CommonTypes::readRecipeNetId($in);
 
@@ -156,7 +156,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
 		CommonTypes::putString($out, $this->blockName);
 		VarInt::writeSignedInt($out, $this->priority);
 		CommonTypes::putBool($out, $this->symmetric);
-		$this->unlockingRequirement->write($out);
+		CommonTypes::writeOptional($out, $this->unlockingRequirement, fn(ByteBufferWriter $out, RecipeUnlockingRequirement $v) => $v->write($out));
 
 		CommonTypes::writeRecipeNetId($out, $this->recipeNetId);
 	}

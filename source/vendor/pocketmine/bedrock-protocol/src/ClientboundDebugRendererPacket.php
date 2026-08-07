@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol;
@@ -47,13 +49,16 @@ class ClientboundDebugRendererPacket extends DataPacket implements ClientboundPa
 	public function getData() : ?DebugMarkerData{ return $this->data; }
 
 	protected function decodePayload(ByteBufferReader $in) : void{
+		//the type string alone decides whether a body follows; there is no presence flag
 		$this->type = CommonTypes::getString($in);
-		$this->data = CommonTypes::readOptional($in, DebugMarkerData::read(...));
+		$this->data = $this->type === self::TYPE_ADD_CUBE ? DebugMarkerData::read($in) : null;
 	}
 
 	protected function encodePayload(ByteBufferWriter $out) : void{
 		CommonTypes::putString($out, $this->type);
-		CommonTypes::writeOptional($out, $this->data, fn(ByteBufferWriter $out, DebugMarkerData $data) => $data->write($out));
+		if($this->type === self::TYPE_ADD_CUBE && $this->data !== null){
+			$this->data->write($out);
+		}
 	}
 
 	public function handle(PacketHandlerInterface $handler) : bool{

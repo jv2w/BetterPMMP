@@ -17,36 +17,78 @@ declare(strict_types=1);
 namespace pocketmine\network\mcpe\protocol\types\skin;
 
 use Ramsey\Uuid\UuidInterface;
+use function str_starts_with;
+use function substr;
 
 final class PersonaSkinPiece{
 
-	public const PIECE_TYPE_PERSONA_SKELETON = 0;
-	public const PIECE_TYPE_PERSONA_BODY = 1;
-	public const PIECE_TYPE_PERSONA_SKIN = 2;
-	public const PIECE_TYPE_PERSONA_BOTTOM = 3;
-	public const PIECE_TYPE_PERSONA_FEET = 4;
-	public const PIECE_TYPE_DRESS = 5;
-	public const PIECE_TYPE_PERSONA_TOP = 6;
-	public const PIECE_TYPE_HIGH_PANTS = 7;
-	public const PIECE_TYPE_HANDS = 8;
-	public const PIECE_TYPE_OUTERWEAR = 9;
-	public const PIECE_TYPE_PERSONA_FACIAL_HAIR = 10;
-	public const PIECE_TYPE_PERSONA_MOUTH = 11;
-	public const PIECE_TYPE_PERSONA_EYES = 12;
-	public const PIECE_TYPE_PERSONA_HAIR = 13;
-	public const PIECE_TYPE_HOOD = 14;
-	public const PIECE_TYPE_BACK = 15;
-	public const PIECE_TYPE_FACE_ACCESSORY = 16;
-	public const PIECE_TYPE_HEAD = 17;
-	public const PIECE_TYPE_LEGS = 18;
-	public const PIECE_TYPE_LEFT_LEG = 19;
-	public const PIECE_TYPE_RIGHT_LEG = 20;
-	public const PIECE_TYPE_ARMS = 21;
-	public const PIECE_TYPE_LEFT_ARM = 22;
-	public const PIECE_TYPE_RIGHT_ARM = 23;
-	public const PIECE_TYPE_CAPES = 24;
-	public const PIECE_TYPE_CLASSIC_SKIN = 25;
-	public const PIECE_TYPE_EMOTE = 26;
+	public const PIECE_TYPE_UNKNOWN = 0;
+	public const PIECE_TYPE_PERSONA_SKELETON = 1;
+	public const PIECE_TYPE_PERSONA_BODY = 2;
+	public const PIECE_TYPE_PERSONA_SKIN = 3;
+	public const PIECE_TYPE_PERSONA_BOTTOM = 4;
+	public const PIECE_TYPE_PERSONA_FEET = 5;
+	public const PIECE_TYPE_DRESS = 6;
+	public const PIECE_TYPE_PERSONA_TOP = 7;
+	public const PIECE_TYPE_HIGH_PANTS = 8;
+	public const PIECE_TYPE_HANDS = 9;
+	public const PIECE_TYPE_OUTERWEAR = 10;
+	public const PIECE_TYPE_PERSONA_FACIAL_HAIR = 11;
+	public const PIECE_TYPE_PERSONA_MOUTH = 12;
+	public const PIECE_TYPE_PERSONA_EYES = 13;
+	public const PIECE_TYPE_PERSONA_HAIR = 14;
+	public const PIECE_TYPE_HOOD = 15;
+	public const PIECE_TYPE_BACK = 16;
+	public const PIECE_TYPE_FACE_ACCESSORY = 17;
+	public const PIECE_TYPE_HEAD = 18;
+	public const PIECE_TYPE_LEGS = 19;
+	public const PIECE_TYPE_LEFT_LEG = 20;
+	public const PIECE_TYPE_RIGHT_LEG = 21;
+	public const PIECE_TYPE_ARMS = 22;
+	public const PIECE_TYPE_LEFT_ARM = 23;
+	public const PIECE_TYPE_RIGHT_ARM = 24;
+	public const PIECE_TYPE_CAPES = 25;
+	public const PIECE_TYPE_CLASSIC_SKIN = 26;
+	public const PIECE_TYPE_EMOTE = 27;
+	public const PIECE_TYPE_UNSUPPORTED = 28;
+
+	//login JSON names the piece type, the wire numbers it. The names follow the same persona_* convention
+	//the tint piece types use, so an unrecognised one is reported as unknown rather than silently becoming
+	//a valid piece.
+	public static function pieceTypeFromLoginName(string $name) : int{
+		$shortName = str_starts_with($name, 'persona_') ? substr($name, 8) : $name;
+		return match($shortName){
+			'skeleton' => self::PIECE_TYPE_PERSONA_SKELETON,
+			'body' => self::PIECE_TYPE_PERSONA_BODY,
+			'skin' => self::PIECE_TYPE_PERSONA_SKIN,
+			'bottom' => self::PIECE_TYPE_PERSONA_BOTTOM,
+			'feet' => self::PIECE_TYPE_PERSONA_FEET,
+			'dress' => self::PIECE_TYPE_DRESS,
+			'top' => self::PIECE_TYPE_PERSONA_TOP,
+			'high_pants' => self::PIECE_TYPE_HIGH_PANTS,
+			'hand', 'hands' => self::PIECE_TYPE_HANDS,
+			'outerwear' => self::PIECE_TYPE_OUTERWEAR,
+			'facial_hair' => self::PIECE_TYPE_PERSONA_FACIAL_HAIR,
+			'mouth' => self::PIECE_TYPE_PERSONA_MOUTH,
+			'eyes' => self::PIECE_TYPE_PERSONA_EYES,
+			'hair' => self::PIECE_TYPE_PERSONA_HAIR,
+			'hood' => self::PIECE_TYPE_HOOD,
+			'back' => self::PIECE_TYPE_BACK,
+			'face_accessory' => self::PIECE_TYPE_FACE_ACCESSORY,
+			'head' => self::PIECE_TYPE_HEAD,
+			'legs' => self::PIECE_TYPE_LEGS,
+			'left_leg' => self::PIECE_TYPE_LEFT_LEG,
+			'right_leg' => self::PIECE_TYPE_RIGHT_LEG,
+			'arms' => self::PIECE_TYPE_ARMS,
+			'left_arm' => self::PIECE_TYPE_LEFT_ARM,
+			'right_arm' => self::PIECE_TYPE_RIGHT_ARM,
+			'capes' => self::PIECE_TYPE_CAPES,
+			'classic_skin' => self::PIECE_TYPE_CLASSIC_SKIN,
+			'emote' => self::PIECE_TYPE_EMOTE,
+			'unsupported' => self::PIECE_TYPE_UNSUPPORTED,
+			default => self::PIECE_TYPE_UNKNOWN
+		};
+	}
 
 	public function __construct(
 		private string $pieceId,

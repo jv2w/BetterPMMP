@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
@@ -20,6 +22,7 @@ final class GameRuleType{
 		//NOOP
 	}
 
+	public const EMPTY = 0;
 	public const BOOL = 1;
 	public const INT = 2;
 	public const FLOAT = 3;

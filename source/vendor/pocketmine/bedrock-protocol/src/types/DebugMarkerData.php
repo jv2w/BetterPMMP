@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
@@ -20,6 +22,7 @@ use pmmp\encoding\LE;
 use pocketmine\color\Color;
 use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+use function round;
 
 final class DebugMarkerData{
 
@@ -41,7 +44,12 @@ final class DebugMarkerData{
 	public static function read(ByteBufferReader $in) : self{
 		$text = CommonTypes::getString($in);
 		$position = CommonTypes::getVector3($in);
-		$color = Color::fromARGB(LE::readUnsignedInt($in));
+		//unlike every other colour on the wire, this one is four normalised 0-1 channels
+		$red = LE::readFloat($in);
+		$green = LE::readFloat($in);
+		$blue = LE::readFloat($in);
+		$alpha = LE::readFloat($in);
+		$color = new Color((int) round($red * 255), (int) round($green * 255), (int) round($blue * 255), (int) round($alpha * 255));
 		$durationMillis = LE::readUnsignedLong($in);
 
 		return new self(
@@ -55,7 +63,10 @@ final class DebugMarkerData{
 	public function write(ByteBufferWriter $out) : void{
 		CommonTypes::putString($out, $this->text);
 		CommonTypes::putVector3($out, $this->position);
-		LE::writeUnsignedInt($out, $this->color->toARGB());
+		LE::writeFloat($out, $this->color->getR() / 255);
+		LE::writeFloat($out, $this->color->getG() / 255);
+		LE::writeFloat($out, $this->color->getB() / 255);
+		LE::writeFloat($out, $this->color->getA() / 255);
 		LE::writeUnsignedLong($out, $this->durationMillis);
 	}
 }

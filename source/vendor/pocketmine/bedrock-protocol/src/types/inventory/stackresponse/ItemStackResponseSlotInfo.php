@@ -19,7 +19,6 @@ namespace pocketmine\network\mcpe\protocol\types\inventory\stackresponse;
 use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
-use pmmp\encoding\DataDecodeException;
 use pmmp\encoding\VarInt;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 
@@ -67,8 +66,6 @@ final class ItemStackResponseSlotInfo{
 		//for a stack the server hasn't assigned an ID to
 		CommonTypes::putBool($out, true);
 		CommonTypes::writeOptional($out, $this->itemStackId > 0 ? $this->itemStackId : null, CommonTypes::writeServerItemStackId(...));
-		//the encoding of a populated name is unknown: 1.26.40 clients crash on every framing tried, so the
-		//server never sends one (see ItemStackResponseBuilder). An empty name is a bare zero either way.
 		CommonTypes::putString($out, $this->customName);
 		CommonTypes::putString($out, $this->filteredCustomName);
 		VarInt::writeSignedInt($out, $this->durabilityCorrection);

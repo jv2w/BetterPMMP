@@ -61,7 +61,7 @@ final class ClientDataToSkinDataHelper{
 		}
 		return new SkinData(
 			$clientData->SkinId,
-			"",
+			$clientData->PlayFabId,
 			self::safeB64Decode($clientData->SkinResourcePatch, "SkinResourcePatch"),
 			new SkinImage($clientData->SkinImageHeight, $clientData->SkinImageWidth, self::safeB64Decode($clientData->SkinData, "SkinData")),
 			$animations,
@@ -76,7 +76,7 @@ final class ClientDataToSkinDataHelper{
 			array_map(function(ClientDataPersonaSkinPiece $piece) : PersonaSkinPiece{
 				return new PersonaSkinPiece(
 					$piece->PieceId,
-					(int) $piece->PieceType,
+					PersonaSkinPiece::pieceTypeFromLoginName($piece->PieceType),
 					Uuid::isValid($piece->PackId) ? Uuid::fromString($piece->PackId) : Uuid::fromInteger("0"),
 					$piece->IsDefault,
 					$piece->ProductId
@@ -92,7 +92,7 @@ final class ClientDataToSkinDataHelper{
 			$clientData->CapeOnClassicSkin,
 			true, //assume this is true? there's no field for it ...
 			$clientData->OverrideSkin ?? true,
-			$clientData->TrustedSkin ? SkinData::TRUSTED_SKIN_FLAG_TRUE : SkinData::TRUSTED_SKIN_FLAG_UNSET,
+			$clientData->TrustedSkin ? SkinData::TRUSTED_SKIN_FLAG_TRUE : SkinData::TRUSTED_SKIN_FLAG_FALSE,
 			$clientData->ProfileHash,
 		);
 	}

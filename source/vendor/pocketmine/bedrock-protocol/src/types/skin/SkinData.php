@@ -138,7 +138,10 @@ class SkinData{
 			return 0;
 		}
 
-		return (int) \hexdec($hex);
+		//login JSON gives the skin colour as RGB but tint colours as ARGB, so an RGB value would otherwise
+		//ship with a zero alpha byte and render fully transparent.
+		$value = (int) \hexdec($hex);
+		return \strlen($hex) <= 6 ? $value | 0xff000000 : $value;
 	}
 
 	/**

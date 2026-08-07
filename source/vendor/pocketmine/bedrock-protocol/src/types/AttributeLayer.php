@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types;
@@ -54,7 +56,7 @@ final class AttributeLayer{
 	public static function read(ByteBufferReader $in) : self{
 		$name = CommonTypes::getString($in);
 		$noiseName = CommonTypes::readOptional($in, CommonTypes::getString(...));
-		$dimension = VarInt::readUnsignedInt($in);
+		$dimension = VarInt::readSignedInt($in);
 		$settings = AttributeLayerSettings::read($in);
 
 		$attributes = [];
@@ -74,7 +76,7 @@ final class AttributeLayer{
 	public function write(ByteBufferWriter $out) : void{
 		CommonTypes::putString($out, $this->name);
 		CommonTypes::writeOptional($out, $this->name, CommonTypes::putString(...));
-		VarInt::writeUnsignedInt($out, $this->dimension);
+		VarInt::writeSignedInt($out, $this->dimension);
 		$this->settings->write($out);
 
 		VarInt::writeUnsignedInt($out, count($this->attributes));

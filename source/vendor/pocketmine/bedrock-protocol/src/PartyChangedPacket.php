@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol;
@@ -21,31 +23,39 @@ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 class PartyChangedPacket extends DataPacket implements ServerboundPacket{
 	public const NETWORK_ID = ProtocolInfo::PARTY_CHANGED_PACKET;
 
-	private string $partyId;
+	//the whole party info is optional: the client sends this packet with nothing attached when it leaves a party
+	private ?string $partyId;
 	private bool $partyLeader;
 
 	/**
 	 * @generate-create-func
 	 */
-	public static function create(string $partyId, bool $partyLeader) : self{
+	public static function create(?string $partyId, bool $partyLeader) : self{
 		$result = new self;
 		$result->partyId = $partyId;
 		$result->partyLeader = $partyLeader;
 		return $result;
 	}
 
-	public function getPartyId() : string{ return $this->partyId; }
+	public function getPartyId() : ?string{ return $this->partyId; }
 
 	public function isPartyLeader() : bool{ return $this->partyLeader; }
 
 	protected function decodePayload(ByteBufferReader $in) : void{
-		$this->partyId = CommonTypes::getString($in);
-		$this->partyLeader = CommonTypes::getBool($in);
+		$this->partyId = null;
+		$this->partyLeader = false;
+		if(CommonTypes::getBool($in)){
+			$this->partyId = CommonTypes::getString($in);
+			$this->partyLeader = CommonTypes::getBool($in);
+		}
 	}
 
 	protected function encodePayload(ByteBufferWriter $out) : void{
-		CommonTypes::putString($out, $this->partyId);
-		CommonTypes::putBool($out, $this->partyLeader);
+		CommonTypes::putBool($out, $this->partyId !== null);
+		if($this->partyId !== null){
+			CommonTypes::putString($out, $this->partyId);
+			CommonTypes::putBool($out, $this->partyLeader);
+		}
 	}
 
 	public function handle(PacketHandlerInterface $handler) : bool{

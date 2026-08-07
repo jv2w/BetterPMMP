@@ -10,6 +10,8 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\entity;
@@ -147,6 +149,9 @@ final class EntityMetadataFlags{
 	public const CAN_USE_VERTICAL_MOVEMENT_ACTION = 125;
 	public const ROTATION_LOCKED_TO_VEHICLE = 126;
 	public const USES_LEGACY_FRICTION = 127;
+	public const USES_UNIFORM_AIR_DRAG = 128;
+	public const NAMEPLATE_DEPTH_TESTED = 129;
+	public const NOT_PICKABLE_FROM_INSIDE = 130;
 
-	public const NUMBER_OF_FLAGS = 128;
+	public const NUMBER_OF_FLAGS = 131;
 }

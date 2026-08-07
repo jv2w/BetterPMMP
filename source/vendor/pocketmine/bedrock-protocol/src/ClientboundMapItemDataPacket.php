@@ -28,7 +28,6 @@ use pocketmine\network\mcpe\protocol\types\DimensionIds;
 use pocketmine\network\mcpe\protocol\types\MapDecoration;
 use pocketmine\network\mcpe\protocol\types\MapImage;
 use pocketmine\network\mcpe\protocol\types\MapTrackedObject;
-use pocketmine\utils\Binary;
 use function count;
 
 class ClientboundMapItemDataPacket extends DataPacket implements ClientboundPacket{
@@ -84,7 +83,7 @@ class ClientboundMapItemDataPacket extends DataPacket implements ClientboundPack
 				$xOffset = Byte::readUnsigned($in);
 				$yOffset = Byte::readUnsigned($in);
 				$label = CommonTypes::getString($in);
-				$color = Color::fromRGBA(Binary::flipIntEndianness(LE::readUnsignedInt($in)));
+				$color = Color::fromARGB(LE::readUnsignedInt($in));
 				$decorations[] = new MapDecoration($icon, $rotation, $xOffset, $yOffset, $label, $color);
 			}
 			return $decorations;
@@ -131,7 +130,7 @@ class ClientboundMapItemDataPacket extends DataPacket implements ClientboundPack
 				Byte::writeUnsigned($out, $decoration->getXOffset());
 				Byte::writeUnsigned($out, $decoration->getYOffset());
 				CommonTypes::putString($out, $decoration->getLabel());
-				LE::writeUnsignedInt($out, Binary::flipIntEndianness($decoration->getColor()->toRGBA()));
+				LE::writeUnsignedInt($out, $decoration->getColor()->toARGB());
 			}
 		});
 		CommonTypes::writeOptional($out, $this->colors?->getWidth(), VarInt::writeSignedInt(...));

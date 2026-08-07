@@ -10,11 +10,12 @@
  * (at your option) any later version.
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\camera;
 
-use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\LE;
@@ -40,7 +41,7 @@ final class CameraPresetAimAssist{
 
 	public static function read(ByteBufferReader $in) : self{
 		$presetId = CommonTypes::readOptional($in, CommonTypes::getString(...));
-		$targetMode = CommonTypes::readOptional($in, fn() => CameraAimAssistTargetMode::fromPacket(Byte::readUnsigned($in)));
+		$targetMode = CommonTypes::readOptional($in, fn() => CameraAimAssistTargetMode::fromPacket(LE::readSignedInt($in)));
 		$viewAngle = CommonTypes::readOptional($in, CommonTypes::getVector2(...));
 		$distance = CommonTypes::readOptional($in, LE::readFloat(...));
 
@@ -54,7 +55,7 @@ final class CameraPresetAimAssist{
 
 	public function write(ByteBufferWriter $out) : void{
 		CommonTypes::writeOptional($out, $this->presetId, CommonTypes::putString(...));
-		CommonTypes::writeOptional($out, $this->targetMode, fn(ByteBufferWriter $out, CameraAimAssistTargetMode $v) => Byte::writeUnsigned($out, $v->value));
+		CommonTypes::writeOptional($out, $this->targetMode, fn(ByteBufferWriter $out, CameraAimAssistTargetMode $v) => LE::writeSignedInt($out, $v->value));
 		CommonTypes::writeOptional($out, $this->viewAngle, CommonTypes::putVector2(...));
 		CommonTypes::writeOptional($out, $this->distance, LE::writeFloat(...));
 	}
