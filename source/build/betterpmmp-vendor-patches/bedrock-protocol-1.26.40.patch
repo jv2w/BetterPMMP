@@ -49,8 +49,40 @@ index 416f76b..5f7cf2b 100644
  		CommonTypes::putBlockPosition($out, $this->blockPosition);
  	}
  
+diff --git a/src/ClientboundDebugRendererPacket.php b/src/ClientboundDebugRendererPacket.php
+index 7008f87..28591f0 100644
+--- a/src/ClientboundDebugRendererPacket.php
++++ b/src/ClientboundDebugRendererPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -47,13 +49,16 @@ class ClientboundDebugRendererPacket extends DataPacket implements ClientboundPa
+ 	public function getData() : ?DebugMarkerData{ return $this->data; }
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
++		//the type string alone decides whether a body follows; there is no presence flag
+ 		$this->type = CommonTypes::getString($in);
+-		$this->data = CommonTypes::readOptional($in, DebugMarkerData::read(...));
++		$this->data = $this->type === self::TYPE_ADD_CUBE ? DebugMarkerData::read($in) : null;
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+ 		CommonTypes::putString($out, $this->type);
+-		CommonTypes::writeOptional($out, $this->data, fn(ByteBufferWriter $out, DebugMarkerData $data) => $data->write($out));
++		if($this->type === self::TYPE_ADD_CUBE && $this->data !== null){
++			$this->data->write($out);
++		}
+ 	}
+ 
+ 	public function handle(PacketHandlerInterface $handler) : bool{
 diff --git a/src/ClientboundMapItemDataPacket.php b/src/ClientboundMapItemDataPacket.php
-index 72914fe..4b412ea 100644
+index 72914fe..851ede9 100644
 --- a/src/ClientboundMapItemDataPacket.php
 +++ b/src/ClientboundMapItemDataPacket.php
 @@ -10,6 +10,8 @@
@@ -62,7 +94,13 @@ index 72914fe..4b412ea 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol;
-@@ -32,151 +34,114 @@ use function count;
+@@ -26,157 +28,119 @@ use pocketmine\network\mcpe\protocol\types\DimensionIds;
+ use pocketmine\network\mcpe\protocol\types\MapDecoration;
+ use pocketmine\network\mcpe\protocol\types\MapImage;
+ use pocketmine\network\mcpe\protocol\types\MapTrackedObject;
+-use pocketmine\utils\Binary;
+ use function count;
+ 
  class ClientboundMapItemDataPacket extends DataPacket implements ClientboundPacket{
  	public const NETWORK_ID = ProtocolInfo::CLIENTBOUND_MAP_ITEM_DATA_PACKET;
  
@@ -155,7 +193,7 @@ index 72914fe..4b412ea 100644
  				$label = CommonTypes::getString($in);
 -				$color = Color::fromRGBA(Binary::flipIntEndianness(VarInt::readUnsignedInt($in)));
 -				$this->decorations[] = new MapDecoration($icon, $rotation, $xOffset, $yOffset, $label, $color);
-+				$color = Color::fromRGBA(Binary::flipIntEndianness(LE::readUnsignedInt($in)));
++				$color = Color::fromARGB(LE::readUnsignedInt($in));
 +				$decorations[] = new MapDecoration($icon, $rotation, $xOffset, $yOffset, $label, $color);
  			}
 -		}
@@ -252,7 +290,7 @@ index 72914fe..4b412ea 100644
  				Byte::writeUnsigned($out, $decoration->getYOffset());
  				CommonTypes::putString($out, $decoration->getLabel());
 -				VarInt::writeUnsignedInt($out, Binary::flipIntEndianness($decoration->getColor()->toRGBA()));
-+				LE::writeUnsignedInt($out, Binary::flipIntEndianness($decoration->getColor()->toRGBA()));
++				LE::writeUnsignedInt($out, $decoration->getColor()->toARGB());
  			}
 -		}
 -
@@ -275,6 +313,100 @@ index 72914fe..4b412ea 100644
 +			VarInt::writeUnsignedInt($out, $colors->getWidth() * $colors->getHeight());
 +			$colors->encode($out);
 +		});
+ 	}
+ 
+ 	public function handle(PacketHandlerInterface $handler) : bool{
+diff --git a/src/ClientboundUpdateSoundDataPacket.php b/src/ClientboundUpdateSoundDataPacket.php
+index 72ed52e..145b68b 100644
+--- a/src/ClientboundUpdateSoundDataPacket.php
++++ b/src/ClientboundUpdateSoundDataPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -18,35 +20,74 @@ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\LE;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
++use pocketmine\network\mcpe\protocol\types\SoundDataUpdate;
+ 
+ class ClientboundUpdateSoundDataPacket extends DataPacket implements ClientboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::CLIENTBOUND_UPDATE_SOUND_DATA_PACKET;
+ 
+ 	private int $serverSoundHandle;
+-	private string $soundEvent;
++	//each slot is a union that may hold any update variant; the slot name does not constrain what it carries
++	private ?SoundDataUpdate $stop;
++	private ?SoundDataUpdate $setVolume;
++	private ?SoundDataUpdate $setPitch;
++	private ?SoundDataUpdate $fade;
++	private ?SoundDataUpdate $seekTo;
++	private ?SoundDataUpdate $pause;
++	private ?SoundDataUpdate $resume;
+ 
+ 	/**
+ 	 * @generate-create-func
+ 	 */
+-	public static function create(int $serverSoundHandle, string $soundEvent) : self{
++	public static function create(int $serverSoundHandle, ?SoundDataUpdate $stop, ?SoundDataUpdate $setVolume, ?SoundDataUpdate $setPitch, ?SoundDataUpdate $fade, ?SoundDataUpdate $seekTo, ?SoundDataUpdate $pause, ?SoundDataUpdate $resume) : self{
+ 		$result = new self;
+ 		$result->serverSoundHandle = $serverSoundHandle;
+-		$result->soundEvent = $soundEvent;
++		$result->stop = $stop;
++		$result->setVolume = $setVolume;
++		$result->setPitch = $setPitch;
++		$result->fade = $fade;
++		$result->seekTo = $seekTo;
++		$result->pause = $pause;
++		$result->resume = $resume;
+ 		return $result;
+ 	}
+ 
+ 	public function getServerSoundHandle() : int{ return $this->serverSoundHandle; }
+ 
+-	public function getSoundEvent() : string{ return $this->soundEvent; }
++	public function getStop() : ?SoundDataUpdate{ return $this->stop; }
++
++	public function getSetVolume() : ?SoundDataUpdate{ return $this->setVolume; }
++
++	public function getSetPitch() : ?SoundDataUpdate{ return $this->setPitch; }
++
++	public function getFade() : ?SoundDataUpdate{ return $this->fade; }
++
++	public function getSeekTo() : ?SoundDataUpdate{ return $this->seekTo; }
++
++	public function getPause() : ?SoundDataUpdate{ return $this->pause; }
++
++	public function getResume() : ?SoundDataUpdate{ return $this->resume; }
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+ 		$this->serverSoundHandle = LE::readUnsignedLong($in);
+-		$this->soundEvent = CommonTypes::getString($in);
++		$this->stop = CommonTypes::readOptional($in, SoundDataUpdate::read(...));
++		$this->setVolume = CommonTypes::readOptional($in, SoundDataUpdate::read(...));
++		$this->setPitch = CommonTypes::readOptional($in, SoundDataUpdate::read(...));
++		$this->fade = CommonTypes::readOptional($in, SoundDataUpdate::read(...));
++		$this->seekTo = CommonTypes::readOptional($in, SoundDataUpdate::read(...));
++		$this->pause = CommonTypes::readOptional($in, SoundDataUpdate::read(...));
++		$this->resume = CommonTypes::readOptional($in, SoundDataUpdate::read(...));
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+ 		LE::writeUnsignedLong($out, $this->serverSoundHandle);
+-		CommonTypes::putString($out, $this->soundEvent);
++		$writer = fn(ByteBufferWriter $out, SoundDataUpdate $v) => $v->write($out);
++		CommonTypes::writeOptional($out, $this->stop, $writer);
++		CommonTypes::writeOptional($out, $this->setVolume, $writer);
++		CommonTypes::writeOptional($out, $this->setPitch, $writer);
++		CommonTypes::writeOptional($out, $this->fade, $writer);
++		CommonTypes::writeOptional($out, $this->seekTo, $writer);
++		CommonTypes::writeOptional($out, $this->pause, $writer);
++		CommonTypes::writeOptional($out, $this->resume, $writer);
  	}
  
  	public function handle(PacketHandlerInterface $handler) : bool{
@@ -726,6 +858,66 @@ index 2c6b9fb..1fff554 100644
  			LE::writeSignedInt($out, $this->teleportCause);
  			LE::writeSignedInt($out, $this->teleportItem);
  		}
+diff --git a/src/PartyChangedPacket.php b/src/PartyChangedPacket.php
+index 9ce23e0..a0dfebf 100644
+--- a/src/PartyChangedPacket.php
++++ b/src/PartyChangedPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -21,31 +23,39 @@ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ class PartyChangedPacket extends DataPacket implements ServerboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::PARTY_CHANGED_PACKET;
+ 
+-	private string $partyId;
++	//the whole party info is optional: the client sends this packet with nothing attached when it leaves a party
++	private ?string $partyId;
+ 	private bool $partyLeader;
+ 
+ 	/**
+ 	 * @generate-create-func
+ 	 */
+-	public static function create(string $partyId, bool $partyLeader) : self{
++	public static function create(?string $partyId, bool $partyLeader) : self{
+ 		$result = new self;
+ 		$result->partyId = $partyId;
+ 		$result->partyLeader = $partyLeader;
+ 		return $result;
+ 	}
+ 
+-	public function getPartyId() : string{ return $this->partyId; }
++	public function getPartyId() : ?string{ return $this->partyId; }
+ 
+ 	public function isPartyLeader() : bool{ return $this->partyLeader; }
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+-		$this->partyId = CommonTypes::getString($in);
+-		$this->partyLeader = CommonTypes::getBool($in);
++		$this->partyId = null;
++		$this->partyLeader = false;
++		if(CommonTypes::getBool($in)){
++			$this->partyId = CommonTypes::getString($in);
++			$this->partyLeader = CommonTypes::getBool($in);
++		}
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+-		CommonTypes::putString($out, $this->partyId);
+-		CommonTypes::putBool($out, $this->partyLeader);
++		CommonTypes::putBool($out, $this->partyId !== null);
++		if($this->partyId !== null){
++			CommonTypes::putString($out, $this->partyId);
++			CommonTypes::putBool($out, $this->partyLeader);
++		}
+ 	}
+ 
+ 	public function handle(PacketHandlerInterface $handler) : bool{
 diff --git a/src/PlaySoundPacket.php b/src/PlaySoundPacket.php
 index 1d2b819..226f18f 100644
 --- a/src/PlaySoundPacket.php
@@ -772,7 +964,7 @@ index 1d2b819..226f18f 100644
  	}
  
 diff --git a/src/PlayerAuthInputPacket.php b/src/PlayerAuthInputPacket.php
-index 6afdc4d..8f6872a 100644
+index 6afdc4d..dcb2937 100644
 --- a/src/PlayerAuthInputPacket.php
 +++ b/src/PlayerAuthInputPacket.php
 @@ -10,6 +10,8 @@
@@ -841,7 +1033,7 @@ index 6afdc4d..8f6872a 100644
  
  	public function getAnalogMoveVecX() : float{ return $this->analogMoveVecX; }
  
-@@ -271,34 +271,38 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+@@ -271,34 +271,36 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
  		$this->moveVecX = LE::readFloat($in);
  		$this->moveVecZ = LE::readFloat($in);
  		$this->headYaw = LE::readFloat($in);
@@ -879,13 +1071,14 @@ index 6afdc4d..8f6872a 100644
 +			$blockActions = [];
 +			$max = VarInt::readUnsignedInt($in);
  			for($i = 0; $i < $max; ++$i){
++				//the frame is self-describing, so an action type this build does not know still parses
  				$actionType = VarInt::readSignedInt($in);
 -				$this->blockActions[] = match(true){
-+				$blockActions[] = match(true){
- 					PlayerBlockActionWithBlockInfo::isValidActionType($actionType) => PlayerBlockActionWithBlockInfo::read($in, $actionType),
+-					PlayerBlockActionWithBlockInfo::isValidActionType($actionType) => PlayerBlockActionWithBlockInfo::read($in, $actionType),
 -					$actionType === PlayerAction::STOP_BREAK => new PlayerBlockActionStopBreak(),
- 					default => throw new PacketDecodeException("Unexpected block action type $actionType")
- 				};
+-					default => throw new PacketDecodeException("Unexpected block action type $actionType")
+-				};
++				$blockActions[] = PlayerBlockActionWithBlockInfo::read($in, $actionType);
  			}
 -		}
 -		if($this->inputFlags->get(PlayerAuthInputFlags::IN_CLIENT_PREDICTED_VEHICLE)){
@@ -897,7 +1090,7 @@ index 6afdc4d..8f6872a 100644
  		$this->analogMoveVecX = LE::readFloat($in);
  		$this->analogMoveVecZ = LE::readFloat($in);
  		$this->cameraOrientation = CommonTypes::getVector3($in);
-@@ -312,29 +316,34 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
+@@ -312,29 +314,34 @@ class PlayerAuthInputPacket extends DataPacket implements ServerboundPacket{
  		LE::writeFloat($out, $this->moveVecX);
  		LE::writeFloat($out, $this->moveVecZ);
  		LE::writeFloat($out, $this->headYaw);
@@ -1107,7 +1300,7 @@ index 28d5a59..d1da9c4 100644
  		if($this->type === PlayerLocationType::PLAYER_LOCATION_COORDINATES){
  			if($this->position === null){ // this should never be the case
 diff --git a/src/PlayerSkinPacket.php b/src/PlayerSkinPacket.php
-index e4e35ab..557c480 100644
+index e4e35ab..025d086 100644
 --- a/src/PlayerSkinPacket.php
 +++ b/src/PlayerSkinPacket.php
 @@ -10,6 +10,8 @@
@@ -1119,26 +1312,115 @@ index e4e35ab..557c480 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol;
-@@ -43,17 +45,15 @@ class PlayerSkinPacket extends DataPacket implements ClientboundPacket, Serverbo
- 	protected function decodePayload(ByteBufferReader $in) : void{
- 		$this->uuid = CommonTypes::getUUID($in);
+@@ -45,7 +47,6 @@ class PlayerSkinPacket extends DataPacket implements ClientboundPacket, Serverbo
  		$this->skin = CommonTypes::getSkin($in);
--		$this->newSkinName = CommonTypes::getString($in);
+ 		$this->newSkinName = CommonTypes::getString($in);
  		$this->oldSkinName = CommonTypes::getString($in);
 -		$this->skin->setVerified(CommonTypes::getBool($in));
-+		$this->newSkinName = CommonTypes::getString($in);
  	}
  
  	protected function encodePayload(ByteBufferWriter $out) : void{
- 		CommonTypes::putUUID($out, $this->uuid);
+@@ -53,7 +54,6 @@ class PlayerSkinPacket extends DataPacket implements ClientboundPacket, Serverbo
  		CommonTypes::putSkin($out, $this->skin);
--		CommonTypes::putString($out, $this->newSkinName);
+ 		CommonTypes::putString($out, $this->newSkinName);
  		CommonTypes::putString($out, $this->oldSkinName);
 -		CommonTypes::putBool($out, $this->skin->isVerified());
-+		CommonTypes::putString($out, $this->newSkinName);
  	}
  
  	public function handle(PacketHandlerInterface $handler) : bool{
+diff --git a/src/PlayerUpdateEntityOverridesPacket.php b/src/PlayerUpdateEntityOverridesPacket.php
+index fba7b48..4889881 100644
+--- a/src/PlayerUpdateEntityOverridesPacket.php
++++ b/src/PlayerUpdateEntityOverridesPacket.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol;
+@@ -25,7 +27,7 @@ use pocketmine\network\mcpe\protocol\types\OverrideUpdateType;
+ class PlayerUpdateEntityOverridesPacket extends DataPacket implements ClientboundPacket{
+ 	public const NETWORK_ID = ProtocolInfo::PLAYER_UPDATE_ENTITY_OVERRIDES_PACKET;
+ 
+-	private int $actorRuntimeId;
++	private int $actorUniqueId;
+ 	private int $propertyIndex;
+ 	private OverrideUpdateType $updateType;
+ 	private ?int $intOverrideValue;
+@@ -34,9 +36,9 @@ class PlayerUpdateEntityOverridesPacket extends DataPacket implements Clientboun
+ 	/**
+ 	 * @generate-create-func
+ 	 */
+-	private static function create(int $actorRuntimeId, int $propertyIndex, OverrideUpdateType $updateType, ?int $intOverrideValue, ?float $floatOverrideValue) : self{
++	private static function create(int $actorUniqueId, int $propertyIndex, OverrideUpdateType $updateType, ?int $intOverrideValue, ?float $floatOverrideValue) : self{
+ 		$result = new self;
+-		$result->actorRuntimeId = $actorRuntimeId;
++		$result->actorUniqueId = $actorUniqueId;
+ 		$result->propertyIndex = $propertyIndex;
+ 		$result->updateType = $updateType;
+ 		$result->intOverrideValue = $intOverrideValue;
+@@ -44,23 +46,23 @@ class PlayerUpdateEntityOverridesPacket extends DataPacket implements Clientboun
+ 		return $result;
+ 	}
+ 
+-	public static function createIntOverride(int $actorRuntimeId, int $propertyIndex, int $value) : self{
+-		return self::create($actorRuntimeId, $propertyIndex, OverrideUpdateType::SET_INT_OVERRIDE, $value, null);
++	public static function createIntOverride(int $actorUniqueId, int $propertyIndex, int $value) : self{
++		return self::create($actorUniqueId, $propertyIndex, OverrideUpdateType::SET_INT_OVERRIDE, $value, null);
+ 	}
+ 
+-	public static function createFloatOverride(int $actorRuntimeId, int $propertyIndex, float $value) : self{
+-		return self::create($actorRuntimeId, $propertyIndex, OverrideUpdateType::SET_FLOAT_OVERRIDE, null, $value);
++	public static function createFloatOverride(int $actorUniqueId, int $propertyIndex, float $value) : self{
++		return self::create($actorUniqueId, $propertyIndex, OverrideUpdateType::SET_FLOAT_OVERRIDE, null, $value);
+ 	}
+ 
+-	public static function createClearOverrides(int $actorRuntimeId, int $propertyIndex) : self{
+-		return self::create($actorRuntimeId, $propertyIndex, OverrideUpdateType::CLEAR_OVERRIDES, null, null);
++	public static function createClearOverrides(int $actorUniqueId, int $propertyIndex) : self{
++		return self::create($actorUniqueId, $propertyIndex, OverrideUpdateType::CLEAR_OVERRIDES, null, null);
+ 	}
+ 
+-	public static function createRemoveOverride(int $actorRuntimeId, int $propertyIndex) : self{
+-		return self::create($actorRuntimeId, $propertyIndex, OverrideUpdateType::REMOVE_OVERRIDE, null, null);
++	public static function createRemoveOverride(int $actorUniqueId, int $propertyIndex) : self{
++		return self::create($actorUniqueId, $propertyIndex, OverrideUpdateType::REMOVE_OVERRIDE, null, null);
+ 	}
+ 
+-	public function getActorRuntimeId() : int{ return $this->actorRuntimeId; }
++	public function getActorUniqueId() : int{ return $this->actorUniqueId; }
+ 
+ 	public function getPropertyIndex() : int{ return $this->propertyIndex; }
+ 
+@@ -71,9 +73,13 @@ class PlayerUpdateEntityOverridesPacket extends DataPacket implements Clientboun
+ 	public function getFloatOverrideValue() : ?float{ return $this->floatOverrideValue; }
+ 
+ 	protected function decodePayload(ByteBufferReader $in) : void{
+-		$this->actorRuntimeId = CommonTypes::getActorRuntimeId($in);
++		$this->actorUniqueId = CommonTypes::getActorUniqueId($in);
+ 		$this->propertyIndex = VarInt::readUnsignedInt($in);
++		$variant = VarInt::readUnsignedInt($in);
+ 		$this->updateType = OverrideUpdateType::fromPacket(Byte::readUnsigned($in));
++		if($variant !== $this->updateType->value){
++			throw new PacketDecodeException("Update type variant {$variant} does not match type {$this->updateType->value}");
++		}
+ 		if($this->updateType === OverrideUpdateType::SET_INT_OVERRIDE){
+ 			$this->intOverrideValue = LE::readSignedInt($in);
+ 		}elseif($this->updateType === OverrideUpdateType::SET_FLOAT_OVERRIDE){
+@@ -82,8 +88,9 @@ class PlayerUpdateEntityOverridesPacket extends DataPacket implements Clientboun
+ 	}
+ 
+ 	protected function encodePayload(ByteBufferWriter $out) : void{
+-		CommonTypes::putActorRuntimeId($out, $this->actorRuntimeId);
++		CommonTypes::putActorUniqueId($out, $this->actorUniqueId);
+ 		VarInt::writeUnsignedInt($out, $this->propertyIndex);
++		VarInt::writeUnsignedInt($out, $this->updateType->value);
+ 		Byte::writeUnsigned($out, $this->updateType->value);
+ 		if($this->updateType === OverrideUpdateType::SET_INT_OVERRIDE){
+ 			if($this->intOverrideValue === null){ // this should never be the case
 diff --git a/src/ProtocolInfo.php b/src/ProtocolInfo.php
 index 340f9bc..26a6222 100644
 --- a/src/ProtocolInfo.php
@@ -1713,7 +1995,7 @@ index 840e50e..946d127 100644
  
  	public function handle(PacketHandlerInterface $handler) : bool{
 diff --git a/src/serializer/CommonTypes.php b/src/serializer/CommonTypes.php
-index ca0a11f..135ac54 100644
+index ca0a11f..dc7c2ca 100644
 --- a/src/serializer/CommonTypes.php
 +++ b/src/serializer/CommonTypes.php
 @@ -10,6 +10,8 @@
@@ -1725,7 +2007,15 @@ index ca0a11f..135ac54 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\serializer;
-@@ -45,8 +47,6 @@ use pocketmine\network\mcpe\protocol\types\GameRule;
+@@ -28,6 +30,7 @@ use pocketmine\nbt\TreeRoot;
+ use pocketmine\network\mcpe\protocol\PacketDecodeException;
+ use pocketmine\network\mcpe\protocol\types\BlockPosition;
+ use pocketmine\network\mcpe\protocol\types\BoolGameRule;
++use pocketmine\network\mcpe\protocol\types\EmptyGameRule;
+ use pocketmine\network\mcpe\protocol\types\command\CommandOriginData;
+ use pocketmine\network\mcpe\protocol\types\entity\BlockPosMetadataProperty;
+ use pocketmine\network\mcpe\protocol\types\entity\ByteMetadataProperty;
+@@ -45,8 +48,6 @@ use pocketmine\network\mcpe\protocol\types\GameRule;
  use pocketmine\network\mcpe\protocol\types\IntGameRule;
  use pocketmine\network\mcpe\protocol\types\inventory\ItemStack;
  use pocketmine\network\mcpe\protocol\types\inventory\ItemStackWrapper;
@@ -1734,7 +2024,38 @@ index ca0a11f..135ac54 100644
  use pocketmine\network\mcpe\protocol\types\recipe\ItemDescriptorType;
  use pocketmine\network\mcpe\protocol\types\recipe\MolangItemDescriptor;
  use pocketmine\network\mcpe\protocol\types\recipe\RecipeIngredient;
-@@ -111,13 +111,13 @@ final class CommonTypes{
+@@ -62,6 +63,7 @@ use pocketmine\network\mcpe\protocol\types\StructureSettings;
+ use Ramsey\Uuid\Uuid;
+ use Ramsey\Uuid\UuidInterface;
+ use function count;
++use function str_starts_with;
+ use function strlen;
+ use function strrev;
+ use function substr;
+@@ -105,19 +107,36 @@ final class CommonTypes{
+ 		$out->writeByteArray(strrev(substr($bytes, 8, 8)));
+ 	}
+ 
++	//the skin codec shortens the persona_* tint piece names the client uses in its login JSON, and makes
++	//the hands type plural. Echoing back the login spelling leaves the client unable to resolve the piece.
++	private static function personaPieceTintWireType(string $pieceType) : string{
++		if($pieceType === 'persona_hand'){
++			return 'hands';
++		}
++		return str_starts_with($pieceType, 'persona_') ? substr($pieceType, 8) : $pieceType;
++	}
++
++	private static function personaPieceTintLoginType(string $pieceType) : string{
++		return match($pieceType){
++			'hands' => 'persona_hand',
++			'unsupported' => $pieceType,
++			default => "persona_{$pieceType}"
++		};
++	}
++
+ 	/** @throws DataDecodeException */
+ 	public static function getSkin(ByteBufferReader $in) : SkinData{
+ 		$skinId = self::getString($in);
  		$skinPlayFabId = self::getString($in);
  		$skinResourcePatch = self::getString($in);
  		$skinData = self::getSkinImage($in);
@@ -1751,7 +2072,7 @@ index ca0a11f..135ac54 100644
  			$animations[] = new SkinAnimation($skinImage, $animationType, $animationFrames, $expressionType);
  		}
  		$capeData = self::getSkinImage($in);
-@@ -126,26 +126,25 @@ final class CommonTypes{
+@@ -126,26 +145,25 @@ final class CommonTypes{
  		$animationData = self::getString($in);
  		$capeId = self::getString($in);
  		$fullSkinId = self::getString($in);
@@ -1776,8 +2097,9 @@ index ca0a11f..135ac54 100644
 +		$pieceTintColorCount = VarInt::readUnsignedInt($in);
  		$pieceTintColors = [];
  		for($i = 0; $i < $pieceTintColorCount; ++$i){
- 			$pieceType = self::getString($in);
+-			$pieceType = self::getString($in);
 -			$colorCount = LE::readUnsignedInt($in);
++			$pieceType = self::personaPieceTintLoginType(self::getString($in));
  			$colors = [];
 -			for($j = 0; $j < $colorCount; ++$j){
 -				$colors[] = self::getString($in);
@@ -1786,7 +2108,7 @@ index ca0a11f..135ac54 100644
  			}
  			$pieceTintColors[] = new PersonaPieceTintColor(
  				$pieceType,
-@@ -158,6 +157,8 @@ final class CommonTypes{
+@@ -158,6 +176,8 @@ final class CommonTypes{
  		$capeOnClassic = self::getBool($in);
  		$isPrimaryUser = self::getBool($in);
  		$override = self::getBool($in);
@@ -1795,7 +2117,7 @@ index ca0a11f..135ac54 100644
  
  		return new SkinData(
  			$skinId,
-@@ -181,6 +182,8 @@ final class CommonTypes{
+@@ -181,6 +201,8 @@ final class CommonTypes{
  			$capeOnClassic,
  			$isPrimaryUser,
  			$override,
@@ -1804,7 +2126,7 @@ index ca0a11f..135ac54 100644
  		);
  	}
  
-@@ -189,12 +192,12 @@ final class CommonTypes{
+@@ -189,12 +211,12 @@ final class CommonTypes{
  		self::putString($out, $skin->getPlayFabId());
  		self::putString($out, $skin->getResourcePatch());
  		self::putSkinImage($out, $skin->getSkinImage());
@@ -1820,7 +2142,7 @@ index ca0a11f..135ac54 100644
  		}
  		self::putSkinImage($out, $skin->getCapeImage());
  		self::putString($out, $skin->getGeometryData());
-@@ -202,22 +205,21 @@ final class CommonTypes{
+@@ -202,22 +224,22 @@ final class CommonTypes{
  		self::putString($out, $skin->getAnimationData());
  		self::putString($out, $skin->getCapeId());
  		self::putString($out, $skin->getFullSkinId());
@@ -1842,15 +2164,18 @@ index ca0a11f..135ac54 100644
 -		LE::writeUnsignedInt($out, count($skin->getPieceTintColors()));
 +		VarInt::writeUnsignedInt($out, count($skin->getPieceTintColors()));
  		foreach($skin->getPieceTintColors() as $tint){
- 			self::putString($out, $tint->getPieceType());
+-			self::putString($out, $tint->getPieceType());
 -			LE::writeUnsignedInt($out, count($tint->getColors()));
- 			foreach($tint->getColors() as $color){
+-			foreach($tint->getColors() as $color){
 -				self::putString($out, $color);
-+				LE::writeSignedInt($out, $color);
++			self::putString($out, self::personaPieceTintWireType($tint->getPieceType()));
++			$colors = $tint->getColors();
++			for($i = 0; $i < 4; ++$i){
++				LE::writeSignedInt($out, $colors[$i] ?? 0);
  			}
  		}
  		self::putBool($out, $skin->isPremium());
-@@ -225,6 +227,8 @@ final class CommonTypes{
+@@ -225,6 +247,8 @@ final class CommonTypes{
  		self::putBool($out, $skin->isPersonaCapeOnClassic());
  		self::putBool($out, $skin->isPrimaryUser());
  		self::putBool($out, $skin->isOverride());
@@ -1859,7 +2184,7 @@ index ca0a11f..135ac54 100644
  	}
  
  	/** @throws DataDecodeException */
-@@ -252,10 +256,6 @@ final class CommonTypes{
+@@ -252,10 +276,6 @@ final class CommonTypes{
  	 */
  	private static function getItemStackHeader(ByteBufferReader $in) : array{
  		$id = VarInt::readSignedInt($in);
@@ -1870,7 +2195,7 @@ index ca0a11f..135ac54 100644
  		$count = LE::readUnsignedShort($in);
  		$meta = VarInt::readUnsignedInt($in);
  
-@@ -265,6 +265,8 @@ final class CommonTypes{
+@@ -265,6 +285,8 @@ final class CommonTypes{
  	private static function putItemStackHeader(ByteBufferWriter $out, ItemStack $itemStack) : bool{
  		if($itemStack->getId() === 0){
  			VarInt::writeSignedInt($out, 0);
@@ -1879,7 +2204,7 @@ index ca0a11f..135ac54 100644
  			return false;
  		}
  
-@@ -294,43 +296,29 @@ final class CommonTypes{
+@@ -294,43 +316,29 @@ final class CommonTypes{
  	 */
  	public static function getItemStackWithoutStackId(ByteBufferReader $in) : ItemStack{
  		[$id, $count, $meta] = self::getItemStackHeader($in);
@@ -1908,10 +2233,10 @@ index ca0a11f..135ac54 100644
 -
 -		$hasNetId = self::getBool($in);
 -		$stackId = $hasNetId ? self::readServerItemStackId($in) : 0;
+-
+-		$itemStack = self::getItemStackFooter($in, $id, $meta, $count);
 +		$wrapper = self::getNetworkItemStackDescriptor($in);
  
--		$itemStack = self::getItemStackFooter($in, $id, $meta, $count);
--
 -		return new ItemStackWrapper($stackId, $itemStack);
 +		return $wrapper->getItemStack()->getId() !== 0 ? $wrapper : new ItemStackWrapper(0, ItemStack::null());
  	}
@@ -1931,7 +2256,7 @@ index ca0a11f..135ac54 100644
  	}
  
  	public static function getNetworkItemStackDescriptor(ByteBufferReader $in) : ItemStackWrapper{
-@@ -339,18 +327,12 @@ final class CommonTypes{
+@@ -339,18 +347,12 @@ final class CommonTypes{
  		$meta = VarInt::readUnsignedInt($in);
  
  		$hasNetId = self::getBool($in);
@@ -1952,7 +2277,7 @@ index ca0a11f..135ac54 100644
  	}
  
  	public static function putNetworkItemStackDescriptor(ByteBufferWriter $out, ItemStackWrapper $itemStackWrapper) : void{
-@@ -360,7 +342,6 @@ final class CommonTypes{
+@@ -360,7 +362,6 @@ final class CommonTypes{
  
  		self::putBool($out, $hasNetId = $itemStackWrapper->getStackId() !== 0);
  		if($hasNetId){
@@ -1960,7 +2285,7 @@ index ca0a11f..135ac54 100644
  			VarInt::writeSignedInt($out, $itemStackWrapper->getStackId());
  		}
  
-@@ -369,26 +350,47 @@ final class CommonTypes{
+@@ -369,26 +370,47 @@ final class CommonTypes{
  	}
  
  	/** @throws DataDecodeException */
@@ -2020,7 +2345,7 @@ index ca0a11f..135ac54 100644
  
  		VarInt::writeSignedInt($out, $ingredient->getCount());
  	}
-@@ -408,6 +410,7 @@ final class CommonTypes{
+@@ -408,6 +430,7 @@ final class CommonTypes{
  		for($i = 0; $i < $count; ++$i){
  			$key = VarInt::readUnsignedInt($in);
  			$type = VarInt::readUnsignedInt($in);
@@ -2028,7 +2353,7 @@ index ca0a11f..135ac54 100644
  
  			$data[$key] = self::readMetadataProperty($in, $type);
  		}
-@@ -443,6 +446,7 @@ final class CommonTypes{
+@@ -443,6 +466,7 @@ final class CommonTypes{
  		foreach($metadata as $key => $d){
  			VarInt::writeUnsignedInt($out, $key);
  			VarInt::writeUnsignedInt($out, $d->getTypeId());
@@ -2036,7 +2361,33 @@ index ca0a11f..135ac54 100644
  			$d->write($out);
  		}
  	}
-@@ -767,7 +771,9 @@ final class CommonTypes{
+@@ -556,6 +580,7 @@ final class CommonTypes{
+ 	/** @throws DataDecodeException */
+ 	private static function readGameRule(ByteBufferReader $in, int $type, bool $isPlayerModifiable, bool $isStartGame) : GameRule{
+ 		return match($type){
++			EmptyGameRule::ID => EmptyGameRule::decode($in, $isPlayerModifiable),
+ 			BoolGameRule::ID => BoolGameRule::decode($in, $isPlayerModifiable),
+ 			IntGameRule::ID => IntGameRule::decode($in, $isPlayerModifiable, $isStartGame),
+ 			FloatGameRule::ID => FloatGameRule::decode($in, $isPlayerModifiable),
+@@ -698,7 +723,7 @@ final class CommonTypes{
+ 
+ 		$result->structureBlockType = VarInt::readSignedInt($in);
+ 		$result->structureSettings = self::getStructureSettings($in);
+-		$result->structureRedstoneSaveMode = VarInt::readSignedInt($in);
++		$result->structureRedstoneSaveMode = Byte::readUnsigned($in);
+ 
+ 		return $result;
+ 	}
+@@ -713,7 +738,7 @@ final class CommonTypes{
+ 
+ 		VarInt::writeSignedInt($out, $structureEditorData->structureBlockType);
+ 		self::putStructureSettings($out, $structureEditorData->structureSettings);
+-		VarInt::writeSignedInt($out, $structureEditorData->structureRedstoneSaveMode);
++		Byte::writeUnsigned($out, $structureEditorData->structureRedstoneSaveMode);
+ 	}
+ 
+ 	/** @throws PacketDecodeException */
+@@ -767,7 +792,9 @@ final class CommonTypes{
  	 * @throws DataDecodeException
  	 */
  	public static function readItemStackNetIdVariant(ByteBufferReader $in) : int{
@@ -2047,7 +2398,7 @@ index ca0a11f..135ac54 100644
  	}
  
  	/**
-@@ -776,7 +782,7 @@ final class CommonTypes{
+@@ -776,7 +803,7 @@ final class CommonTypes{
  	 * as-yet unacknowledged request from the client.
  	 */
  	public static function writeItemStackNetIdVariant(ByteBufferWriter $out, int $id) : void{
@@ -2056,6 +2407,400 @@ index ca0a11f..135ac54 100644
  	}
  
  	/** @throws DataDecodeException */
+diff --git a/src/types/AttributeLayer.php b/src/types/AttributeLayer.php
+index c148df7..c0ae32a 100644
+--- a/src/types/AttributeLayer.php
++++ b/src/types/AttributeLayer.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -54,7 +56,7 @@ final class AttributeLayer{
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$name = CommonTypes::getString($in);
+ 		$noiseName = CommonTypes::readOptional($in, CommonTypes::getString(...));
+-		$dimension = VarInt::readUnsignedInt($in);
++		$dimension = VarInt::readSignedInt($in);
+ 		$settings = AttributeLayerSettings::read($in);
+ 
+ 		$attributes = [];
+@@ -74,7 +76,7 @@ final class AttributeLayer{
+ 	public function write(ByteBufferWriter $out) : void{
+ 		CommonTypes::putString($out, $this->name);
+ 		CommonTypes::writeOptional($out, $this->name, CommonTypes::putString(...));
+-		VarInt::writeUnsignedInt($out, $this->dimension);
++		VarInt::writeSignedInt($out, $this->dimension);
+ 		$this->settings->write($out);
+ 
+ 		VarInt::writeUnsignedInt($out, count($this->attributes));
+diff --git a/src/types/AttributeLayerSettings.php b/src/types/AttributeLayerSettings.php
+index 79fd2bb..4dc462b 100644
+--- a/src/types/AttributeLayerSettings.php
++++ b/src/types/AttributeLayerSettings.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -17,8 +19,6 @@ namespace pocketmine\network\mcpe\protocol\types;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\LE;
+-use pmmp\encoding\VarInt;
+-use pocketmine\network\mcpe\protocol\PacketDecodeException;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ 
+ /**
+@@ -28,14 +28,14 @@ final class AttributeLayerSettings{
+ 
+ 	public function __construct(
+ 		private int $priority,
+-		private AttributeLayerSettingsWeight $weight,
++		private float $weight,
+ 		private bool $enabled,
+ 		private bool $transitionsPaused,
+ 	){}
+ 
+ 	public function getPriority() : int{ return $this->priority; }
+ 
+-	public function getWeight() : AttributeLayerSettingsWeight{ return $this->weight; }
++	public function getWeight() : float{ return $this->weight; }
+ 
+ 	public function isEnabled() : bool{ return $this->enabled; }
+ 
+@@ -43,11 +43,7 @@ final class AttributeLayerSettings{
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$priority = LE::readSignedInt($in);
+-		$weight = match (VarInt::readUnsignedInt($in)){
+-			AttributeLayerSettingsWeightFloat::ID => AttributeLayerSettingsWeightFloat::read($in),
+-			AttributeLayerSettingsWeightString::ID => AttributeLayerSettingsWeightString::read($in),
+-			default => throw new PacketDecodeException("Unknown AttributeLayerSettingsWeight type"),
+-		};
++		$weight = LE::readFloat($in);
+ 		$enabled = CommonTypes::getBool($in);
+ 		$transitionsPaused = CommonTypes::getBool($in);
+ 
+@@ -61,8 +57,7 @@ final class AttributeLayerSettings{
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+ 		LE::writeSignedInt($out, $this->priority);
+-		VarInt::writeUnsignedInt($out, $this->weight->getTypeId());
+-		$this->weight->write($out);
++		LE::writeFloat($out, $this->weight);
+ 		CommonTypes::putBool($out, $this->enabled);
+ 		CommonTypes::putBool($out, $this->transitionsPaused);
+ 	}
+diff --git a/src/types/AttributeUpdateLayerSettings.php b/src/types/AttributeUpdateLayerSettings.php
+index c7ae944..329f5fe 100644
+--- a/src/types/AttributeUpdateLayerSettings.php
++++ b/src/types/AttributeUpdateLayerSettings.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -43,7 +45,7 @@ final class AttributeUpdateLayerSettings extends AttributeLayerSyncPayload{
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$name = CommonTypes::getString($in);
+-		$dimension = VarInt::readUnsignedInt($in);
++		$dimension = VarInt::readSignedInt($in);
+ 		$settings = AttributeLayerSettings::read($in);
+ 
+ 		return new self(
+@@ -55,7 +57,7 @@ final class AttributeUpdateLayerSettings extends AttributeLayerSyncPayload{
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+ 		CommonTypes::putString($out, $this->name);
+-		VarInt::writeUnsignedInt($out, $this->dimension);
++		VarInt::writeSignedInt($out, $this->dimension);
+ 		$this->settings->write($out);
+ 	}
+ }
+diff --git a/src/types/AttributesRemoveEnvironment.php b/src/types/AttributesRemoveEnvironment.php
+index d32e478..c8793f1 100644
+--- a/src/types/AttributesRemoveEnvironment.php
++++ b/src/types/AttributesRemoveEnvironment.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -52,7 +54,7 @@ final class AttributesRemoveEnvironment extends AttributeLayerSyncPayload{
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$name = CommonTypes::getString($in);
+-		$dimension = VarInt::readUnsignedInt($in);
++		$dimension = VarInt::readSignedInt($in);
+ 
+ 		$attributes = [];
+ 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
+@@ -68,7 +70,7 @@ final class AttributesRemoveEnvironment extends AttributeLayerSyncPayload{
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+ 		CommonTypes::putString($out, $this->name);
+-		VarInt::writeUnsignedInt($out, $this->dimension);
++		VarInt::writeSignedInt($out, $this->dimension);
+ 
+ 		VarInt::writeUnsignedInt($out, count($this->attributes));
+ 		foreach($this->attributes as $attribute){
+diff --git a/src/types/AttributesUpdateEnvironment.php b/src/types/AttributesUpdateEnvironment.php
+index 9fdf01a..c568eca 100644
+--- a/src/types/AttributesUpdateEnvironment.php
++++ b/src/types/AttributesUpdateEnvironment.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -52,7 +54,7 @@ final class AttributesUpdateEnvironment extends AttributeLayerSyncPayload{
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$name = CommonTypes::getString($in);
+-		$dimension = VarInt::readUnsignedInt($in);
++		$dimension = VarInt::readSignedInt($in);
+ 
+ 		$attributes = [];
+ 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
+@@ -68,7 +70,7 @@ final class AttributesUpdateEnvironment extends AttributeLayerSyncPayload{
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+ 		CommonTypes::putString($out, $this->name);
+-		VarInt::writeUnsignedInt($out, $this->dimension);
++		VarInt::writeSignedInt($out, $this->dimension);
+ 
+ 		VarInt::writeUnsignedInt($out, count($this->attributes));
+ 		foreach($this->attributes as $attribute){
+diff --git a/src/types/DebugMarkerData.php b/src/types/DebugMarkerData.php
+index af2eb9a..d3568bf 100644
+--- a/src/types/DebugMarkerData.php
++++ b/src/types/DebugMarkerData.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -20,6 +22,7 @@ use pmmp\encoding\LE;
+ use pocketmine\color\Color;
+ use pocketmine\math\Vector3;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
++use function round;
+ 
+ final class DebugMarkerData{
+ 
+@@ -41,7 +44,12 @@ final class DebugMarkerData{
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$text = CommonTypes::getString($in);
+ 		$position = CommonTypes::getVector3($in);
+-		$color = Color::fromARGB(LE::readUnsignedInt($in));
++		//unlike every other colour on the wire, this one is four normalised 0-1 channels
++		$red = LE::readFloat($in);
++		$green = LE::readFloat($in);
++		$blue = LE::readFloat($in);
++		$alpha = LE::readFloat($in);
++		$color = new Color((int) round($red * 255), (int) round($green * 255), (int) round($blue * 255), (int) round($alpha * 255));
+ 		$durationMillis = LE::readUnsignedLong($in);
+ 
+ 		return new self(
+@@ -55,7 +63,10 @@ final class DebugMarkerData{
+ 	public function write(ByteBufferWriter $out) : void{
+ 		CommonTypes::putString($out, $this->text);
+ 		CommonTypes::putVector3($out, $this->position);
+-		LE::writeUnsignedInt($out, $this->color->toARGB());
++		LE::writeFloat($out, $this->color->getR() / 255);
++		LE::writeFloat($out, $this->color->getG() / 255);
++		LE::writeFloat($out, $this->color->getB() / 255);
++		LE::writeFloat($out, $this->color->getA() / 255);
+ 		LE::writeUnsignedLong($out, $this->durationMillis);
+ 	}
+ }
+diff --git a/src/types/DimensionData.php b/src/types/DimensionData.php
+index fc38ef3..871c5e0 100644
+--- a/src/types/DimensionData.php
++++ b/src/types/DimensionData.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -17,6 +19,8 @@ namespace pocketmine\network\mcpe\protocol\types;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\VarInt;
++use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
++use Ramsey\Uuid\UuidInterface;
+ 
+ final class DimensionData{
+ 
+@@ -25,6 +29,7 @@ final class DimensionData{
+ 		private int $minHeight,
+ 		private int $generator,
+ 		private int $dimensionType,
++		private UuidInterface $packId,
+ 	){}
+ 
+ 	public function getMaxHeight() : int{ return $this->maxHeight; }
+@@ -35,13 +40,16 @@ final class DimensionData{
+ 
+ 	public function getDimensionType() : int{ return $this->dimensionType; }
+ 
++	public function getPackId() : UuidInterface{ return $this->packId; }
++
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$maxHeight = VarInt::readSignedInt($in);
+ 		$minHeight = VarInt::readSignedInt($in);
+ 		$generator = VarInt::readSignedInt($in);
+ 		$dimensionType = VarInt::readSignedInt($in);
++		$packId = CommonTypes::getUUID($in);
+ 
+-		return new self($maxHeight, $minHeight, $generator, $dimensionType);
++		return new self($maxHeight, $minHeight, $generator, $dimensionType, $packId);
+ 	}
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+@@ -49,5 +57,6 @@ final class DimensionData{
+ 		VarInt::writeSignedInt($out, $this->minHeight);
+ 		VarInt::writeSignedInt($out, $this->generator);
+ 		VarInt::writeSignedInt($out, $this->dimensionType);
++		CommonTypes::putUUID($out, $this->packId);
+ 	}
+ }
+diff --git a/src/types/GameRuleType.php b/src/types/GameRuleType.php
+index bdc6a57..b403ad4 100644
+--- a/src/types/GameRuleType.php
++++ b/src/types/GameRuleType.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -20,6 +22,7 @@ final class GameRuleType{
+ 		//NOOP
+ 	}
+ 
++	public const EMPTY = 0;
+ 	public const BOOL = 1;
+ 	public const INT = 2;
+ 	public const FLOAT = 3;
+diff --git a/src/types/GatheringJoinInfo.php b/src/types/GatheringJoinInfo.php
+index 9b1e2dd..1e5a264 100644
+--- a/src/types/GatheringJoinInfo.php
++++ b/src/types/GatheringJoinInfo.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -24,39 +26,39 @@ final class GatheringJoinInfo{
+ 	public function __construct(
+ 		private UuidInterface $experienceId,
+ 		private string $experienceName,
+-		private UuidInterface $experienceWorldId,
+-		private string $experienceWorldName,
++		private ?UuidInterface $experienceWorldId,
++		private ?string $experienceWorldName,
+ 		private string $creatorId,
+-		private UuidInterface $targetId,
+-		private string $scenarioId,
+-		private string $serverId,
++		private ?UuidInterface $targetId,
++		private ?string $scenarioId,
++		private ?string $serverId,
+ 	){}
+ 
+ 	public function getExperienceId() : UuidInterface{ return $this->experienceId; }
+ 
+ 	public function getExperienceName() : string{ return $this->experienceName; }
+ 
+-	public function getExperienceWorldId() : UuidInterface{ return $this->experienceWorldId; }
++	public function getExperienceWorldId() : ?UuidInterface{ return $this->experienceWorldId; }
+ 
+-	public function getExperienceWorldName() : string{ return $this->experienceWorldName; }
++	public function getExperienceWorldName() : ?string{ return $this->experienceWorldName; }
+ 
+ 	public function getCreatorId() : string{ return $this->creatorId; }
+ 
+-	public function getTargetId() : UuidInterface{ return $this->targetId; }
++	public function getTargetId() : ?UuidInterface{ return $this->targetId; }
+ 
+-	public function getScenarioId() : string{ return $this->scenarioId; }
++	public function getScenarioId() : ?string{ return $this->scenarioId; }
+ 
+-	public function getServerId() : string{ return $this->serverId; }
++	public function getServerId() : ?string{ return $this->serverId; }
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$experienceId = CommonTypes::getUUID($in);
+ 		$experienceName = CommonTypes::getString($in);
+-		$experienceWorldId = CommonTypes::getUUID($in);
+-		$experienceWorldName = CommonTypes::getString($in);
++		$experienceWorldId = CommonTypes::readOptional($in, CommonTypes::getUUID(...));
++		$experienceWorldName = CommonTypes::readOptional($in, CommonTypes::getString(...));
+ 		$creatorId = CommonTypes::getString($in);
+-		$targetId = CommonTypes::getUUID($in);
+-		$scenarioId = CommonTypes::getString($in);
+-		$serverId = CommonTypes::getString($in);
++		$targetId = CommonTypes::readOptional($in, CommonTypes::getUUID(...));
++		$scenarioId = CommonTypes::readOptional($in, CommonTypes::getString(...));
++		$serverId = CommonTypes::readOptional($in, CommonTypes::getString(...));
+ 
+ 		return new self(
+ 			$experienceId,
+@@ -73,11 +75,11 @@ final class GatheringJoinInfo{
+ 	public function write(ByteBufferWriter $out) : void{
+ 		CommonTypes::putUUID($out, $this->experienceId);
+ 		CommonTypes::putString($out, $this->experienceName);
+-		CommonTypes::putUUID($out, $this->experienceWorldId);
+-		CommonTypes::putString($out, $this->experienceWorldName);
++		CommonTypes::writeOptional($out, $this->experienceWorldId, CommonTypes::putUUID(...));
++		CommonTypes::writeOptional($out, $this->experienceWorldName, CommonTypes::putString(...));
+ 		CommonTypes::putString($out, $this->creatorId);
+-		CommonTypes::putUUID($out, $this->targetId);
+-		CommonTypes::putString($out, $this->scenarioId);
+-		CommonTypes::putString($out, $this->serverId);
++		CommonTypes::writeOptional($out, $this->targetId, CommonTypes::putUUID(...));
++		CommonTypes::writeOptional($out, $this->scenarioId, CommonTypes::putString(...));
++		CommonTypes::writeOptional($out, $this->serverId, CommonTypes::putString(...));
+ 	}
+ }
 diff --git a/src/types/IntGameRule.php b/src/types/IntGameRule.php
 index d2a7789..115d25d 100644
 --- a/src/types/IntGameRule.php
@@ -2199,7 +2944,7 @@ index 8400b9b..ed8a4e9 100644
  		CommonTypes::putBool($out, $this->hasLockedBehaviorPack);
  		CommonTypes::putBool($out, $this->hasLockedResourcePack);
 diff --git a/src/types/MapImage.php b/src/types/MapImage.php
-index ca77bbb..be2dc47 100644
+index ca77bbb..698e4f8 100644
 --- a/src/types/MapImage.php
 +++ b/src/types/MapImage.php
 @@ -10,6 +10,8 @@
@@ -2211,7 +2956,7 @@ index ca77bbb..be2dc47 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types;
-@@ -17,7 +19,7 @@ namespace pocketmine\network\mcpe\protocol\types;
+@@ -17,10 +19,9 @@ namespace pocketmine\network\mcpe\protocol\types;
  use pmmp\encoding\ByteBufferReader;
  use pmmp\encoding\ByteBufferWriter;
  use pmmp\encoding\DataDecodeException;
@@ -2219,23 +2964,26 @@ index ca77bbb..be2dc47 100644
 +use pmmp\encoding\LE;
  use pocketmine\color\Color;
  use pocketmine\network\mcpe\protocol\PacketDecodeException;
- use pocketmine\utils\Binary;
-@@ -79,8 +81,7 @@ final class MapImage{
+-use pocketmine\utils\Binary;
+ use function count;
+ 
+ final class MapImage{
+@@ -79,8 +80,7 @@ final class MapImage{
  			$serializer = new ByteBufferWriter();
  			for($y = 0; $y < $this->height; ++$y){
  				for($x = 0; $x < $this->width; ++$x){
 -					//if mojang had any sense this would just be a regular LE int
 -					VarInt::writeUnsignedInt($serializer, Binary::flipIntEndianness($this->pixels[$y][$x]->toRGBA()));
-+					LE::writeUnsignedInt($serializer, Binary::flipIntEndianness($this->pixels[$y][$x]->toRGBA()));
++					LE::writeUnsignedInt($serializer, $this->pixels[$y][$x]->toARGB());
  				}
  			}
  			$this->encodedPixelCache = $serializer->getData();
-@@ -105,7 +106,7 @@ final class MapImage{
+@@ -105,7 +105,7 @@ final class MapImage{
  		for($y = 0; $y < $height; ++$y){
  			$row = [];
  			for($x = 0; $x < $width; ++$x){
 -				$row[] = Color::fromRGBA(Binary::flipIntEndianness(VarInt::readUnsignedInt($in)));
-+				$row[] = Color::fromRGBA(Binary::flipIntEndianness(LE::readUnsignedInt($in)));
++				$row[] = Color::fromARGB(LE::readUnsignedInt($in));
  			}
  			$pixels[] = $row;
  		}
@@ -2289,6 +3037,30 @@ index 2c76f41..fdee32b 100644
 +		CommonTypes::writeOptional($out, $this->blockPosition, CommonTypes::putBlockPosition(...));
 +	}
  }
+diff --git a/src/types/PlayerAction.php b/src/types/PlayerAction.php
+index 9e487d6..bd19925 100644
+--- a/src/types/PlayerAction.php
++++ b/src/types/PlayerAction.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types;
+@@ -55,8 +57,10 @@ final class PlayerAction{
+ 	public const STOP_CRAWLING = 33;
+ 	public const START_FLYING = 34;
+ 	public const STOP_FLYING = 35;
++	public const RECEIVED_SERVER_DATA = 36;
+ 
+ 	public const START_USING_ITEM = 37;
++	public const INTERNAL_UPDATE = 38;
+ 
+ 	//Backwards compatibility (blame @dktapps)
+ 	public const CRACK_BREAK = 18;
 diff --git a/src/types/PlayerAuthInputFlags.php b/src/types/PlayerAuthInputFlags.php
 index 0be7476..9acfc9c 100644
 --- a/src/types/PlayerAuthInputFlags.php
@@ -2374,7 +3146,7 @@ index aeb74ef..1b36375 100644
  	}
  }
 diff --git a/src/types/PlayerBlockActionWithBlockInfo.php b/src/types/PlayerBlockActionWithBlockInfo.php
-index ec8110b..0997903 100644
+index ec8110b..6055744 100644
 --- a/src/types/PlayerBlockActionWithBlockInfo.php
 +++ b/src/types/PlayerBlockActionWithBlockInfo.php
 @@ -10,6 +10,8 @@
@@ -2386,7 +3158,20 @@ index ec8110b..0997903 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types;
-@@ -54,6 +56,7 @@ final class PlayerBlockActionWithBlockInfo implements PlayerBlockAction{
+@@ -27,11 +29,7 @@ final class PlayerBlockActionWithBlockInfo implements PlayerBlockAction{
+ 		private int $actionType,
+ 		private BlockPosition $blockPosition,
+ 		private int $face
+-	){
+-		if(!self::isValidActionType($actionType)){
+-			throw new \InvalidArgumentException("Invalid action type for " . self::class);
+-		}
+-	}
++	){}
+ 
+ 	public function getActionType() : int{ return $this->actionType; }
+ 
+@@ -54,6 +52,7 @@ final class PlayerBlockActionWithBlockInfo implements PlayerBlockAction{
  		return match($actionType){
  			PlayerAction::ABORT_BREAK,
  			PlayerAction::START_BREAK,
@@ -2543,6 +3328,284 @@ index 0000000..8679619
 +		LE::writeUnsignedLong($out, $this->systemIndex);
 +	}
 +}
+diff --git a/src/types/camera/CameraPresetAimAssist.php b/src/types/camera/CameraPresetAimAssist.php
+index b141769..c08ff3a 100644
+--- a/src/types/camera/CameraPresetAimAssist.php
++++ b/src/types/camera/CameraPresetAimAssist.php
+@@ -10,11 +10,12 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\camera;
+ 
+-use pmmp\encoding\Byte;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\LE;
+@@ -40,7 +41,7 @@ final class CameraPresetAimAssist{
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$presetId = CommonTypes::readOptional($in, CommonTypes::getString(...));
+-		$targetMode = CommonTypes::readOptional($in, fn() => CameraAimAssistTargetMode::fromPacket(Byte::readUnsigned($in)));
++		$targetMode = CommonTypes::readOptional($in, fn() => CameraAimAssistTargetMode::fromPacket(LE::readSignedInt($in)));
+ 		$viewAngle = CommonTypes::readOptional($in, CommonTypes::getVector2(...));
+ 		$distance = CommonTypes::readOptional($in, LE::readFloat(...));
+ 
+@@ -54,7 +55,7 @@ final class CameraPresetAimAssist{
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+ 		CommonTypes::writeOptional($out, $this->presetId, CommonTypes::putString(...));
+-		CommonTypes::writeOptional($out, $this->targetMode, fn(ByteBufferWriter $out, CameraAimAssistTargetMode $v) => Byte::writeUnsigned($out, $v->value));
++		CommonTypes::writeOptional($out, $this->targetMode, fn(ByteBufferWriter $out, CameraAimAssistTargetMode $v) => LE::writeSignedInt($out, $v->value));
+ 		CommonTypes::writeOptional($out, $this->viewAngle, CommonTypes::putVector2(...));
+ 		CommonTypes::writeOptional($out, $this->distance, LE::writeFloat(...));
+ 	}
+diff --git a/src/types/camera/CameraSplineDefinition.php b/src/types/camera/CameraSplineDefinition.php
+index 25b1073..fc688ea 100644
+--- a/src/types/camera/CameraSplineDefinition.php
++++ b/src/types/camera/CameraSplineDefinition.php
+@@ -10,33 +10,98 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\camera;
+ 
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
++use pmmp\encoding\LE;
++use pmmp\encoding\VarInt;
++use pocketmine\math\Vector3;
+ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
++use function count;
+ 
+ final class CameraSplineDefinition{
+ 
++	/**
++	 * @param Vector3[] $controlPoints
++	 * @param CameraProgressOption[] $progressKeyFrames
++	 * @param CameraRotationOption[] $rotationKeyFrames
++	 */
+ 	public function __construct(
+ 		private string $name,
+-		private CameraSplineInstruction $instruction,
++		private float $totalTime,
++		private ?string $splineType,
++		private array $controlPoints,
++		private array $progressKeyFrames,
++		private array $rotationKeyFrames,
+ 	){}
+ 
+-	public function getName() : string { return $this->name; }
++	public function getName() : string{ return $this->name; }
++
++	public function getTotalTime() : float{ return $this->totalTime; }
++
++	public function getSplineType() : ?string{ return $this->splineType; }
+ 
+-	public function getInstruction() : CameraSplineInstruction { return $this->instruction; }
++	/**
++	 * @return Vector3[]
++	 */
++	public function getControlPoints() : array{ return $this->controlPoints; }
++
++	/**
++	 * @return CameraProgressOption[]
++	 */
++	public function getProgressKeyFrames() : array{ return $this->progressKeyFrames; }
++
++	/**
++	 * @return CameraRotationOption[]
++	 */
++	public function getRotationKeyFrames() : array{ return $this->rotationKeyFrames; }
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$name = CommonTypes::getString($in);
+-		$instruction = CameraSplineInstruction::read($in);
+-		return new self($name, $instruction);
++		$totalTime = LE::readFloat($in);
++		$splineType = CommonTypes::readOptional($in, CommonTypes::getString(...));
++
++		$controlPoints = [];
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$controlPoints[] = CommonTypes::getVector3($in);
++		}
++
++		$progressKeyFrames = [];
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$progressKeyFrames[] = CameraProgressOption::read($in);
++		}
++
++		$rotationKeyFrames = [];
++		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
++			$rotationKeyFrames[] = CameraRotationOption::read($in);
++		}
++
++		return new self($name, $totalTime, $splineType, $controlPoints, $progressKeyFrames, $rotationKeyFrames);
+ 	}
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+ 		CommonTypes::putString($out, $this->name);
+-		$this->instruction->write($out);
++		LE::writeFloat($out, $this->totalTime);
++		CommonTypes::writeOptional($out, $this->splineType, CommonTypes::putString(...));
++
++		VarInt::writeUnsignedInt($out, count($this->controlPoints));
++		foreach($this->controlPoints as $point){
++			CommonTypes::putVector3($out, $point);
++		}
++
++		VarInt::writeUnsignedInt($out, count($this->progressKeyFrames));
++		foreach($this->progressKeyFrames as $keyFrame){
++			$keyFrame->write($out);
++		}
++
++		VarInt::writeUnsignedInt($out, count($this->rotationKeyFrames));
++		foreach($this->rotationKeyFrames as $keyFrame){
++			$keyFrame->write($out);
++		}
+ 	}
+ }
+diff --git a/src/types/camera/CameraSplineInstruction.php b/src/types/camera/CameraSplineInstruction.php
+index 34d696d..acfd53d 100644
+--- a/src/types/camera/CameraSplineInstruction.php
++++ b/src/types/camera/CameraSplineInstruction.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\camera;
+@@ -34,12 +36,12 @@ final class CameraSplineInstruction{
+ 	 */
+ 	public function __construct(
+ 		private float $totalTime,
+-		private int $easeType,
++		private ?int $easeType,
+ 		private array $curve,
+ 		private array $progressKeyFrames,
+ 		private array $rotationOptions,
+-		private string $splineIdentifier,
+-		private bool $loadFromJson
++		private ?string $splineIdentifier,
++		private ?bool $loadFromJson
+ 	){}
+ 
+ 	public function getTotalTime() : float{ return $this->totalTime; }
+@@ -47,7 +49,7 @@ final class CameraSplineInstruction{
+ 	/**
+ 	 * @see CameraSetInstructionEaseType
+ 	 */
+-	public function getEaseType() : int{ return $this->easeType; }
++	public function getEaseType() : ?int{ return $this->easeType; }
+ 
+ 	/**
+ 	 * @return Vector3[]
+@@ -64,13 +66,13 @@ final class CameraSplineInstruction{
+ 	 */
+ 	public function getRotationOptions() : array{ return $this->rotationOptions; }
+ 
+-	public function getSplineIdentifier() : string{ return $this->splineIdentifier; }
++	public function getSplineIdentifier() : ?string{ return $this->splineIdentifier; }
+ 
+-	public function isLoadFromJson() : bool{ return $this->loadFromJson; }
++	public function isLoadFromJson() : ?bool{ return $this->loadFromJson; }
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+ 		$totalTime = LE::readFloat($in);
+-		$easeType = Byte::readUnsigned($in);
++		$easeType = CommonTypes::readOptional($in, Byte::readUnsigned(...));
+ 
+ 		$curve = [];
+ 		$curveCount = VarInt::readUnsignedInt($in);
+@@ -90,15 +92,15 @@ final class CameraSplineInstruction{
+ 			$rotationOptions[] = CameraRotationOption::read($in);
+ 		}
+ 
+-		$splineIdentifier = CommonTypes::getString($in);
+-		$loadFromJson = CommonTypes::getBool($in);
++		$splineIdentifier = CommonTypes::readOptional($in, CommonTypes::getString(...));
++		$loadFromJson = CommonTypes::readOptional($in, CommonTypes::getBool(...));
+ 
+ 		return new self($totalTime, $easeType, $curve, $progressKeyFrames, $rotationOptions, $splineIdentifier, $loadFromJson);
+ 	}
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+ 		LE::writeFloat($out, $this->totalTime);
+-		Byte::writeUnsigned($out, $this->easeType);
++		CommonTypes::writeOptional($out, $this->easeType, Byte::writeUnsigned(...));
+ 
+ 		VarInt::writeUnsignedInt($out, count($this->curve));
+ 		foreach($this->curve as $point){
+@@ -115,7 +117,7 @@ final class CameraSplineInstruction{
+ 			$option->write($out);
+ 		}
+ 
+-		CommonTypes::putString($out, $this->splineIdentifier);
+-		CommonTypes::putBool($out, $this->loadFromJson);
++		CommonTypes::writeOptional($out, $this->splineIdentifier, CommonTypes::putString(...));
++		CommonTypes::writeOptional($out, $this->loadFromJson, CommonTypes::putBool(...));
+ 	}
+ }
+diff --git a/src/types/entity/EntityMetadataFlags.php b/src/types/entity/EntityMetadataFlags.php
+index 8ac6b2f..eca7161 100644
+--- a/src/types/entity/EntityMetadataFlags.php
++++ b/src/types/entity/EntityMetadataFlags.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\entity;
+@@ -147,6 +149,9 @@ final class EntityMetadataFlags{
+ 	public const CAN_USE_VERTICAL_MOVEMENT_ACTION = 125;
+ 	public const ROTATION_LOCKED_TO_VEHICLE = 126;
+ 	public const USES_LEGACY_FRICTION = 127;
++	public const USES_UNIFORM_AIR_DRAG = 128;
++	public const NAMEPLATE_DEPTH_TESTED = 129;
++	public const NOT_PICKABLE_FROM_INSIDE = 130;
+ 
+-	public const NUMBER_OF_FLAGS = 128;
++	public const NUMBER_OF_FLAGS = 131;
+ }
+diff --git a/src/types/entity/EntityMetadataProperties.php b/src/types/entity/EntityMetadataProperties.php
+index 12d5dad..42c2f88 100644
+--- a/src/types/entity/EntityMetadataProperties.php
++++ b/src/types/entity/EntityMetadataProperties.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\entity;
+@@ -168,6 +170,9 @@ final class EntityMetadataProperties{
+ 	public const AIM_ASSIST_PRIORITY_PRESET_ID = 136; //int
+ 	public const AIM_ASSIST_PRIORITY_CATEGORY_ID = 137; //int
+ 	public const AIM_ASSIST_PRIORITY_ACTOR_ID = 138; //int
+-	public const RESERVED_139 = 139; //long
+-	public const NAMEPLATE_RENDER_DISTANCE_MAX = 140; //float
++	public const ARROW_SHOOTER_ID = 139; //long
++	public const FIREWORK_DIRECTION = 140; //vector3f
++	public const FIREWORK_SHOOTER_ID = 141; //long
++	public const RESERVED_139 = 142; //long
++	public const NAMEPLATE_RENDER_DISTANCE_MAX = 143; //float
+ }
 diff --git a/src/types/inventory/CreativeGroupEntry.php b/src/types/inventory/CreativeGroupEntry.php
 index 54e61bc..9b5507b 100644
 --- a/src/types/inventory/CreativeGroupEntry.php
@@ -2890,6 +3953,51 @@ index 4dec8dd..f4917e8 100644
  		}
  		Byte::writeUnsigned($out, $this->iterations);
  	}
+diff --git a/src/types/inventory/stackrequest/GrindstoneStackRequestAction.php b/src/types/inventory/stackrequest/GrindstoneStackRequestAction.php
+index 856331f..4c4fff7 100644
+--- a/src/types/inventory/stackrequest/GrindstoneStackRequestAction.php
++++ b/src/types/inventory/stackrequest/GrindstoneStackRequestAction.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\inventory\stackrequest;
+@@ -17,8 +19,8 @@ namespace pocketmine\network\mcpe\protocol\types\inventory\stackrequest;
+ use pmmp\encoding\Byte;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
++use pmmp\encoding\LE;
+ use pmmp\encoding\VarInt;
+-use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use pocketmine\network\mcpe\protocol\types\GetTypeIdFromConstTrait;
+ 
+ /**
+@@ -43,16 +45,17 @@ final class GrindstoneStackRequestAction extends ItemStackRequestAction{
+ 	public function getRepetitions() : int{ return $this->repetitions; }
+ 
+ 	public static function read(ByteBufferReader $in) : self{
+-		$recipeId = CommonTypes::readRecipeNetId($in);
+-		$repairCost = VarInt::readSignedInt($in); //WHY!!!!
++		//alone among the stack request actions, the grindstone carries its recipe ID as a fixed int
++		$recipeId = LE::readSignedInt($in);
+ 		$repetitions = Byte::readUnsigned($in);
++		$repairCost = VarInt::readSignedInt($in); //WHY!!!!
+ 
+ 		return new self($recipeId, $repairCost, $repetitions);
+ 	}
+ 
+ 	public function write(ByteBufferWriter $out) : void{
+-		CommonTypes::writeRecipeNetId($out, $this->recipeId);
+-		VarInt::writeSignedInt($out, $this->repairCost);
++		LE::writeSignedInt($out, $this->recipeId);
+ 		Byte::writeUnsigned($out, $this->repetitions);
++		VarInt::writeSignedInt($out, $this->repairCost);
+ 	}
+ }
 diff --git a/src/types/inventory/stackrequest/ItemStackRequest.php b/src/types/inventory/stackrequest/ItemStackRequest.php
 index 6123c38..0ee911b 100644
 --- a/src/types/inventory/stackrequest/ItemStackRequest.php
@@ -3086,7 +4194,7 @@ index dc78164..9707f59 100644
  	}
  }
 diff --git a/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php b/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
-index 4613c13..eb46c19 100644
+index 4613c13..afb98f3 100644
 --- a/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
 +++ b/src/types/inventory/stackresponse/ItemStackResponseSlotInfo.php
 @@ -10,6 +10,8 @@
@@ -3098,27 +4206,16 @@ index 4613c13..eb46c19 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types\inventory\stackresponse;
-@@ -17,6 +19,7 @@ namespace pocketmine\network\mcpe\protocol\types\inventory\stackresponse;
- use pmmp\encoding\Byte;
- use pmmp\encoding\ByteBufferReader;
- use pmmp\encoding\ByteBufferWriter;
-+use pmmp\encoding\DataDecodeException;
- use pmmp\encoding\VarInt;
- use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
- 
-@@ -49,9 +52,9 @@ final class ItemStackResponseSlotInfo{
+@@ -49,7 +51,7 @@ final class ItemStackResponseSlotInfo{
  		$slot = Byte::readUnsigned($in);
  		$hotbarSlot = Byte::readUnsigned($in);
  		$count = Byte::readUnsigned($in);
 -		$itemStackId = CommonTypes::readServerItemStackId($in);
 +		$itemStackId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, CommonTypes::readServerItemStackId(...))) ?? 0;
  		$customName = CommonTypes::getString($in);
--		$filteredCustomName = CommonTypes::getString($in);
-+		$filteredCustomName = CommonTypes::readOptional($in, CommonTypes::getString(...)) ?? "";
+ 		$filteredCustomName = CommonTypes::getString($in);
  		$durabilityCorrection = VarInt::readSignedInt($in);
- 		return new self($slot, $hotbarSlot, $count, $itemStackId, $customName, $filteredCustomName, $durabilityCorrection);
- 	}
-@@ -60,9 +63,15 @@ final class ItemStackResponseSlotInfo{
+@@ -60,7 +62,10 @@ final class ItemStackResponseSlotInfo{
  		Byte::writeUnsigned($out, $this->slot);
  		Byte::writeUnsigned($out, $this->hotbarSlot);
  		Byte::writeUnsigned($out, $this->count);
@@ -3127,17 +4224,11 @@ index 4613c13..eb46c19 100644
 +		//for a stack the server hasn't assigned an ID to
 +		CommonTypes::putBool($out, true);
 +		CommonTypes::writeOptional($out, $this->itemStackId > 0 ? $this->itemStackId : null, CommonTypes::writeServerItemStackId(...));
-+		//the two names are one redactable string: the unredacted half is a plain string, but the redacted
-+		//half is optional. Writing both as plain strings made clients read the second string's length byte
-+		//as a presence flag, which is why only renamed items crashed them.
  		CommonTypes::putString($out, $this->customName);
--		CommonTypes::putString($out, $this->filteredCustomName);
-+		CommonTypes::writeOptional($out, $this->filteredCustomName !== "" ? $this->filteredCustomName : null, CommonTypes::putString(...));
+ 		CommonTypes::putString($out, $this->filteredCustomName);
  		VarInt::writeSignedInt($out, $this->durabilityCorrection);
- 	}
- }
 diff --git a/src/types/login/clientdata/ClientData.php b/src/types/login/clientdata/ClientData.php
-index 58875c3..cb47969 100644
+index 58875c3..3659e96 100644
 --- a/src/types/login/clientdata/ClientData.php
 +++ b/src/types/login/clientdata/ClientData.php
 @@ -10,6 +10,8 @@
@@ -3149,7 +4240,16 @@ index 58875c3..cb47969 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types\login\clientdata;
-@@ -164,6 +166,8 @@ final class ClientData{
+@@ -122,6 +124,8 @@ final class ClientData{
+ 
+ 	public string $PlatformUserId = ""; //xbox-only, apparently
+ 
++	public string $PlayFabId = "";
++
+ 	/** @required */
+ 	public bool $PremiumSkin = false;
+ 
+@@ -164,6 +168,8 @@ final class ClientData{
  	/** @required */
  	public bool $TrustedSkin;
  
@@ -3159,7 +4259,7 @@ index 58875c3..cb47969 100644
  	public int $UIProfile;
  }
 diff --git a/src/types/login/clientdata/ClientDataToSkinDataHelper.php b/src/types/login/clientdata/ClientDataToSkinDataHelper.php
-index b0d9b7c..52b5cd9 100644
+index b0d9b7c..d65aaf4 100644
 --- a/src/types/login/clientdata/ClientDataToSkinDataHelper.php
 +++ b/src/types/login/clientdata/ClientDataToSkinDataHelper.php
 @@ -10,6 +10,8 @@
@@ -3183,6 +4283,15 @@ index b0d9b7c..52b5cd9 100644
  use function base64_decode;
  
  final class ClientDataToSkinDataHelper{
+@@ -55,7 +61,7 @@ final class ClientDataToSkinDataHelper{
+ 		}
+ 		return new SkinData(
+ 			$clientData->SkinId,
+-			"",
++			$clientData->PlayFabId,
+ 			self::safeB64Decode($clientData->SkinResourcePatch, "SkinResourcePatch"),
+ 			new SkinImage($clientData->SkinImageHeight, $clientData->SkinImageWidth, self::safeB64Decode($clientData->SkinData, "SkinData")),
+ 			$animations,
 @@ -65,13 +71,20 @@ final class ClientDataToSkinDataHelper{
  			self::safeB64Decode($clientData->SkinAnimationData, "SkinAnimationData"),
  			$clientData->CapeId,
@@ -3195,7 +4304,7 @@ index b0d9b7c..52b5cd9 100644
 -				return new PersonaSkinPiece($piece->PieceId, $piece->PieceType, $piece->PackId, $piece->IsDefault, $piece->ProductId);
 +				return new PersonaSkinPiece(
 +					$piece->PieceId,
-+					(int) $piece->PieceType,
++					PersonaSkinPiece::pieceTypeFromLoginName($piece->PieceType),
 +					Uuid::isValid($piece->PackId) ? Uuid::fromString($piece->PackId) : Uuid::fromInteger("0"),
 +					$piece->IsDefault,
 +					$piece->ProductId
@@ -3212,7 +4321,7 @@ index b0d9b7c..52b5cd9 100644
  			$clientData->CapeOnClassicSkin,
  			true, //assume this is true? there's no field for it ...
  			$clientData->OverrideSkin ?? true,
-+			$clientData->TrustedSkin ? SkinData::TRUSTED_SKIN_FLAG_TRUE : SkinData::TRUSTED_SKIN_FLAG_UNSET,
++			$clientData->TrustedSkin ? SkinData::TRUSTED_SKIN_FLAG_TRUE : SkinData::TRUSTED_SKIN_FLAG_FALSE,
 +			$clientData->ProfileHash,
  		);
  	}
@@ -3281,7 +4390,7 @@ index b196aad..04c51a7 100644
  	}
  }
 diff --git a/src/types/recipe/RecipeUnlockingRequirement.php b/src/types/recipe/RecipeUnlockingRequirement.php
-index 4c352c1..c101c3d 100644
+index 4c352c1..9887771 100644
 --- a/src/types/recipe/RecipeUnlockingRequirement.php
 +++ b/src/types/recipe/RecipeUnlockingRequirement.php
 @@ -10,6 +10,8 @@
@@ -3293,30 +4402,68 @@ index 4c352c1..c101c3d 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types\recipe;
-@@ -37,11 +39,8 @@ final class RecipeUnlockingRequirement{
+@@ -22,14 +24,22 @@ use function count;
+ 
+ final class RecipeUnlockingRequirement{
+ 
++	public const CONTEXT_NONE = 0;
++	public const CONTEXT_ALWAYS_UNLOCKED = 1;
++	public const CONTEXT_PLAYER_IN_WATER = 2;
++	public const CONTEXT_PLAYER_HAS_MANY_ITEMS = 3;
++
+ 	/**
+ 	 * @param RecipeIngredient[]|null $unlockingIngredients
+ 	 * @phpstan-param list<RecipeIngredient>|null $unlockingIngredients
+ 	 */
+ 	public function __construct(
++		private int $context,
+ 		private ?array $unlockingIngredients
+ 	){}
+ 
++	public function getContext() : int{ return $this->context; }
++
+ 	/**
+ 	 * @return RecipeIngredient[]|null
+ 	 * @phpstan-return list<RecipeIngredient>|null
+@@ -37,25 +47,27 @@ final class RecipeUnlockingRequirement{
  	public function getUnlockingIngredients() : ?array{ return $this->unlockingIngredients; }
  
  	public static function read(ByteBufferReader $in) : self{
 -		//I don't know what the point of this structure is. It could easily have been a list<RecipeIngredient> instead.
 -		//It's basically just an optional list, which could have been done by an empty list wherever it's not needed.
 -		$unlockingContext = CommonTypes::getBool($in);
++		$context = VarInt::readSignedInt($in);
  		$unlockingIngredients = null;
 -		if(!$unlockingContext){
 +		if(CommonTypes::getBool($in)){
  			$unlockingIngredients = [];
  			for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; $i++){
  				$unlockingIngredients[] = CommonTypes::getRecipeIngredient($in);
-@@ -52,7 +51,7 @@ final class RecipeUnlockingRequirement{
+ 			}
+ 		}
+ 
+-		return new self($unlockingIngredients);
++		return new self($context, $unlockingIngredients);
  	}
  
  	public function write(ByteBufferWriter $out) : void{
 -		CommonTypes::putBool($out, $this->unlockingIngredients === null);
-+		CommonTypes::putBool($out, $this->unlockingIngredients !== null);
- 		if($this->unlockingIngredients !== null){
- 			VarInt::writeUnsignedInt($out, count($this->unlockingIngredients));
- 			foreach($this->unlockingIngredients as $ingredient){
+-		if($this->unlockingIngredients !== null){
+-			VarInt::writeUnsignedInt($out, count($this->unlockingIngredients));
+-			foreach($this->unlockingIngredients as $ingredient){
++		VarInt::writeSignedInt($out, $this->context);
++		//an ingredient list only accompanies the none context; every other context is self-describing
++		$hasIngredients = $this->context === self::CONTEXT_NONE;
++		CommonTypes::putBool($out, $hasIngredients);
++		if($hasIngredients){
++			$ingredients = $this->unlockingIngredients ?? [];
++			VarInt::writeUnsignedInt($out, count($ingredients));
++			foreach($ingredients as $ingredient){
+ 				CommonTypes::putRecipeIngredient($out, $ingredient);
+ 			}
+ 		}
 diff --git a/src/types/recipe/ShapedRecipe.php b/src/types/recipe/ShapedRecipe.php
-index 1cdb679..1ee26fa 100644
+index 1cdb679..db1ecc4 100644
 --- a/src/types/recipe/ShapedRecipe.php
 +++ b/src/types/recipe/ShapedRecipe.php
 @@ -10,6 +10,8 @@
@@ -3328,6 +4475,24 @@ index 1cdb679..1ee26fa 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types\recipe;
+@@ -40,7 +42,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
+ 		string $blockType, //TODO: rename this
+ 		private int $priority,
+ 		private bool $symmetric,
+-		private RecipeUnlockingRequirement $unlockingRequirement,
++		private ?RecipeUnlockingRequirement $unlockingRequirement,
+ 		private int $recipeNetId
+ 	){
+ 		parent::__construct($typeId);
+@@ -101,7 +103,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
+ 
+ 	public function isSymmetric() : bool{ return $this->symmetric; }
+ 
+-	public function getUnlockingRequirement() : RecipeUnlockingRequirement{ return $this->unlockingRequirement; }
++	public function getUnlockingRequirement() : ?RecipeUnlockingRequirement{ return $this->unlockingRequirement; }
+ 
+ 	public function getRecipeNetId() : int{
+ 		return $this->recipeNetId;
 @@ -111,6 +113,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
  		$recipeId = CommonTypes::getString($in);
  		$width = VarInt::readSignedInt($in);
@@ -3336,6 +4501,15 @@ index 1cdb679..1ee26fa 100644
  		$input = [];
  		for($row = 0; $row < $height; ++$row){
  			for($column = 0; $column < $width; ++$column){
+@@ -126,7 +129,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
+ 		$block = CommonTypes::getString($in);
+ 		$priority = VarInt::readSignedInt($in);
+ 		$symmetric = CommonTypes::getBool($in);
+-		$unlockingRequirement = RecipeUnlockingRequirement::read($in);
++		$unlockingRequirement = CommonTypes::readOptional($in, RecipeUnlockingRequirement::read(...));
+ 
+ 		$recipeNetId = CommonTypes::readRecipeNetId($in);
+ 
 @@ -137,6 +140,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
  		CommonTypes::putString($out, $this->recipeId);
  		VarInt::writeSignedInt($out, $this->getWidth());
@@ -3344,6 +4518,64 @@ index 1cdb679..1ee26fa 100644
  		foreach($this->input as $row){
  			foreach($row as $ingredient){
  				CommonTypes::putRecipeIngredient($out, $ingredient);
+@@ -152,7 +156,7 @@ final class ShapedRecipe extends RecipeWithTypeId{
+ 		CommonTypes::putString($out, $this->blockName);
+ 		VarInt::writeSignedInt($out, $this->priority);
+ 		CommonTypes::putBool($out, $this->symmetric);
+-		$this->unlockingRequirement->write($out);
++		CommonTypes::writeOptional($out, $this->unlockingRequirement, fn(ByteBufferWriter $out, RecipeUnlockingRequirement $v) => $v->write($out));
+ 
+ 		CommonTypes::writeRecipeNetId($out, $this->recipeNetId);
+ 	}
+diff --git a/src/types/recipe/ShapelessRecipe.php b/src/types/recipe/ShapelessRecipe.php
+index d922a82..52633c4 100644
+--- a/src/types/recipe/ShapelessRecipe.php
++++ b/src/types/recipe/ShapelessRecipe.php
+@@ -10,6 +10,8 @@
+  * (at your option) any later version.
+  */
+ 
++/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
++
+ declare(strict_types=1);
+ 
+ namespace pocketmine\network\mcpe\protocol\types\recipe;
+@@ -37,7 +39,7 @@ final class ShapelessRecipe extends RecipeWithTypeId{
+ 		private UuidInterface $uuid,
+ 		private string $blockName,
+ 		private int $priority,
+-		private RecipeUnlockingRequirement $unlockingRequirement,
++		private ?RecipeUnlockingRequirement $unlockingRequirement,
+ 		private int $recipeNetId
+ 	){
+ 		parent::__construct($typeId);
+@@ -75,7 +77,7 @@ final class ShapelessRecipe extends RecipeWithTypeId{
+ 		return $this->priority;
+ 	}
+ 
+-	public function getUnlockingRequirement() : RecipeUnlockingRequirement{ return $this->unlockingRequirement; }
++	public function getUnlockingRequirement() : ?RecipeUnlockingRequirement{ return $this->unlockingRequirement; }
+ 
+ 	public function getRecipeNetId() : int{
+ 		return $this->recipeNetId;
+@@ -94,7 +96,7 @@ final class ShapelessRecipe extends RecipeWithTypeId{
+ 		$uuid = CommonTypes::getUUID($in);
+ 		$block = CommonTypes::getString($in);
+ 		$priority = VarInt::readSignedInt($in);
+-		$unlockingRequirement = RecipeUnlockingRequirement::read($in);
++		$unlockingRequirement = CommonTypes::readOptional($in, RecipeUnlockingRequirement::read(...));
+ 
+ 		$recipeNetId = CommonTypes::readRecipeNetId($in);
+ 
+@@ -116,7 +118,7 @@ final class ShapelessRecipe extends RecipeWithTypeId{
+ 		CommonTypes::putUUID($out, $this->uuid);
+ 		CommonTypes::putString($out, $this->blockName);
+ 		VarInt::writeSignedInt($out, $this->priority);
+-		$this->unlockingRequirement->write($out);
++		CommonTypes::writeOptional($out, $this->unlockingRequirement, fn(ByteBufferWriter $out, RecipeUnlockingRequirement $v) => $v->write($out));
+ 
+ 		CommonTypes::writeRecipeNetId($out, $this->recipeNetId);
+ 	}
 diff --git a/src/types/recipe/StringIdMetaItemDescriptor.php b/src/types/recipe/StringIdMetaItemDescriptor.php
 index 07f0b50..a714b0b 100644
 --- a/src/types/recipe/StringIdMetaItemDescriptor.php
@@ -3447,10 +4679,10 @@ index 14dc05a..5b4b692 100644
  	public function getColors() : array{
  		return $this->colors;
 diff --git a/src/types/skin/PersonaSkinPiece.php b/src/types/skin/PersonaSkinPiece.php
-index 7c9d8fa..703db92 100644
+index 7c9d8fa..20a93cb 100644
 --- a/src/types/skin/PersonaSkinPiece.php
 +++ b/src/types/skin/PersonaSkinPiece.php
-@@ -10,27 +10,48 @@
+@@ -10,27 +10,90 @@
   * (at your option) any later version.
   */
  
@@ -3461,6 +4693,8 @@ index 7c9d8fa..703db92 100644
  namespace pocketmine\network\mcpe\protocol\types\skin;
  
 +use Ramsey\Uuid\UuidInterface;
++use function str_starts_with;
++use function substr;
 +
  final class PersonaSkinPiece{
  
@@ -3474,33 +4708,73 @@ index 7c9d8fa..703db92 100644
 -	public const PIECE_TYPE_PERSONA_SKELETON = "persona_skeleton";
 -	public const PIECE_TYPE_PERSONA_SKIN = "persona_skin";
 -	public const PIECE_TYPE_PERSONA_TOP = "persona_top";
-+	public const PIECE_TYPE_PERSONA_SKELETON = 0;
-+	public const PIECE_TYPE_PERSONA_BODY = 1;
-+	public const PIECE_TYPE_PERSONA_SKIN = 2;
-+	public const PIECE_TYPE_PERSONA_BOTTOM = 3;
-+	public const PIECE_TYPE_PERSONA_FEET = 4;
-+	public const PIECE_TYPE_DRESS = 5;
-+	public const PIECE_TYPE_PERSONA_TOP = 6;
-+	public const PIECE_TYPE_HIGH_PANTS = 7;
-+	public const PIECE_TYPE_HANDS = 8;
-+	public const PIECE_TYPE_OUTERWEAR = 9;
-+	public const PIECE_TYPE_PERSONA_FACIAL_HAIR = 10;
-+	public const PIECE_TYPE_PERSONA_MOUTH = 11;
-+	public const PIECE_TYPE_PERSONA_EYES = 12;
-+	public const PIECE_TYPE_PERSONA_HAIR = 13;
-+	public const PIECE_TYPE_HOOD = 14;
-+	public const PIECE_TYPE_BACK = 15;
-+	public const PIECE_TYPE_FACE_ACCESSORY = 16;
-+	public const PIECE_TYPE_HEAD = 17;
-+	public const PIECE_TYPE_LEGS = 18;
-+	public const PIECE_TYPE_LEFT_LEG = 19;
-+	public const PIECE_TYPE_RIGHT_LEG = 20;
-+	public const PIECE_TYPE_ARMS = 21;
-+	public const PIECE_TYPE_LEFT_ARM = 22;
-+	public const PIECE_TYPE_RIGHT_ARM = 23;
-+	public const PIECE_TYPE_CAPES = 24;
-+	public const PIECE_TYPE_CLASSIC_SKIN = 25;
-+	public const PIECE_TYPE_EMOTE = 26;
++	public const PIECE_TYPE_UNKNOWN = 0;
++	public const PIECE_TYPE_PERSONA_SKELETON = 1;
++	public const PIECE_TYPE_PERSONA_BODY = 2;
++	public const PIECE_TYPE_PERSONA_SKIN = 3;
++	public const PIECE_TYPE_PERSONA_BOTTOM = 4;
++	public const PIECE_TYPE_PERSONA_FEET = 5;
++	public const PIECE_TYPE_DRESS = 6;
++	public const PIECE_TYPE_PERSONA_TOP = 7;
++	public const PIECE_TYPE_HIGH_PANTS = 8;
++	public const PIECE_TYPE_HANDS = 9;
++	public const PIECE_TYPE_OUTERWEAR = 10;
++	public const PIECE_TYPE_PERSONA_FACIAL_HAIR = 11;
++	public const PIECE_TYPE_PERSONA_MOUTH = 12;
++	public const PIECE_TYPE_PERSONA_EYES = 13;
++	public const PIECE_TYPE_PERSONA_HAIR = 14;
++	public const PIECE_TYPE_HOOD = 15;
++	public const PIECE_TYPE_BACK = 16;
++	public const PIECE_TYPE_FACE_ACCESSORY = 17;
++	public const PIECE_TYPE_HEAD = 18;
++	public const PIECE_TYPE_LEGS = 19;
++	public const PIECE_TYPE_LEFT_LEG = 20;
++	public const PIECE_TYPE_RIGHT_LEG = 21;
++	public const PIECE_TYPE_ARMS = 22;
++	public const PIECE_TYPE_LEFT_ARM = 23;
++	public const PIECE_TYPE_RIGHT_ARM = 24;
++	public const PIECE_TYPE_CAPES = 25;
++	public const PIECE_TYPE_CLASSIC_SKIN = 26;
++	public const PIECE_TYPE_EMOTE = 27;
++	public const PIECE_TYPE_UNSUPPORTED = 28;
++
++	//login JSON names the piece type, the wire numbers it. The names follow the same persona_* convention
++	//the tint piece types use, so an unrecognised one is reported as unknown rather than silently becoming
++	//a valid piece.
++	public static function pieceTypeFromLoginName(string $name) : int{
++		$shortName = str_starts_with($name, 'persona_') ? substr($name, 8) : $name;
++		return match($shortName){
++			'skeleton' => self::PIECE_TYPE_PERSONA_SKELETON,
++			'body' => self::PIECE_TYPE_PERSONA_BODY,
++			'skin' => self::PIECE_TYPE_PERSONA_SKIN,
++			'bottom' => self::PIECE_TYPE_PERSONA_BOTTOM,
++			'feet' => self::PIECE_TYPE_PERSONA_FEET,
++			'dress' => self::PIECE_TYPE_DRESS,
++			'top' => self::PIECE_TYPE_PERSONA_TOP,
++			'high_pants' => self::PIECE_TYPE_HIGH_PANTS,
++			'hand', 'hands' => self::PIECE_TYPE_HANDS,
++			'outerwear' => self::PIECE_TYPE_OUTERWEAR,
++			'facial_hair' => self::PIECE_TYPE_PERSONA_FACIAL_HAIR,
++			'mouth' => self::PIECE_TYPE_PERSONA_MOUTH,
++			'eyes' => self::PIECE_TYPE_PERSONA_EYES,
++			'hair' => self::PIECE_TYPE_PERSONA_HAIR,
++			'hood' => self::PIECE_TYPE_HOOD,
++			'back' => self::PIECE_TYPE_BACK,
++			'face_accessory' => self::PIECE_TYPE_FACE_ACCESSORY,
++			'head' => self::PIECE_TYPE_HEAD,
++			'legs' => self::PIECE_TYPE_LEGS,
++			'left_leg' => self::PIECE_TYPE_LEFT_LEG,
++			'right_leg' => self::PIECE_TYPE_RIGHT_LEG,
++			'arms' => self::PIECE_TYPE_ARMS,
++			'left_arm' => self::PIECE_TYPE_LEFT_ARM,
++			'right_arm' => self::PIECE_TYPE_RIGHT_ARM,
++			'capes' => self::PIECE_TYPE_CAPES,
++			'classic_skin' => self::PIECE_TYPE_CLASSIC_SKIN,
++			'emote' => self::PIECE_TYPE_EMOTE,
++			'unsupported' => self::PIECE_TYPE_UNSUPPORTED,
++			default => self::PIECE_TYPE_UNKNOWN
++		};
++	}
  
  	public function __construct(
  		private string $pieceId,
@@ -3511,7 +4785,7 @@ index 7c9d8fa..703db92 100644
  		private bool $isDefaultPiece,
  		private string $productId
  	){}
-@@ -39,11 +60,11 @@ final class PersonaSkinPiece{
+@@ -39,11 +102,11 @@ final class PersonaSkinPiece{
  		return $this->pieceId;
  	}
  
@@ -3526,7 +4800,7 @@ index 7c9d8fa..703db92 100644
  	}
  
 diff --git a/src/types/skin/SkinData.php b/src/types/skin/SkinData.php
-index da2d59c..d08fcfa 100644
+index da2d59c..95ec584 100644
 --- a/src/types/skin/SkinData.php
 +++ b/src/types/skin/SkinData.php
 @@ -10,6 +10,8 @@
@@ -3575,7 +4849,7 @@ index da2d59c..d08fcfa 100644
  	){
  		$this->capeImage = $capeImage ?? new SkinImage(0, 0, "");
  		//this has to be unique or the client will do stupid things
-@@ -101,14 +109,38 @@ class SkinData{
+@@ -101,14 +109,41 @@ class SkinData{
  		return $this->fullSkinId;
  	}
  
@@ -3610,7 +4884,10 @@ index da2d59c..d08fcfa 100644
 +			return 0;
 +		}
 +
-+		return (int) \hexdec($hex);
++		//login JSON gives the skin colour as RGB but tint colours as ARGB, so an RGB value would otherwise
++		//ship with a zero alpha byte and render fully transparent.
++		$value = (int) \hexdec($hex);
++		return \strlen($hex) <= 6 ? $value | 0xff000000 : $value;
 +	}
 +
  	/**
