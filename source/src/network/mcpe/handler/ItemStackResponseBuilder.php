@@ -95,7 +95,9 @@ final class ItemStackResponseBuilder{
 					$item->getCount(),
 					$itemStackInfo->getStackId(),
 					$item->getCustomName(),
-					$item->getCustomName(),
+					//the filtered form of the name, which vanilla always leaves empty; echoing the
+					//unfiltered name back here disconnects the client as soon as an item has a name
+					"",
 					$item instanceof Durable ? $item->getDamage() : 0,
 				);
 			}
