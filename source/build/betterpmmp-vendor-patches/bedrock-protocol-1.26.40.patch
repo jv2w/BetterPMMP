@@ -5126,7 +5126,7 @@ index 7c9d8fa..20a93cb 100644
  	}
  
 diff --git a/src/types/skin/SkinData.php b/src/types/skin/SkinData.php
-index da2d59c..95ec584 100644
+index da2d59c..6078b82 100644
 --- a/src/types/skin/SkinData.php
 +++ b/src/types/skin/SkinData.php
 @@ -10,6 +10,8 @@
@@ -5138,7 +5138,7 @@ index da2d59c..95ec584 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types\skin;
-@@ -19,8 +21,12 @@ use Ramsey\Uuid\Uuid;
+@@ -19,8 +21,11 @@ use Ramsey\Uuid\Uuid;
  
  class SkinData{
  
@@ -5147,13 +5147,12 @@ index da2d59c..95ec584 100644
 +	public const ARM_SIZE_SLIM = 0;
 +	public const ARM_SIZE_WIDE = 1;
 +
-+	public const TRUSTED_SKIN_FLAG_UNSET = "unset";
 +	public const TRUSTED_SKIN_FLAG_FALSE = "false";
 +	public const TRUSTED_SKIN_FLAG_TRUE = "true";
  
  	private SkinImage $capeImage;
  	private string $fullSkinId;
-@@ -42,8 +48,8 @@ class SkinData{
+@@ -42,8 +47,8 @@ class SkinData{
  		private string $animationData = "",
  		private string $capeId = "",
  		?string $fullSkinId = null,
@@ -5164,7 +5163,7 @@ index da2d59c..95ec584 100644
  		private array $personaPieces = [],
  		private array $pieceTintColors = [],
  		private bool $isVerified = true,
-@@ -51,7 +57,9 @@ class SkinData{
+@@ -51,7 +56,9 @@ class SkinData{
  		private bool $persona = false,
  		private bool $personaCapeOnClassic = false,
  		private bool $isPrimaryUser = true,
@@ -5175,7 +5174,7 @@ index da2d59c..95ec584 100644
  	){
  		$this->capeImage = $capeImage ?? new SkinImage(0, 0, "");
  		//this has to be unique or the client will do stupid things
-@@ -101,14 +109,41 @@ class SkinData{
+@@ -101,14 +108,41 @@ class SkinData{
  		return $this->fullSkinId;
  	}
  

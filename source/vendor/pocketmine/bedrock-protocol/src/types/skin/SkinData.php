@@ -24,7 +24,6 @@ class SkinData{
 	public const ARM_SIZE_SLIM = 0;
 	public const ARM_SIZE_WIDE = 1;
 
-	public const TRUSTED_SKIN_FLAG_UNSET = "unset";
 	public const TRUSTED_SKIN_FLAG_FALSE = "false";
 	public const TRUSTED_SKIN_FLAG_TRUE = "true";
 
