@@ -3360,7 +3360,7 @@ index aeb74ef..1b36375 100644
  	}
  }
 diff --git a/src/types/PlayerBlockActionWithBlockInfo.php b/src/types/PlayerBlockActionWithBlockInfo.php
-index ec8110b..6055744 100644
+index ec8110b..f60ec89 100644
 --- a/src/types/PlayerBlockActionWithBlockInfo.php
 +++ b/src/types/PlayerBlockActionWithBlockInfo.php
 @@ -10,6 +10,8 @@
@@ -3385,14 +3385,22 @@ index ec8110b..6055744 100644
  
  	public function getActionType() : int{ return $this->actionType; }
  
-@@ -54,6 +52,7 @@ final class PlayerBlockActionWithBlockInfo implements PlayerBlockAction{
- 		return match($actionType){
- 			PlayerAction::ABORT_BREAK,
- 			PlayerAction::START_BREAK,
-+			PlayerAction::STOP_BREAK,
- 			PlayerAction::CRACK_BREAK,
- 			PlayerAction::PREDICT_DESTROY_BLOCK,
- 			PlayerAction::CONTINUE_DESTROY_BLOCK => true,
+@@ -49,15 +47,4 @@ final class PlayerBlockActionWithBlockInfo implements PlayerBlockAction{
+ 		CommonTypes::putBlockPosition($out, $this->blockPosition);
+ 		VarInt::writeSignedInt($out, $this->face);
+ 	}
+-
+-	public static function isValidActionType(int $actionType) : bool{
+-		return match($actionType){
+-			PlayerAction::ABORT_BREAK,
+-			PlayerAction::START_BREAK,
+-			PlayerAction::CRACK_BREAK,
+-			PlayerAction::PREDICT_DESTROY_BLOCK,
+-			PlayerAction::CONTINUE_DESTROY_BLOCK => true,
+-			default => false
+-		};
+-	}
+ }
 diff --git a/src/types/PlayerListEntry.php b/src/types/PlayerListEntry.php
 index a6852f1..10f5244 100644
 --- a/src/types/PlayerListEntry.php

@@ -47,16 +47,4 @@ final class PlayerBlockActionWithBlockInfo implements PlayerBlockAction{
 		CommonTypes::putBlockPosition($out, $this->blockPosition);
 		VarInt::writeSignedInt($out, $this->face);
 	}
-
-	public static function isValidActionType(int $actionType) : bool{
-		return match($actionType){
-			PlayerAction::ABORT_BREAK,
-			PlayerAction::START_BREAK,
-			PlayerAction::STOP_BREAK,
-			PlayerAction::CRACK_BREAK,
-			PlayerAction::PREDICT_DESTROY_BLOCK,
-			PlayerAction::CONTINUE_DESTROY_BLOCK => true,
-			default => false
-		};
-	}
 }
