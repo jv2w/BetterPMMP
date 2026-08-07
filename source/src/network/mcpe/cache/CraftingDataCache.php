@@ -19,6 +19,8 @@
  *
  */
 
+/* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
+
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\cache;
@@ -35,7 +37,6 @@ use pocketmine\network\mcpe\protocol\types\recipe\CraftingRecipeBlockName;
 use pocketmine\network\mcpe\protocol\types\recipe\FurnaceRecipeBlockName;
 use pocketmine\network\mcpe\protocol\types\recipe\PotionContainerChangeRecipe as ProtocolPotionContainerChangeRecipe;
 use pocketmine\network\mcpe\protocol\types\recipe\PotionTypeRecipe as ProtocolPotionTypeRecipe;
-use pocketmine\network\mcpe\protocol\types\recipe\RecipeUnlockingRequirement;
 use pocketmine\network\mcpe\protocol\types\recipe\ShapedRecipe as ProtocolShapedRecipe;
 use pocketmine\network\mcpe\protocol\types\recipe\ShapelessRecipe as ProtocolShapelessRecipe;
 use pocketmine\network\mcpe\protocol\types\recipe\StringIdMetaItemDescriptor;
@@ -85,7 +86,6 @@ final class CraftingDataCache{
 		$converter = TypeConverter::getInstance();
 		$recipesWithTypeIds = [];
 
-		$noUnlockingRequirement = new RecipeUnlockingRequirement(null);
 		$recipeNetId = self::RECIPE_ID_OFFSET;
 		foreach($manager->getCraftingRecipeIndex() as $index => $recipe){
 			//the client doesn't like recipes with an ID of 0, so we need to offset them
@@ -105,7 +105,7 @@ final class CraftingDataCache{
 					$nullUUID,
 					$typeTag,
 					50,
-					$noUnlockingRequirement,
+					null,
 					$recipeNetId
 				);
 			}elseif($recipe instanceof ShapedRecipe){
@@ -125,7 +125,7 @@ final class CraftingDataCache{
 					CraftingRecipeBlockName::CRAFTING_TABLE,
 					50,
 					true,
-					$noUnlockingRequirement,
+					null,
 					$recipeNetId,
 				);
 			}else{
@@ -151,7 +151,7 @@ final class CraftingDataCache{
 					$nullUUID,
 					$typeTag,
 					50,
-					$noUnlockingRequirement,
+					null,
 					$recipeNetId //not used, but we need to fill them with something unique regardless
 				);
 			}
