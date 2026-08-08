@@ -396,22 +396,23 @@ final class CommonTypes{
 
 	public static function putRecipeIngredient(ByteBufferWriter $out, RecipeIngredient $ingredient) : void{
 		$descriptor = $ingredient->getDescriptor();
+		if($descriptor === null){
+			VarInt::writeUnsignedInt($out, 0);
+			VarInt::writeSignedInt($out, ItemDescriptorType::ANY_METADATA);
+			VarInt::writeSignedInt($out, $ingredient->getCount());
+			return;
+		}
+
 		$descriptorName = match(true){
 			$descriptor instanceof StringIdMetaItemDescriptor => ItemDescriptorType::NAME_STRING_ID_META,
 			$descriptor instanceof MolangItemDescriptor => ItemDescriptorType::NAME_MOLANG,
 			$descriptor instanceof TagItemDescriptor => ItemDescriptorType::NAME_TAG,
-			$descriptor === null => null,
 			default => throw new \InvalidArgumentException("Unsupported item descriptor type " . $descriptor::class)
 		};
 
-		VarInt::writeUnsignedInt($out, $descriptorName === null ? 0 : 1);
-		if($descriptorName === null){
-			VarInt::writeSignedInt($out, ItemDescriptorType::ANY_METADATA);
-		}else{
-			self::putString($out, $descriptorName);
-			$descriptor->write($out);
-		}
-
+		VarInt::writeUnsignedInt($out, 1);
+		self::putString($out, $descriptorName);
+		$descriptor->write($out);
 		VarInt::writeSignedInt($out, $ingredient->getCount());
 	}
 
@@ -430,7 +431,10 @@ final class CommonTypes{
 		for($i = 0; $i < $count; ++$i){
 			$key = VarInt::readUnsignedInt($in);
 			$type = VarInt::readUnsignedInt($in);
-			Byte::readUnsigned($in);
+			$legacyType = Byte::readUnsigned($in);
+			if($type !== $legacyType){
+				throw new PacketDecodeException("Entity metadata type $legacyType does not match variant $type");
+			}
 
 			$data[$key] = self::readMetadataProperty($in, $type);
 		}

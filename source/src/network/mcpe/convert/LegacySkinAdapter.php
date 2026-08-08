@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /*
  *
@@ -20,8 +20,6 @@
  */
 
 /* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
-
-declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\convert;
 
@@ -48,6 +46,8 @@ class LegacySkinAdapter implements SkinAdapter{
 		if($geometryName === ""){
 			$geometryName = "geometry.humanoid.custom";
 		}
+		$geometryData = $skin->getGeometryData();
+		if($geometryData === "") $geometryData = "{}";
 		$skinData = $skin->getSkinData();
 		return new SkinData(
 			$skin->getSkinId(),
@@ -55,7 +55,7 @@ class LegacySkinAdapter implements SkinAdapter{
 			json_encode(["geometry" => ["default" => $geometryName]], JSON_THROW_ON_ERROR),
 			strlen($skinData) === 256 * 256 * 4 ? new SkinImage(256, 256, $skinData) : SkinImage::fromLegacy($skinData), [],
 			$capeImage,
-			$skin->getGeometryData()
+			$geometryData
 		);
 	}
 

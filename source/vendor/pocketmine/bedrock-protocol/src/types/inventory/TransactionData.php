@@ -16,16 +16,19 @@ declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\inventory;
 
+use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\DataDecodeException;
 use pmmp\encoding\VarInt;
 use pocketmine\network\mcpe\protocol\PacketDecodeException;
+use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 use function count;
 
 abstract class TransactionData{
 	/** @var NetworkInventoryAction[] */
 	protected array $actions = [];
+	protected bool $actionsPresent = true;
 
 	/**
 	 * @return NetworkInventoryAction[]
@@ -54,10 +57,16 @@ abstract class TransactionData{
 	 * @throws PacketDecodeException
 	 */
 	final public function decodeAuthInput(ByteBufferReader $in) : void{
-		$actionCount = VarInt::readUnsignedInt($in);
 		$this->actions = [];
-		for($i = 0; $i < $actionCount; ++$i){
-			$this->actions[] = (new NetworkInventoryAction())->readTransaction($in);
+		$this->actionsPresent = false;
+		if(Byte::readUnsigned($in) !== 0){
+			$this->actionsPresent = CommonTypes::getBool($in);
+			if($this->actionsPresent){
+				$actionCount = VarInt::readUnsignedInt($in);
+				for($i = 0; $i < $actionCount; ++$i){
+					$this->actions[] = (new NetworkInventoryAction())->readTransaction($in);
+				}
+			}
 		}
 		$this->decodeData($in);
 	}
@@ -77,9 +86,14 @@ abstract class TransactionData{
 	}
 
 	final public function encodeAuthInput(ByteBufferWriter $out) : void{
-		VarInt::writeUnsignedInt($out, count($this->actions));
-		foreach($this->actions as $action){
-			$action->writeTransaction($out);
+		Byte::writeUnsigned($out, 1);
+		$actionsPresent = $this->actionsPresent || count($this->actions) !== 0;
+		CommonTypes::putBool($out, $actionsPresent);
+		if($actionsPresent){
+			VarInt::writeUnsignedInt($out, count($this->actions));
+			foreach($this->actions as $action){
+				$action->writeTransaction($out);
+			}
 		}
 		$this->encodeData($out);
 	}

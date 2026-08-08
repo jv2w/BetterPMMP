@@ -1995,7 +1995,7 @@ index 840e50e..946d127 100644
  
  	public function handle(PacketHandlerInterface $handler) : bool{
 diff --git a/src/serializer/CommonTypes.php b/src/serializer/CommonTypes.php
-index ca0a11f..dc7c2ca 100644
+index ca0a11f..40a8cf1 100644
 --- a/src/serializer/CommonTypes.php
 +++ b/src/serializer/CommonTypes.php
 @@ -10,6 +10,8 @@
@@ -2285,7 +2285,7 @@ index ca0a11f..dc7c2ca 100644
  			VarInt::writeSignedInt($out, $itemStackWrapper->getStackId());
  		}
  
-@@ -369,26 +370,47 @@ final class CommonTypes{
+@@ -369,26 +370,48 @@ final class CommonTypes{
  	}
  
  	/** @throws DataDecodeException */
@@ -2325,35 +2325,40 @@ index ca0a11f..dc7c2ca 100644
  	public static function putRecipeIngredient(ByteBufferWriter $out, RecipeIngredient $ingredient) : void{
 -		$type = $ingredient->getDescriptor();
 +		$descriptor = $ingredient->getDescriptor();
++		if($descriptor === null){
++			VarInt::writeUnsignedInt($out, 0);
++			VarInt::writeSignedInt($out, ItemDescriptorType::ANY_METADATA);
++			VarInt::writeSignedInt($out, $ingredient->getCount());
++			return;
++		}
++
 +		$descriptorName = match(true){
 +			$descriptor instanceof StringIdMetaItemDescriptor => ItemDescriptorType::NAME_STRING_ID_META,
 +			$descriptor instanceof MolangItemDescriptor => ItemDescriptorType::NAME_MOLANG,
 +			$descriptor instanceof TagItemDescriptor => ItemDescriptorType::NAME_TAG,
-+			$descriptor === null => null,
 +			default => throw new \InvalidArgumentException("Unsupported item descriptor type " . $descriptor::class)
 +		};
  
 -		Byte::writeUnsigned($out, $type?->getTypeId() ?? 0);
 -		$type?->write($out);
-+		VarInt::writeUnsignedInt($out, $descriptorName === null ? 0 : 1);
-+		if($descriptorName === null){
-+			VarInt::writeSignedInt($out, ItemDescriptorType::ANY_METADATA);
-+		}else{
-+			self::putString($out, $descriptorName);
-+			$descriptor->write($out);
-+		}
- 
++		VarInt::writeUnsignedInt($out, 1);
++		self::putString($out, $descriptorName);
++		$descriptor->write($out);
+-
  		VarInt::writeSignedInt($out, $ingredient->getCount());
  	}
-@@ -408,6 +430,7 @@ final class CommonTypes{
+@@ -408,6 +431,10 @@ final class CommonTypes{
  		for($i = 0; $i < $count; ++$i){
  			$key = VarInt::readUnsignedInt($in);
  			$type = VarInt::readUnsignedInt($in);
-+			Byte::readUnsigned($in);
++			$legacyType = Byte::readUnsigned($in);
++			if($type !== $legacyType){
++				throw new PacketDecodeException("Entity metadata type $legacyType does not match variant $type");
++			}
  
  			$data[$key] = self::readMetadataProperty($in, $type);
  		}
-@@ -443,6 +466,7 @@ final class CommonTypes{
+@@ -443,6 +470,7 @@ final class CommonTypes{
  		foreach($metadata as $key => $d){
  			VarInt::writeUnsignedInt($out, $key);
  			VarInt::writeUnsignedInt($out, $d->getTypeId());
@@ -2361,7 +2366,7 @@ index ca0a11f..dc7c2ca 100644
  			$d->write($out);
  		}
  	}
-@@ -556,6 +580,7 @@ final class CommonTypes{
+@@ -556,6 +584,7 @@ final class CommonTypes{
  	/** @throws DataDecodeException */
  	private static function readGameRule(ByteBufferReader $in, int $type, bool $isPlayerModifiable, bool $isStartGame) : GameRule{
  		return match($type){
@@ -2369,7 +2374,7 @@ index ca0a11f..dc7c2ca 100644
  			BoolGameRule::ID => BoolGameRule::decode($in, $isPlayerModifiable),
  			IntGameRule::ID => IntGameRule::decode($in, $isPlayerModifiable, $isStartGame),
  			FloatGameRule::ID => FloatGameRule::decode($in, $isPlayerModifiable),
-@@ -698,7 +723,7 @@ final class CommonTypes{
+@@ -698,7 +727,7 @@ final class CommonTypes{
  
  		$result->structureBlockType = VarInt::readSignedInt($in);
  		$result->structureSettings = self::getStructureSettings($in);
@@ -2378,7 +2383,7 @@ index ca0a11f..dc7c2ca 100644
  
  		return $result;
  	}
-@@ -713,7 +738,7 @@ final class CommonTypes{
+@@ -713,7 +742,7 @@ final class CommonTypes{
  
  		VarInt::writeSignedInt($out, $structureEditorData->structureBlockType);
  		self::putStructureSettings($out, $structureEditorData->structureSettings);
@@ -2387,7 +2392,7 @@ index ca0a11f..dc7c2ca 100644
  	}
  
  	/** @throws PacketDecodeException */
-@@ -767,7 +792,9 @@ final class CommonTypes{
+@@ -767,7 +796,9 @@ final class CommonTypes{
  	 * @throws DataDecodeException
  	 */
  	public static function readItemStackNetIdVariant(ByteBufferReader $in) : int{
@@ -2398,7 +2403,7 @@ index ca0a11f..dc7c2ca 100644
  	}
  
  	/**
-@@ -776,7 +803,7 @@ final class CommonTypes{
+@@ -776,7 +807,7 @@ final class CommonTypes{
  	 * as-yet unacknowledged request from the client.
  	 */
  	public static function writeItemStackNetIdVariant(ByteBufferWriter $out, int $id) : void{
@@ -4056,7 +4061,7 @@ index 56228f4..ef951c5 100644
  	 * @return $this
  	 *
 diff --git a/src/types/inventory/TransactionData.php b/src/types/inventory/TransactionData.php
-index 509d296..6f85905 100644
+index 509d296..832c5e9 100644
 --- a/src/types/inventory/TransactionData.php
 +++ b/src/types/inventory/TransactionData.php
 @@ -10,6 +10,8 @@
@@ -4068,21 +4073,58 @@ index 509d296..6f85905 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types\inventory;
-@@ -55,7 +57,7 @@ abstract class TransactionData{
- 		$actionCount = VarInt::readUnsignedInt($in);
+@@ -17,13 +19,16 @@ namespace pocketmine\network\mcpe\protocol\types\inventory;
++use pmmp\encoding\Byte;
+ use pmmp\encoding\ByteBufferReader;
+ use pmmp\encoding\ByteBufferWriter;
+ use pmmp\encoding\DataDecodeException;
+ use pmmp\encoding\VarInt;
+ use pocketmine\network\mcpe\protocol\PacketDecodeException;
++use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
+ use function count;
+ 
+ abstract class TransactionData{
+ 	/** @var NetworkInventoryAction[] */
+ 	protected array $actions = [];
++	protected bool $actionsPresent = true;
+ 
+ 	/**
+ 	 * @return NetworkInventoryAction[]
+@@ -52,10 +56,16 @@ abstract class TransactionData{
+ 	 * @throws PacketDecodeException
+ 	 */
+ 	final public function decodeAuthInput(ByteBufferReader $in) : void{
+-		$actionCount = VarInt::readUnsignedInt($in);
  		$this->actions = [];
- 		for($i = 0; $i < $actionCount; ++$i){
+-		for($i = 0; $i < $actionCount; ++$i){
 -			$this->actions[] = (new NetworkInventoryAction())->readAuthInput($in);
-+			$this->actions[] = (new NetworkInventoryAction())->readTransaction($in);
++		$this->actionsPresent = false;
++		if(Byte::readUnsigned($in) !== 0){
++			$this->actionsPresent = CommonTypes::getBool($in);
++			if($this->actionsPresent){
++				$actionCount = VarInt::readUnsignedInt($in);
++				for($i = 0; $i < $actionCount; ++$i){
++					$this->actions[] = (new NetworkInventoryAction())->readTransaction($in);
++				}
++			}
  		}
  		$this->decodeData($in);
  	}
-@@ -77,7 +79,7 @@ abstract class TransactionData{
+@@ -75,9 +85,14 @@ abstract class TransactionData{
+ 	}
+ 
  	final public function encodeAuthInput(ByteBufferWriter $out) : void{
- 		VarInt::writeUnsignedInt($out, count($this->actions));
- 		foreach($this->actions as $action){
+-		VarInt::writeUnsignedInt($out, count($this->actions));
+-		foreach($this->actions as $action){
 -			$action->writeAuthInput($out);
-+			$action->writeTransaction($out);
++		Byte::writeUnsigned($out, 1);
++		$actionsPresent = $this->actionsPresent || count($this->actions) !== 0;
++		CommonTypes::putBool($out, $actionsPresent);
++		if($actionsPresent){
++			VarInt::writeUnsignedInt($out, count($this->actions));
++			foreach($this->actions as $action){
++				$action->writeTransaction($out);
++			}
  		}
  		$this->encodeData($out);
  	}
@@ -4325,7 +4367,7 @@ index 856331f..4c4fff7 100644
  	}
  }
 diff --git a/src/types/inventory/stackrequest/ItemStackRequest.php b/src/types/inventory/stackrequest/ItemStackRequest.php
-index 6123c38..0ee911b 100644
+index 6123c38..e94a936 100644
 --- a/src/types/inventory/stackrequest/ItemStackRequest.php
 +++ b/src/types/inventory/stackrequest/ItemStackRequest.php
 @@ -10,6 +10,8 @@
@@ -4337,12 +4379,13 @@ index 6123c38..0ee911b 100644
  declare(strict_types=1);
  
  namespace pocketmine\network\mcpe\protocol\types\inventory\stackrequest;
-@@ -78,11 +80,26 @@ final class ItemStackRequest{
+@@ -78,11 +80,28 @@ final class ItemStackRequest{
  		};
  	}
  
-+	/** ID of the last action type that was dropped from the variant list (TAKE_OUT_CONTAINER). */
++	private const FIRST_REMOVED_ACTION_TYPE = 7;
 +	private const LAST_REMOVED_ACTION_TYPE = 8;
++	private const MAX_ACTION_VARIANT = ItemStackRequestActionType::CRAFTING_RESULTS_DEPRECATED_ASK_TY_LAING - 2;
 +
 +	/**
 +	 * PLACE_IN_CONTAINER and TAKE_OUT_CONTAINER were dropped from the action variant list, but the types above
@@ -4357,14 +4400,16 @@ index 6123c38..0ee911b 100644
  		$actions = [];
  		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
 +			$variantId = VarInt::readUnsignedInt($in);
- 			$typeId = Byte::readUnsigned($in);
-+			if(self::actionVariantId($typeId) !== $variantId){
-+				throw new PacketDecodeException("Item stack request action variant $variantId does not match type $typeId");
+-			$typeId = Byte::readUnsigned($in);
++			Byte::readUnsigned($in);
++			if($variantId > self::MAX_ACTION_VARIANT){
++				throw new PacketDecodeException("Unhandled item stack request action variant $variantId");
 +			}
++			$typeId = $variantId >= self::FIRST_REMOVED_ACTION_TYPE ? $variantId + 2 : $variantId;
  			$actions[] = self::readAction($in, $typeId);
  		}
  		$filterStrings = [];
-@@ -97,7 +114,9 @@ final class ItemStackRequest{
+@@ -97,7 +116,9 @@ final class ItemStackRequest{
  		CommonTypes::writeItemStackRequestId($out, $this->requestId);
  		VarInt::writeUnsignedInt($out, count($this->actions));
  		foreach($this->actions as $action){

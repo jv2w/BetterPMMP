@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /*
  *
@@ -20,8 +20,6 @@
  */
 
 /* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
-
-declare(strict_types=1);
 
 namespace pocketmine\network\mcpe;
 
@@ -1503,12 +1501,12 @@ class NetworkSession{
 	 */
 	public function syncPlayerList(array $players) : void{
 		$this->sendDataPacket(PlayerListPacket::add(array_map(function(Player $player) : PlayerListEntry{
-			return PlayerListEntry::createAdditionEntry($player->getUniqueId(), $player->getId(), $player->getDisplayName(), $this->typeConverter->getSkinAdapter()->toSkinData($player->getSkin()), $player->getXuid());
+			return PlayerListEntry::createAdditionEntry($player->getUniqueId(), $player->getId(), $player->getDisplayName(), $this->typeConverter->getSkinAdapter()->toSkinData($player->getSkin()), $player->getXuid(), '', $player->getPlayerInfo()->getBuildPlatform());
 		}, $players)));
 	}
 
 	public function onPlayerAdded(Player $p) : void{
-		$this->sendDataPacket(PlayerListPacket::add([PlayerListEntry::createAdditionEntry($p->getUniqueId(), $p->getId(), $p->getDisplayName(), $this->typeConverter->getSkinAdapter()->toSkinData($p->getSkin()), $p->getXuid())]));
+		$this->sendDataPacket(PlayerListPacket::add([PlayerListEntry::createAdditionEntry($p->getUniqueId(), $p->getId(), $p->getDisplayName(), $this->typeConverter->getSkinAdapter()->toSkinData($p->getSkin()), $p->getXuid(), '', $p->getPlayerInfo()->getBuildPlatform())]));
 	}
 
 	public function onPlayerRemoved(Player $p) : void{
