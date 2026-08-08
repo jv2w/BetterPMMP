@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /*
  *
@@ -20,8 +20,6 @@
  */
 
 /* Modified by the BetterPMMP project (2026) - see the NOTICE file for details. */
-
-declare(strict_types=1);
 
 namespace pocketmine\entity;
 
@@ -497,8 +495,9 @@ class Human extends Living implements ProjectileSource, InventoryHolder{
 	protected function sendSpawnPacket(Player $player) : void{
 		$networkSession = $player->getNetworkSession();
 		$typeConverter = $networkSession->getTypeConverter();
+		$buildPlatform = $this instanceof Player ? $this->getPlayerInfo()->getBuildPlatform() : DeviceOS::DEDICATED;
 		if(!($this instanceof Player)){
-			$networkSession->sendDataPacket(PlayerListPacket::add([PlayerListEntry::createAdditionEntry($this->uuid, $this->id, $this->getName(), $typeConverter->getSkinAdapter()->toSkinData($this->skin))]));
+			$networkSession->sendDataPacket(PlayerListPacket::add([PlayerListEntry::createAdditionEntry($this->uuid, $this->id, $this->getName(), $typeConverter->getSkinAdapter()->toSkinData($this->skin), '', '', $buildPlatform)]));
 		}
 
 		$networkSession->sendDataPacket(AddPlayerPacket::create(
@@ -525,8 +524,8 @@ class Human extends Living implements ProjectileSource, InventoryHolder{
 				)
 			])),
 			[], //TODO: entity links
-			"", //device ID (we intentionally don't send this - secvuln)
-			DeviceOS::UNKNOWN //we intentionally don't send this (secvuln)
+			'', //device ID (we intentionally don't send this - secvuln)
+			$buildPlatform
 		));
 
 		//TODO: Hack for MCPE 1.2.13: DATA_NAMETAG is useless in AddPlayerPacket, so it has to be sent separately

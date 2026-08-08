@@ -80,8 +80,9 @@ final class ItemStackRequest{
 		};
 	}
 
-	/** ID of the last action type that was dropped from the variant list (TAKE_OUT_CONTAINER). */
+	private const FIRST_REMOVED_ACTION_TYPE = 7;
 	private const LAST_REMOVED_ACTION_TYPE = 8;
+	private const MAX_ACTION_VARIANT = ItemStackRequestActionType::CRAFTING_RESULTS_DEPRECATED_ASK_TY_LAING - 2;
 
 	/**
 	 * PLACE_IN_CONTAINER and TAKE_OUT_CONTAINER were dropped from the action variant list, but the types above
@@ -96,10 +97,11 @@ final class ItemStackRequest{
 		$actions = [];
 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
 			$variantId = VarInt::readUnsignedInt($in);
-			$typeId = Byte::readUnsigned($in);
-			if(self::actionVariantId($typeId) !== $variantId){
-				throw new PacketDecodeException("Item stack request action variant $variantId does not match type $typeId");
+			Byte::readUnsigned($in);
+			if($variantId > self::MAX_ACTION_VARIANT){
+				throw new PacketDecodeException("Unhandled item stack request action variant $variantId");
 			}
+			$typeId = $variantId >= self::FIRST_REMOVED_ACTION_TYPE ? $variantId + 2 : $variantId;
 			$actions[] = self::readAction($in, $typeId);
 		}
 		$filterStrings = [];

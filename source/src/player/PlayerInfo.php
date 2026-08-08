@@ -1,4 +1,4 @@
-<?php
+<?php declare(strict_types=1);
 
 /*
  *
@@ -19,13 +19,13 @@
  *
  */
 
-declare(strict_types=1);
-
 namespace pocketmine\player;
 
 use pocketmine\entity\Skin;
+use pocketmine\network\mcpe\protocol\types\DeviceOS;
 use pocketmine\utils\TextFormat;
 use Ramsey\Uuid\UuidInterface;
+use function is_int;
 
 /**
  * Encapsulates data needed to create a player.
@@ -67,5 +67,10 @@ class PlayerInfo{
 	 */
 	public function getExtraData() : array{
 		return $this->extraData;
+	}
+
+	public function getBuildPlatform() : int{
+		$buildPlatform = $this->extraData['DeviceOS'] ?? DeviceOS::DEDICATED;
+		return is_int($buildPlatform) && $buildPlatform >= DeviceOS::ANDROID && $buildPlatform <= DeviceOS::LINUX ? $buildPlatform : DeviceOS::DEDICATED;
 	}
 }
